@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.crossaudit/
+*.env
+.env.*
+.DS_Store
+.swiftpm/

@@ -1,0 +1,31 @@
+# Security policy
+
+## Reporting a vulnerability
+
+Do not open a public issue for a suspected vulnerability, leaked credential, or
+exploit. Use GitHub's private vulnerability reporting for this repository. If
+that channel is unavailable, contact the maintainers listed in `pyproject.toml`
+and include the affected version, reproduction steps, impact, and any proposed
+mitigation. Do not include real API keys or user data.
+
+## Supported version
+
+Security fixes are made against the latest `main` release. CrossAudit 4.0.0 is
+the first native-app release.
+
+## Desktop trust boundary
+
+The native shell embeds a loopback-only Python core. Every HTTP request must
+carry an unguessable process token and an allowed localhost `Host` header. The
+browser layer cannot retrieve stored credentials. Provider keys are kept in the
+macOS login Keychain and injected only into the local core process.
+
+Project workers are independent processes with separate repositories, tokens,
+locks, ledgers, and scoped write directories. Provider output is data, not a
+shell program: CrossAudit does not execute generated commands automatically.
+
+## Distribution status
+
+The 4.0.0 community DMG is ad-hoc signed and is not Apple-notarized. Verify the
+published SHA-256 checksum before first launch. Organization-wide distribution
+should wait for a Developer ID signed, notarized, and stapled artifact.
