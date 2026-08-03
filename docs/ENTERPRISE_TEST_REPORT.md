@@ -1,14 +1,14 @@
-# CrossAudit 4.8.0 enterprise release assessment
+# CrossAudit 4.9.0 enterprise release assessment
 
 Date: 2026-08-04
 
 Target: Apple Silicon macOS 13 or later
 
-Release candidate: 4.8.0
+Release candidate: 4.9.0
 
 ## Executive result
 
-CrossAudit 4.8.0 is suitable for local evaluation and controlled pilot use. It
+CrossAudit 4.9.0 is suitable for local evaluation and controlled pilot use. It
 preserves the V3.2 audited protocol while adding a native AppKit/WebKit shell,
 Keychain credentials, UI-first project creation, independent background
 projects, GitHub connection, chunked file transfer, final-artifact downloads,
@@ -41,10 +41,39 @@ Policy rather than hidden behind an installation workaround.
 | Transfers | Arbitrary type/count, chunk offsets, traversal, one-shot staging, zero-byte file | Automated |
 | Receipts | Binding verification, recorded cycle state, one-time admission | Automated |
 | Runtime models | Atomic model/effort switch, busy refusal, SSE refresh, provider-specific payload | Automated and live |
+| Environment Doctor | Missing/outdated tools, startup degradation, safe repair allowlist, update check, responsive UI | Automated and browser smoke |
 
 The final command outputs and artifact hashes are recorded in the GitHub release
 and CI logs. Tests that spend provider credits remain explicitly opt-in and use
 repository secrets in CI.
+
+## V4.9.0 release-candidate evidence
+
+- Automated suite: **445 passed, 2 skipped** in 44.43 seconds. The skipped
+  cases remain only explicitly opt-in paid-provider checks. Python bytecode
+  compilation and the native arm64 macOS 13 Swift typecheck also passed.
+- Real-machine scan: the in-app Doctor identified Python 3.13.5, macOS 26.5,
+  Git 2.50.1, GitHub CLI 2.96.0, Codex 0.146.0, 121 trusted certificate
+  authorities, workspace access, project configuration, ledger state, and the
+  public latest-release result without returning credentials.
+- Failure simulation: an isolated first launch with a Git 2.20.1 shim and no
+  GitHub/Codex binaries reached the UI, reported installed and minimum versions,
+  separated optional bundled features and the dependent ledger wait state from
+  the root Git blocker, and prevented
+  New Project from bypassing the repair guidance.
+- Repair smoke: the UI initiated a live rescan, accepted validated Git author
+  fields, saved them only in the isolated project repository, refreshed through
+  SSE, and changed the environment result to ready without a page reload.
+- Security boundary: Doctor POST actions are app-mode-only, token protected,
+  and mapped to a fixed server-side allowlist. Unknown actions and invalid email
+  values are refused; the browser cannot submit an executable or command line.
+- Frozen runtime: the core copied from the installed 4.9.0 application started
+  against isolated support/workspace folders, rendered the packaged Doctor,
+  reported Git/GitHub/Codex checks, and completed a live rescan. The installed
+  native shell and core remained one parent/child pair after the smoke test.
+- Distribution: the arm64 DMG passed APFS verification, deep strict code-sign
+  verification, architecture and 4.9.0 Info.plist checks. Its SHA-256 is
+  `0dc5d476614db3a9a8a89d40b93d056535f70a3954c0cd95f672fe1f0e7df74f`.
 
 ## V4.8.0 release-candidate evidence
 

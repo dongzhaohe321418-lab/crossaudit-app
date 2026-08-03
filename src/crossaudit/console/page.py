@@ -524,6 +524,27 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
 .settings-readiness{display:grid;grid-template-columns:1fr 1fr;gap:8px}.readiness-item{border:1px solid var(--line);
   border-radius:8px;padding:10px;background:var(--panel);font-size:11px}.readiness-item span{float:right;color:var(--green)}
 .readiness-item span.bad{color:var(--red)}
+.doctor-panel{margin-top:12px;border:1px solid var(--line);border-radius:11px;background:var(--panel);overflow:hidden}
+.doctor-head{display:flex;align-items:center;gap:10px;padding:12px 13px;border-bottom:1px solid var(--line)}
+.doctor-head-copy{min-width:0;flex:1}.doctor-head-copy b{display:block;font-size:12px}.doctor-head-copy small{
+  display:block;margin-top:2px;color:var(--muted);font-size:10.5px}.doctor-state{width:8px;height:8px;border-radius:50%;
+  background:var(--faint);flex:none}.doctor-state.ready{background:var(--green)}.doctor-state.blocked,.doctor-state.failed{
+  background:var(--red)}.doctor-state.attention{background:var(--amber)}.doctor-state.running{background:var(--blue);
+  animation:pulse 1.2s ease-in-out infinite}.doctor-head .secondary{height:29px;flex:none}
+.doctor-list{display:grid}.doctor-empty{padding:18px;color:var(--muted);font-size:11px;text-align:center}
+.doctor-check{display:grid;grid-template-columns:18px minmax(0,1fr) auto;gap:9px;padding:11px 13px;
+  border-bottom:1px solid var(--line);align-items:start}.doctor-check:last-child{border-bottom:0}.doctor-mark{width:17px;
+  height:17px;border-radius:50%;display:grid;place-items:center;font-size:9px;font-weight:800;background:var(--green-bg);
+  color:var(--green);margin-top:1px}.doctor-check.missing .doctor-mark,.doctor-check.outdated .doctor-mark{background:var(--red-bg);
+  color:var(--red)}.doctor-check.warning .doctor-mark,.doctor-check.unknown .doctor-mark,.doctor-check.waiting .doctor-mark{background:var(--amber-bg);
+  color:var(--amber)}.doctor-copy{min-width:0}.doctor-copy b{display:block;font-size:11px}.doctor-copy small{display:block;
+  color:var(--muted);font-size:10px;line-height:1.4;margin-top:2px;overflow-wrap:anywhere}.doctor-version{color:var(--faint);
+  font:9.5px ui-monospace,SFMono-Regular,Menlo,monospace;margin-top:2px;white-space:nowrap}.doctor-action{
+  grid-column:2/4;display:flex;gap:7px;align-items:center;flex-wrap:wrap}.doctor-action .secondary{height:27px;font-size:10px;
+  text-decoration:none}.doctor-identity{display:grid;grid-template-columns:1fr 1fr auto;gap:7px;width:100%}.doctor-identity input{
+  min-width:0;border:1px solid var(--line-strong);border-radius:7px;background:var(--surface);padding:7px 8px;font-size:10px}
+.doctor-message{display:none;margin:0 13px 12px;padding:9px 10px;border-radius:8px;background:var(--blue-bg);color:var(--blue);
+  font-size:10.5px}.doctor-message.on{display:block}.doctor-message.bad{background:var(--red-bg);color:var(--red)}
 #provider-credentials{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
 #provider-credentials .credential-card{margin:0;min-width:0}
 #provider-credentials .provider-note{min-height:58px}
@@ -533,6 +554,8 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
   .project-models,.project-tier{display:none}.form-grid{grid-template-columns:1fr}
   .field.full{grid-column:auto}.project-modal{padding:8px}.wizard{max-height:calc(100vh - 16px)}
   #provider-credentials{grid-template-columns:1fr}
+  .doctor-check{grid-template-columns:18px minmax(0,1fr)}.doctor-version{grid-column:2}.doctor-action{grid-column:2}
+  .doctor-identity{grid-template-columns:1fr}.doctor-head{align-items:flex-start}
   .runtime-grid{grid-template-columns:1fr}
   .path-picker{align-items:stretch;flex-direction:column}.path-picker button{width:100%}.repo-actions{align-items:flex-start;
     flex-direction:column}.hub-tools,.hub-search{width:100%;min-width:0}}
@@ -540,7 +563,7 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
 <body>
 <section class="project-hub" id="project-hub" aria-label="Projects">
   <header class="hub-bar"><button class="brand-button" id="hub-brand"><span class="brand-mark">◇</span>
-    CrossAudit <span class="version" id="hub-version">V4.8.0</span></button><span class="spacer"></span>
+    CrossAudit <span class="version" id="hub-version">V4.9.0</span></button><span class="spacer"></span>
     <button class="icon-button" id="hub-settings" aria-label="Settings" title="Settings">⚙</button>
     <button class="icon-button" id="hub-theme" aria-label="Switch theme">◐</button>
     <button class="primary" id="create-project">＋ New project</button></header>
@@ -641,17 +664,22 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
 
 <div class="project-modal" id="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
   <form class="wizard" id="settings-form"><div class="wizard-head"><div><h2 id="settings-title">CrossAudit settings</h2>
-    <p>Connect subscriptions or enter API keys without editing files or environment variables.</p></div>
+    <p>Check this Mac, repair setup issues, and connect model providers without using Terminal.</p></div>
     <span class="spacer"></span><button type="button" class="icon-button" id="close-settings" aria-label="Close settings">×</button></div>
-    <div class="wizard-body"><section class="form-section"><div class="form-title">Provider credentials</div>
-      <div class="provider-note"><b>Developer access and consumer subscriptions are different products.</b> CrossAudit only offers web sign-in where the provider publishes a supported third-party inference flow. It never imports browser cookies or CLI session files.</div>
-      <div id="provider-credentials"></div>
-    </section><section class="form-section"><div class="form-title">Application readiness</div>
+    <div class="wizard-body"><section class="form-section"><div class="form-title">Application readiness</div>
       <div class="settings-readiness"><div class="readiness-item">Git<span id="git-state">…</span></div>
         <div class="readiness-item">GitHub connection tool<span id="ghcli-state">…</span></div>
         <div class="readiness-item">Application build<span id="runtime-state">…</span></div>
         <div class="readiness-item">Code identity<span id="digest-state">…</span></div></div>
+      <div class="doctor-panel"><div class="doctor-head"><span class="doctor-state" id="doctor-state"></span>
+        <div class="doctor-head-copy"><b>Environment Doctor</b><small id="doctor-summary">Preparing checks…</small></div>
+        <button type="button" class="secondary" id="run-doctor">Run check</button></div>
+        <div class="doctor-list" id="doctor-checks"><div class="doctor-empty">Checking required software…</div></div>
+        <div class="doctor-message" id="doctor-message"></div></div>
       <label class="field" style="margin-top:12px"><span>Project workspace</span><div class="path-picker"><input id="settings-workspace" readonly><button type="button" class="secondary" id="choose-settings-workspace">Choose folder…</button></div></label>
+    </section><section class="form-section"><div class="form-title">Provider credentials</div>
+      <div class="provider-note"><b>Developer access and consumer subscriptions are different products.</b> CrossAudit only offers web sign-in where the provider publishes a supported third-party inference flow. It never imports browser cookies or CLI session files.</div>
+      <div id="provider-credentials"></div>
     </section><div class="wizard-error" id="settings-error"></div></div>
     <div class="wizard-foot"><span>API keys are write-only macOS Keychain items. Subscription credentials stay with the official provider runtime.</span>
       <button type="button" class="secondary" id="cancel-settings">Cancel</button><button class="primary" id="save-settings">Save settings</button></div>
@@ -669,7 +697,7 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
       aria-controls="sidebar-panel" aria-expanded="false">☰</button>
     <button class="icon-button" id="back-projects" aria-label="Back to projects" title="Back to projects">←</button>
     <button class="brand-button" id="projects-home"><span class="brand-mark">◇</span>CrossAudit
-      <span class="version" id="version-badge">V4.8.0</span></button>
+      <span class="version" id="version-badge">V4.9.0</span></button>
     <button class="top-project" id="project-switcher"><b id="proj">…</b> <span id="branch-label">/ project folder</span>⌄</button>
     <button class="icon-button" id="current-project-pin" aria-label="Pin project" title="Pin project">☆</button>
     <span class="spacer"></span>
@@ -850,7 +878,7 @@ window.crossauditWorkspaceSelected=async choice=>{
 
 const settingsModal=document.getElementById('settings-modal');
 const settingsForm=document.getElementById('settings-form');
-let settingsSource=null;
+let settingsSource=null;let settingsState=null;
 function renderProviderCards(d){
   const host=document.getElementById('provider-credentials');
   const vendors=Object.keys(d.providers||{});
@@ -867,7 +895,29 @@ function renderProviderCards(d){
       +'<label class="toggle-line"><input type="checkbox" id="remove-'+esc(vendor)+'" data-provider-remove="'+esc(vendor)+'"><span><b>Remove</b><small>Delete saved key</small></span></label></div></div>';
   }).join('');
 }
+function renderDoctor(doctor){
+  const value=doctor||{};const status=value.status||'idle';
+  const state=document.getElementById('doctor-state');state.className='doctor-state '+status;
+  document.getElementById('doctor-summary').textContent=value.summary||'Environment has not been checked';
+  const run=document.getElementById('run-doctor');run.disabled=status==='running';
+  run.textContent=status==='running'?'Checking…':'Run check';
+  const rows=Array.isArray(value.checks)?value.checks:[];
+  const marks={ready:'✓',missing:'!',outdated:'↑',warning:'!',unknown:'?',waiting:'·'};
+  document.getElementById('doctor-checks').innerHTML=rows.length?rows.map(row=>{
+    const repair=row.repair||{};let action='';
+    if(repair.inputs){
+      action='<div class="doctor-action"><div class="doctor-identity"><input data-doctor-name maxlength="100" placeholder="Git author name"><input data-doctor-email type="email" maxlength="200" placeholder="Git author email"><button type="button" class="secondary" data-doctor-action="'+esc(repair.action)+'">'+esc(repair.label||'Save')+'</button></div></div>';
+    }else if(repair.url){
+      action='<div class="doctor-action"><a class="secondary" href="'+esc(repair.url)+'" target="_blank" rel="noopener">'+esc(repair.label||'Open help')+' ↗</a></div>';
+    }else if(repair.action){
+      action='<div class="doctor-action"><button type="button" class="secondary" data-doctor-action="'+esc(repair.action)+'">'+esc(repair.label||'Fix')+'</button></div>';
+    }
+    const version=row.version?'<span class="doctor-version">v'+esc(row.version)+'</span>':'';
+    return '<div class="doctor-check '+esc(row.status||'unknown')+'"><span class="doctor-mark">'+(marks[row.status]||'?')+'</span><div class="doctor-copy"><b>'+esc(row.label||row.id)+'</b><small>'+esc(row.detail||'')+'</small></div>'+version+action+'</div>';
+  }).join(''):'<div class="doctor-empty">'+(status==='running'?'Checking required software…':'Run the check to inspect this Mac.')+'</div>';
+}
 function renderSettings(d){
+  settingsState=d;
   renderProviderCards(d);
   for(const vendor of Object.keys(d.providers||{})){
     const provider=d.providers&&d.providers[vendor]||{};
@@ -891,13 +941,16 @@ function renderSettings(d){
     detail.textContent=chatgpt.detail||'Use the official Codex login and an eligible ChatGPT plan. CrossAudit never receives the OAuth token.';
     button.textContent=login.status==='failed'?'Try again':'Connect';button.disabled=!chatgpt.available;
   }
-  const deps=d.dependencies||{};
-  for(const [id,value] of [['git-state',deps.git],['ghcli-state',deps.github_cli]]){
-    const el=document.getElementById(id);el.textContent=value?'Ready':'Missing';el.className=value?'':'bad';
+  const deps=d.dependencies||{};const doctorRows=Object.fromEntries(((d.doctor&&d.doctor.checks)||[]).map(row=>[row.id,row]));
+  for(const [id,key,value] of [['git-state','git',deps.git],['ghcli-state','github_cli',deps.github_cli]]){
+    const el=document.getElementById(id),row=doctorRows[key];const status=row&&row.status;
+    el.textContent=status==='outdated'?'Outdated':status==='missing'?'Missing':status==='ready'?'Ready':value?'Ready':'Checking';
+    el.className=status==='outdated'||status==='missing'||(!status&&!value)?'bad':'';
   }
   updateWorkspaceFields(d.workspace||'Not selected');
   const runtime=d.runtime||{};document.getElementById('runtime-state').textContent=runtime.install_mode||'unknown';
   document.getElementById('digest-state').textContent=runtime.code_digest||'unavailable';
+  renderDoctor(d.doctor);
 }
 async function openSettings(){
   settingsModal.className='project-modal on';document.getElementById('settings-error').className='wizard-error';
@@ -914,6 +967,25 @@ document.getElementById('hub-settings').onclick=openSettings;
 document.getElementById('close-settings').onclick=closeSettings;
 document.getElementById('cancel-settings').onclick=closeSettings;
 document.getElementById('choose-settings-workspace').onclick=()=>chooseWorkspace('settings');
+function doctorMessage(text,bad=false){const box=document.getElementById('doctor-message');box.textContent=text||'';
+  box.className='doctor-message'+(text?' on':'')+(bad?' bad':'');}
+document.getElementById('run-doctor').onclick=async()=>{doctorMessage('');
+  try{renderDoctor(await api('/api/doctor',{action:'scan'}));}
+  catch(e){doctorMessage(e.message,true);}};
+document.getElementById('doctor-checks').onclick=async ev=>{
+  const button=ev.target.closest('[data-doctor-action]');if(!button)return;
+  const action=button.getAttribute('data-doctor-action');
+  if(action==='choose_workspace'){chooseWorkspace('settings');return;}
+  const payload={action};const row=button.closest('.doctor-check');
+  if(action==='set_git_identity'){
+    payload.name=row.querySelector('[data-doctor-name]').value.trim();
+    payload.email=row.querySelector('[data-doctor-email]').value.trim();
+  }
+  doctorMessage('');button.disabled=true;const before=button.textContent;button.textContent='Working…';
+  try{const result=await api('/api/doctor',payload);doctorMessage(result.message||'Repair started. Doctor is checking again.');
+    renderSettings(await api('/api/settings'));}
+  catch(e){doctorMessage(e.message,true);button.disabled=false;button.textContent=before;}
+};
 settingsModal.addEventListener('click',ev=>{if(ev.target===settingsModal)closeSettings();});
 document.getElementById('provider-credentials').onclick=async ev=>{if(!ev.target.closest('#connect-chatgpt'))return;
   const button=document.getElementById('connect-chatgpt');const error=document.getElementById('settings-error');
@@ -1215,6 +1287,8 @@ async function openProject(root,current){
     document.getElementById('job-title').textContent='Could not open project';document.getElementById('job-detail').textContent=e.message;}
 }
 function openProjectModal(){projectForm.reset();document.getElementById('wizard-error').className='wizard-error';
+  if(settingsState&&settingsState.doctor&&settingsState.doctor.status==='blocked'){
+    openSettings();doctorMessage('Fix the required Environment Doctor items before creating a project.',true);return;}
   repoNameTouched={science:false,audit:false};resetRepositoryCheck();
   configureProjectForm();const vendors=Object.keys((projectState&&projectState.models)||{});
   auditorVendor.value=vendors.includes('openai')?'openai':vendors[0];
@@ -1871,6 +1945,17 @@ form.onsubmit=async ev=>{ev.preventDefault();const rawText=say.value.trim();if(!
 api('/api/state').then(render).catch(e=>{document.getElementById('thread-title').textContent='Disconnected — '+e.message;});
 startStream();
 if(location.hash==='#projects')showProjects();
-api('/api/settings').then(s=>{const ready=Object.values(s.providers||{}).filter(p=>p.configured).length;
-  if(s.app_mode&&location.hash==='#projects'&&ready<2)openSettings();}).catch(()=>{});
+async function initialReadiness(){
+  for(let attempt=0;attempt<12;attempt++){
+    try{const s=await api('/api/settings');settingsState=s;
+      const providers=Object.values(s.providers||{}).filter(p=>p.configured).length;
+      const blocked=s.doctor&&s.doctor.status==='blocked';
+      if(s.app_mode&&location.hash==='#projects'&&(providers<2||blocked)){
+        await openSettings();if(blocked)doctorMessage('Required setup needs attention before creating a project.',true);return;}
+      if(!s.doctor||s.doctor.status!=='running')return;
+    }catch(e){return;}
+    await new Promise(resolve=>setTimeout(resolve,500));
+  }
+}
+initialReadiness();
 </script></body></html>"""

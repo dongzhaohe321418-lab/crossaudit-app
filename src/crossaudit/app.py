@@ -39,15 +39,18 @@ def _git(root: Path, *args: str) -> None:
 
 
 def _controller_project(workspace: Path) -> Path:
-    """Create the hidden, non-user controller needed by the project hub."""
+    """Create the hidden controller, even when Git still needs installation.
+
+    The Settings/Doctor UI must be reachable precisely when a prerequisite is
+    broken.  Configuration files therefore come first; Git initialization is a
+    best-effort final step that Doctor can safely complete after the user has
+    installed Apple's Command Line Tools.
+    """
     root = workspace / ".crossaudit-home"
     config = root / CONFIG_NAME
     if config.is_file():
         return root
     root.mkdir(parents=True, exist_ok=True)
-    if not shutil.which("git"):
-        raise RuntimeError("Git is required. Install the Xcode Command Line Tools and reopen CrossAudit.")
-    _git(root, "init", "-q", "-b", "main")
     (root / ".gitignore").write_text(
         ".crossaudit/\n*.env\n.DS_Store\n", encoding="utf-8", newline="\n")
     (root / "AUDIT_RULES.md").write_text(
@@ -68,12 +71,34 @@ def _controller_project(workspace: Path) -> Path:
     (root / "DETERMINISTIC_CHECKS.md").write_text(
         "# Deterministic checks\n\n```text\n" + describe_checks(GENERAL_CHECKS)
         + "\n```\n", encoding="utf-8", newline="\n")
-    _git(root, "add", "-A")
-    subprocess.run(
-        ["git", "-c", "user.name=CrossAudit", "-c",
-         "user.email=app@crossaudit.local", "commit", "-q", "-m",
-         f"CrossAudit V{__version__} application controller"],
-        cwd=root, check=True, capture_output=True)
+    git_path = shutil.which("git")
+    git_usable = False
+    if git_path:
+        try:
+            tools_ready = True
+            if sys.platform == "darwin" and git_path == "/usr/bin/git":
+                tools_ready = subprocess.run(
+                    ["/usr/bin/xcode-select", "-p"], capture_output=True,
+                    timeout=5).returncode == 0
+            if tools_ready:
+                probe = subprocess.run([git_path, "--version"], capture_output=True,
+                                       timeout=5)
+                git_usable = probe.returncode == 0
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+    if git_usable:
+        try:
+            _git(root, "init", "-q", "-b", "main")
+            _git(root, "add", "-A")
+            subprocess.run(
+                [git_path, "-c", "user.name=CrossAudit", "-c",
+                 "user.email=app@crossaudit.local", "commit", "-q", "-m",
+                 f"CrossAudit V{__version__} application controller"],
+                cwd=root, check=True, capture_output=True)
+        except (OSError, subprocess.CalledProcessError):
+            # The app can still open its local recovery UI. Doctor will show
+            # the exact Git failure and offer to initialize this ledger again.
+            pass
     return root
 
 

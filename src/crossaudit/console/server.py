@@ -34,7 +34,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, quote, urlparse
 
 from ..config import Config, load
-from .. import app_keys, connections, usage
+from .. import app_doctor, app_keys, connections, usage
 from ..controller import StateStore
 from ..errors import ConfigDenial, Denial
 from ..receipt.verify import (admit as admit_receipt, load as load_receipt,
@@ -55,25 +55,37 @@ MAX_UTTERANCE = 4000
 ALLOWED_HOSTS = {"localhost", "127.0.0.1", "[::1]"}
 
 
-def app_settings() -> dict:
+def app_settings(cfg: Config | None = None) -> dict:
     """Non-secret desktop readiness state for the Settings panel."""
     from .. import _selfid
 
     identity = _selfid.identity()
+    app_mode = os.environ.get("CROSSAUDIT_APP_MODE") == "1"
+    if cfg is not None and app_mode:
+        app_doctor.JOBS.start(cfg, STREAM_CHANGES.notify)
+    doctor = (app_doctor.JOBS.snapshot(cfg) if cfg is not None and app_mode else {
+        "status": "idle", "summary": "Environment has not been checked",
+        "checks": [], "checked_at": 0,
+    })
+    checked = {row.get("id"): row for row in doctor.get("checks", [])}
     return {
-        "app_mode": os.environ.get("CROSSAUDIT_APP_MODE") == "1",
+        "app_mode": app_mode,
         "workspace": os.environ.get("CROSSAUDIT_WORKSPACE_ROOT", ""),
         "providers": connections.status(),
         "provider_login": connections.LOGINS.snapshot(),
         "dependencies": {
-            "git": bool(shutil.which("git")),
-            "github_cli": bool(os.environ.get("CROSSAUDIT_BUNDLED_GH", "") or
-                               shutil.which("gh")),
+            "git": (checked.get("git", {}).get("status") == "ready"
+                    if "git" in checked else bool(shutil.which("git"))),
+            "github_cli": (checked.get("github_cli", {}).get("status") == "ready"
+                           if "github_cli" in checked else
+                           bool(os.environ.get("CROSSAUDIT_BUNDLED_GH", "") or
+                                shutil.which("gh"))),
         },
         "runtime": {
             "install_mode": identity["install_mode"],
             "code_digest": identity["code_digest_sha256"][:12],
         },
+        "doctor": doctor,
     }
 
 
@@ -510,7 +522,8 @@ def make_handler(cfg: Config, token: str, touch) -> type:
             elif parsed.path == "/api/projects/stream":
                 self._stream_projects(cfg, touch)
             elif parsed.path == "/api/settings":
-                self._send(json.dumps(app_settings()).encode(), "application/json")
+                self._send(json.dumps(app_settings(self._config())).encode(),
+                           "application/json")
             elif parsed.path == "/api/settings/stream":
                 self._stream_settings(touch)
             elif parsed.path == "/api/file":
@@ -570,7 +583,7 @@ def make_handler(cfg: Config, token: str, touch) -> type:
             change_version = STREAM_CHANGES.current()
             try:
                 while True:
-                    payload = json.dumps(app_settings(), sort_keys=True)
+                    payload = json.dumps(app_settings(self._config()), sort_keys=True)
                     digest = hashlib.sha256(payload.encode()).hexdigest()
                     now = time.monotonic()
                     if digest != last_digest:
@@ -658,7 +671,7 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                                    "/api/workspace/select", "/api/models/refresh",
                                    "/api/runtime/options", "/api/runtime",
                                    "/api/settings", "/api/providers/connect",
-                                   "/api/admit"}:
+                                   "/api/doctor", "/api/admit"}:
                 self._deny(404, "no such action")
                 return
             touch()
@@ -767,7 +780,20 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                     app_keys.apply(payload)
                     connections.invalidate()
                     STREAM_CHANGES.notify()
-                    self._send(json.dumps(app_settings()).encode(), "application/json")
+                    self._send(json.dumps(app_settings(self._config())).encode(),
+                               "application/json")
+                    return
+                if parsed.path == "/api/doctor":
+                    if os.environ.get("CROSSAUDIT_APP_MODE") != "1":
+                        raise ConfigDenial("Application Doctor repairs are available in the macOS app")
+                    action = str(payload.get("action", "scan"))
+                    if action == "scan":
+                        result = app_doctor.JOBS.start(
+                            self._config(), STREAM_CHANGES.notify, force=True)
+                    else:
+                        result = app_doctor.JOBS.fix(
+                            self._config(), action, payload, STREAM_CHANGES.notify)
+                    self._send(json.dumps(result).encode(), "application/json")
                     return
                 if parsed.path == "/api/providers/connect":
                     if os.environ.get("CROSSAUDIT_APP_MODE") != "1":

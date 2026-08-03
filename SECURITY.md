@@ -10,7 +10,7 @@ mitigation. Do not include real API keys or user data.
 
 ## Supported version
 
-Security fixes are made against the latest `main` release. CrossAudit 4.8.0 is
+Security fixes are made against the latest `main` release. CrossAudit 4.9.0 is
 the current native-app release.
 
 ## Desktop trust boundary
@@ -35,6 +35,13 @@ pin and title metadata stays local in a mode-600, gitignored state file.
 Provider output is data, not a shell program: CrossAudit does not execute
 generated commands automatically.
 
+Environment Doctor exposes only tool paths, public version strings, readiness,
+and local project paths. Its write API accepts a fixed action allowlist: open
+Apple's Git installer, initialize the current project ledger, or save validated
+project-local Git identity fields. It cannot accept a command, executable, or
+arbitrary working directory from the web view. Update discovery calls only the
+public GitHub latest-release endpoint and sends no project or credential data.
+
 Closing the main window orders it out without terminating the native shell or
 local core. The menu-bar item exposes the background state and an explicit Quit
 command. On an unexpected core exit, the shell restores the window, reports the
@@ -43,6 +50,6 @@ background service is healthy.
 
 ## Distribution status
 
-The 4.8.0 community DMG is ad-hoc signed and is not Apple-notarized. Verify the
+The 4.9.0 community DMG is ad-hoc signed and is not Apple-notarized. Verify the
 published SHA-256 checksum before first launch. Organization-wide distribution
 should wait for a Developer ID signed, notarized, and stapled artifact.
