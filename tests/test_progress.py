@@ -244,6 +244,11 @@ def test_console_has_one_primary_command_composer():
     assert PAGE.count('id="settings-modal"') == 1
     assert PAGE.count('id="settings-open"') == 1
     assert "macOS Keychain" in PAGE and "/api/settings" in PAGE
+    assert 'id="auditor-connection" required' in PAGE
+    assert 'id="generator-connection" required' in PAGE
+    assert "ChatGPT subscription" in PAGE and "/api/providers/connect" in PAGE
+    assert "Subscription login unavailable" in PAGE
+    assert "Automatic revision limit" in PAGE and "It never auto-passes" in PAGE
     assert 'type="password" id="openai-key"' in PAGE
     assert 'type="password" id="anthropic-key"' in PAGE
     assert 'data-theme="dark"' in PAGE and "crossaudit-theme" in PAGE

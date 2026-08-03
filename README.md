@@ -1,10 +1,10 @@
-# CrossAudit 4.0.0
+# CrossAudit 4.1.0
 
-[![Version 4.0.0](https://img.shields.io/badge/version-4.0.0-6d5dfc)](https://github.com/dongzhaohe321418-lab/crossaudit_v4/releases/tag/v4.0.0)
+[![Version 4.1.0](https://img.shields.io/badge/version-4.1.0-6d5dfc)](https://github.com/dongzhaohe321418-lab/crossaudit_v4/releases/tag/v4.1.0)
 [![macOS 13+](https://img.shields.io/badge/macOS-13%2B-111111)](https://github.com/dongzhaohe321418-lab/crossaudit_v4#install)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776ab)](https://github.com/dongzhaohe321418-lab/crossaudit_v4#command-line-installation)
 
-**Latest release: [CrossAudit 4.0.0](https://github.com/dongzhaohe321418-lab/crossaudit_v4/releases/tag/v4.0.0).**
+**Latest release: [CrossAudit 4.1.0](https://github.com/dongzhaohe321418-lab/crossaudit_v4/releases/tag/v4.1.0).**
 
 CrossAudit is a local, cross-vendor AI work loop. One model creates files, a
 model from a different provider audits the committed result, and every task,
@@ -59,6 +59,10 @@ structured content.
   human escalation, and result download in one UI.
 - API credentials stored in the macOS login Keychain and never returned to the
   web view.
+- OpenAI access through either a write-only API key or official **Sign in with
+  ChatGPT** subscription authentication. The bundled OpenAI Codex runtime owns
+  the browser flow and tokens; CrossAudit receives only account status and
+  model output.
 - Independent background workers per project and immediate event-driven UI
   updates through Server-Sent Events.
 - A command-line interface for automation and development.
@@ -76,28 +80,31 @@ structured content.
 - An Apple Silicon Mac running macOS 13 or later for the desktop application
 - Git (the application reports clearly when the Xcode Command Line Tools are
   missing)
-- An API key for the auditing model
-- A separate API key for the generator when using the automated build loop
+- Two independent model-provider connections. OpenAI can use a ChatGPT plan or
+  an API key. Anthropic currently requires an API/enterprise-cloud credential.
 - A GitHub account only when you choose the optional two-repository workflow
 
 Python 3.10 or newer is required only for the optional command-line/source
-installation. The `.dmg` bundles its own runtime and GitHub CLI.
+installation. The `.dmg` bundles its own Python core, GitHub CLI, and the pinned
+official OpenAI Codex runtime.
 
 ## Install
 
 ### macOS application
 
-1. Download `CrossAudit-4.0.0-arm64.dmg` and its checksum from the
-   [V4.0.0 release](https://github.com/dongzhaohe321418-lab/crossaudit_v4/releases/tag/v4.0.0).
+1. Download `CrossAudit-4.1.0-arm64.dmg` and its checksum from the
+   [V4.1.0 release](https://github.com/dongzhaohe321418-lab/crossaudit_v4/releases/tag/v4.1.0).
 2. Optionally verify it in Terminal:
 
    ```bash
-   shasum -a 256 -c CrossAudit-4.0.0-arm64.dmg.sha256
+   shasum -a 256 -c CrossAudit-4.1.0-arm64.dmg.sha256
    ```
 
 3. Open the DMG and drag **CrossAudit** to **Applications**.
-4. Open CrossAudit. On first launch, open **Settings**, add one OpenAI key and
-   one Anthropic key, and save. The values go to the macOS login Keychain.
+4. Open CrossAudit, then open **Settings**. For OpenAI, choose **Connect** to
+   complete the official ChatGPT browser login or enter an API key. Enter the
+   independent Anthropic API key and save. API keys go to the macOS login
+   Keychain; ChatGPT credentials remain owned by the official Codex runtime.
 
 This initial community build is ad-hoc signed but not Apple-notarized because
 the project does not yet have an Apple Developer ID certificate. macOS may
@@ -120,7 +127,7 @@ crossaudit --version
 Expected version output:
 
 ```text
-crossaudit 4.0.0 (receipt schema 2)
+crossaudit 4.1.0 (receipt schema 2)
 ```
 
 Use a virtual environment instead when developing CrossAudit, testing source
@@ -141,7 +148,9 @@ project, or contact a model provider. Setup begins only when you run
 
 ### Desktop application
 
-1. Open CrossAudit and store the two provider credentials in **Settings**.
+1. Open CrossAudit and connect both providers in **Settings**. Every normal
+   application setting—including write-only API-key entry—is available in the
+   UI; no YAML or environment-variable editing is required.
 2. Select **New project**, describe the intended output and choose different
    vendors for Generator and Auditor.
 3. Leave GitHub off for a local project, or select the two-repository option and
@@ -158,6 +167,12 @@ project, or contact a model provider. Setup begins only when you run
 The Projects button returns to the portfolio view. Every project has its own
 background process and live progress bar, so switching workspaces does not stop
 other loops.
+
+The **Automatic revision limit** in New Project is a cost and termination
+guardrail, not an audit score. It controls how many generator → auditor
+correction rounds may run automatically. If the result still has blockers at
+the limit, CrossAudit pauses and escalates to the user; it never converts a
+failure into PASS. The default is three and the UI offers 1, 3, 5, or 10.
 
 ### Command-line workflow
 
@@ -472,9 +487,27 @@ organizational separation, use the two-repository deployment described below.
 
 ## Credentials and environment variables
 
-The macOS app stores OpenAI and Anthropic credentials in the current user's
-login Keychain. The UI can add, replace, or remove them, but it can query only
-whether a credential exists; it never reads a secret back into JavaScript.
+The macOS app exposes provider connection settings in the UI. API keys are
+stored in the current user's login Keychain. The UI can add, replace, or remove
+them, but it can query only whether a credential exists; it never reads a secret
+back into JavaScript.
+
+For OpenAI, **Connect ChatGPT** uses the documented Codex App Server browser
+flow. OpenAI documents both ChatGPT subscription and API-key sign-in for Codex,
+and specifically describes App Server as the product-integration surface for
+authentication and streamed events. CrossAudit invokes that official runtime,
+never parses its credential store, and constrains each provider turn to an
+ephemeral read-only, text-only thread. See the official
+[OpenAI authentication](https://learn.chatgpt.com/docs/auth) and
+[Codex App Server](https://learn.chatgpt.com/docs/app-server) documentation.
+
+Claude.ai subscriptions and Anthropic API billing are separate products, and
+Anthropic's consumer terms prohibit sharing account login information or
+credentials. CrossAudit therefore does not offer a Claude subscription bridge,
+browser-cookie import, or token scraping. Use an Anthropic API key or an
+organization-approved enterprise-cloud connection. See Anthropic's
+[subscription/API explanation](https://support.anthropic.com/en/articles/9876003-i-subscribe-to-a-paid-claude-ai-plan-why-do-i-have-to-pay-separately-for-api-usage-on-console)
+and [consumer terms](https://www.anthropic.com/legal/consumer-terms).
 
 The CLI setup wizard writes role credentials to `~/.crossaudit-keys.env` with
 file mode 600. The file is parsed as data; CrossAudit does not execute arbitrary
@@ -499,6 +532,8 @@ content from it. An already-exported environment variable takes precedence.
 | `CROSSAUDIT_APP_MODE` | Internal flag marking a native-app controller process. Do not set it for CLI use. |
 | `CROSSAUDIT_APP_URL` | Internal startup-message prefix used by the native shell. |
 | `CROSSAUDIT_BUNDLED_GH` | Internal path to the GitHub CLI bundled inside the app. |
+| `CROSSAUDIT_BUNDLED_CODEX` | Internal path to the pinned official OpenAI Codex runtime bundled inside the app. |
+| `CROSSAUDIT_CODEX_CWD` | Advanced test-only override for the empty read-only subscription-provider working directory. |
 
 Never commit API keys. If a key is pasted into a public issue, log, screenshot,
 or chat, revoke it and create a replacement.
@@ -509,7 +544,8 @@ The setup wizard includes these provider families:
 
 | Vendor | Provider adapter | Example model choices |
 |---|---|---|
-| OpenAI | `openai_compat` | `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna` |
+| OpenAI API | `openai_compat` | `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna` |
+| ChatGPT subscription | `openai_codex` | Models returned live by the connected ChatGPT workspace |
 | Anthropic | `anthropic` | `claude-fable-5`, `claude-opus-4-8`, `claude-sonnet-4-6`, `claude-haiku-4-5-20251001` |
 | Google | `openai_compat` | `gemini-2.5-pro`, `gemini-2.5-flash` |
 | DeepSeek | `openai_compat` | `deepseek-reasoner`, `deepseek-chat` |
@@ -621,13 +657,13 @@ Exit codes are stable so scripts do not need to parse prose:
 
 V4 sends `max_completion_tokens` to the built-in OpenAI endpoint and retries
 once when a compatible endpoint explicitly asks for that field. Confirm that
-`crossaudit --version` reports 4.0.0 and reinstall if an older package is still
+`crossaudit --version` reports 4.1.0 and reinstall if an older package is still
 on your PATH. Restart a background console after upgrading because an existing
 daemon keeps the Python code that was loaded when it started.
 
 ### The macOS app is blocked on first launch
 
-V4.0.0 is structurally signed with the hardened runtime but is not notarized.
+V4.1.0 is structurally signed with the hardened runtime but is not notarized.
 Control-click **CrossAudit.app**, choose **Open**, and confirm only after you
 have verified the published SHA-256 checksum. An Apple Developer ID signed and
 notarized build is required before broad organizational deployment.

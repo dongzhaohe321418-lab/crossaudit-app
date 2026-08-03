@@ -419,6 +419,14 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
   gap:8px;margin-bottom:10px}.credential-head b{font-size:12px}.credential-state{margin-left:auto;font-size:10px;
   color:var(--faint)}.credential-state.ok{color:var(--green)}.secret-row{display:grid;
   grid-template-columns:minmax(0,1fr) auto;gap:9px;align-items:end}.secret-row .toggle-line{padding-bottom:9px}
+.connection-method{display:flex;align-items:center;gap:12px;padding:11px;border:1px solid var(--line);
+  border-radius:9px;background:var(--surface-2);margin-bottom:11px}.connection-method-copy{min-width:0;flex:1}
+.connection-method-copy b{display:block;font-size:11.5px}.connection-method-copy small{display:block;color:var(--muted);
+  margin-top:3px;line-height:1.4}.connection-method .secondary{flex:none}.provider-note{padding:9px 10px;
+  border-radius:8px;background:var(--amber-bg);color:var(--muted);font-size:10.5px;line-height:1.45;
+  margin-bottom:11px}.provider-note b{color:var(--amber)}.login-link{color:var(--blue);font-weight:650;
+  text-decoration:none}.field-help{display:block!important;margin-top:5px;color:var(--faint);font-size:10px;
+  line-height:1.4}
 .settings-readiness{display:grid;grid-template-columns:1fr 1fr;gap:8px}.readiness-item{border:1px solid var(--line);
   border-radius:8px;padding:10px;background:var(--panel);font-size:11px}.readiness-item span{float:right;color:var(--green)}
 .readiness-item span.bad{color:var(--red)}
@@ -431,7 +439,7 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
 <body>
 <section class="project-hub" id="project-hub" aria-label="Projects">
   <header class="hub-bar"><button class="brand-button" id="hub-brand"><span class="brand-mark">◇</span>
-    CrossAudit <span class="version">V4</span></button><span class="spacer"></span>
+    CrossAudit <span class="version" id="hub-version">V4.1.0</span></button><span class="spacer"></span>
     <button class="icon-button" id="hub-settings" aria-label="Settings" title="Settings">⚙</button>
     <button class="icon-button" id="hub-theme" aria-label="Switch theme">◐</button>
     <button class="primary" id="create-project">＋ New project</button></header>
@@ -452,7 +460,7 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
     <span class="spacer"></span><button type="button" class="icon-button" id="close-project-modal" aria-label="Close">×</button></div>
     <div class="wizard-body"><section class="form-section"><div class="form-title">Project</div><div class="form-grid">
       <label class="field"><span>Project name</span><input name="name" id="project-name" maxlength="80" required placeholder="chem-agent"></label>
-      <label class="field"><span>Maximum audit rounds</span><select name="max_rounds"><option>2</option><option selected>3</option><option>4</option><option>5</option></select></label>
+      <label class="field"><span>Automatic revision limit</span><select name="max_rounds" id="max-rounds-choice"><option value="1">1 — quick stop</option><option value="3" selected>3 — recommended</option><option value="5">5 — persistent</option><option value="10">10 — maximum</option></select><small class="field-help" id="round-limit-help">Up to 3 generator → auditor rounds, then the task pauses for you. It never auto-passes.</small></label>
       <label class="field full"><span>Project type</span><select name="project_type" id="project-type">
         <option value="general" selected>General work — documents, reviews, code</option>
         <option value="science">Scientific / data workflow — structured experiment outputs</option></select></label>
@@ -462,10 +470,12 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
     </div></section>
     <section class="form-section"><div class="form-title">Independent roles</div><div class="form-grid">
       <div class="role-card"><b>Auditor</b><label class="field"><span>Provider</span><select name="auditor_vendor" id="auditor-vendor"></select></label>
+        <label class="field"><span>Connection</span><select name="auditor_connection" id="auditor-connection" required></select></label>
         <label class="field"><span>Model</span><select name="auditor_model_choice" id="auditor-model"></select></label>
         <label class="field custom-model off" id="auditor-custom-wrap"><span>Custom model ID</span><input id="auditor-custom" maxlength="120" placeholder="Model available to your account"></label>
         <div class="model-actions"><button type="button" class="secondary" data-refresh-models="auditor">Refresh from provider</button></div></div>
       <div class="role-card"><b>Generator</b><label class="field"><span>Provider</span><select name="generator_vendor" id="generator-vendor"></select></label>
+        <label class="field"><span>Connection</span><select name="generator_connection" id="generator-connection" required></select></label>
         <label class="field"><span>Model</span><select name="generator_model_choice" id="generator-model"></select></label>
         <label class="field custom-model off" id="generator-custom-wrap"><span>Custom model ID</span><input id="generator-custom" maxlength="120" placeholder="Model available to your account"></label>
         <div class="model-actions"><button type="button" class="secondary" data-refresh-models="generator">Refresh from provider</button></div></div>
@@ -486,13 +496,15 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
 
 <div class="project-modal" id="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
   <form class="wizard" id="settings-form"><div class="wizard-head"><div><h2 id="settings-title">CrossAudit settings</h2>
-    <p>Provider credentials stay in macOS Keychain and are never returned to this page.</p></div>
+    <p>Connect subscriptions or enter API keys without editing files or environment variables.</p></div>
     <span class="spacer"></span><button type="button" class="icon-button" id="close-settings" aria-label="Close settings">×</button></div>
     <div class="wizard-body"><section class="form-section"><div class="form-title">Provider credentials</div>
       <div class="credential-card"><div class="credential-head"><b>OpenAI</b><span class="credential-state" id="openai-state">Checking…</span></div>
+        <div class="connection-method"><div class="connection-method-copy"><b>ChatGPT subscription</b><small id="chatgpt-detail">Use the official Codex login and an eligible ChatGPT plan. CrossAudit never receives the OAuth token.</small></div><button type="button" class="secondary" id="connect-chatgpt">Connect</button></div>
         <div class="secret-row"><label class="field"><span>New API key</span><input type="password" id="openai-key" autocomplete="new-password" placeholder="Leave blank to keep the saved key"></label>
           <label class="toggle-line"><input type="checkbox" id="remove-openai"><span><b>Remove</b><small>Delete saved key</small></span></label></div></div>
       <div class="credential-card"><div class="credential-head"><b>Anthropic</b><span class="credential-state" id="anthropic-state">Checking…</span></div>
+        <div class="provider-note"><b>Subscription login unavailable.</b> Anthropic currently requires third-party applications to use API or approved enterprise-cloud credentials; CrossAudit will not capture Claude.ai cookies or subscription tokens.</div>
         <div class="secret-row"><label class="field"><span>New API key</span><input type="password" id="anthropic-key" autocomplete="new-password" placeholder="Leave blank to keep the saved key"></label>
           <label class="toggle-line"><input type="checkbox" id="remove-anthropic"><span><b>Remove</b><small>Delete saved key</small></span></label></div></div>
     </section><section class="form-section"><div class="form-title">Application readiness</div>
@@ -502,7 +514,7 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
         <div class="readiness-item">Code identity<span id="digest-state">…</span></div></div>
       <label class="field" style="margin-top:12px"><span>Project workspace</span><input id="settings-workspace" readonly></label>
     </section><div class="wizard-error" id="settings-error"></div></div>
-    <div class="wizard-foot"><span>Saving a new key replaces only that provider's Keychain item.</span>
+    <div class="wizard-foot"><span>API keys are write-only macOS Keychain items. Subscription credentials stay with the official provider runtime.</span>
       <button type="button" class="secondary" id="cancel-settings">Cancel</button><button class="primary" id="save-settings">Save settings</button></div>
   </form>
 </div>
@@ -513,7 +525,7 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
       aria-controls="sidebar-panel" aria-expanded="false">☰</button>
     <button class="icon-button" id="back-projects" aria-label="Back to projects" title="Back to projects">←</button>
     <button class="brand-button" id="projects-home"><span class="brand-mark">◇</span>CrossAudit
-      <span class="version" id="version-badge">V4</span></button>
+      <span class="version" id="version-badge">V4.1.0</span></button>
     <button class="top-project" id="project-switcher"><b id="proj">…</b> <span id="branch-label">/ supervised workspace</span>⌄</button>
     <span class="spacer"></span>
     <div class="live-pill"><span class="live-dot" id="livedot"></span><span id="conn-text">connecting</span></div>
@@ -653,12 +665,29 @@ async function api(path, body){
 
 const settingsModal=document.getElementById('settings-modal');
 const settingsForm=document.getElementById('settings-form');
+let settingsSource=null;
 function renderSettings(d){
   for(const vendor of ['openai','anthropic']){
-    const configured=Boolean(d.providers&&d.providers[vendor]&&d.providers[vendor].configured);
-    const state=document.getElementById(vendor+'-state');state.textContent=configured?'Configured':'Not configured';
+    const provider=d.providers&&d.providers[vendor]||{};
+    const apiConfigured=Boolean(provider.api_key&&provider.api_key.configured);
+    const configured=Boolean(provider.configured);
+    const state=document.getElementById(vendor+'-state');state.textContent=configured?'Connected':'Not connected';
     state.className='credential-state'+(configured?' ok':'');
-    document.getElementById('remove-'+vendor).disabled=!configured;
+    document.getElementById('remove-'+vendor).disabled=!apiConfigured;
+  }
+  const openai=d.providers&&d.providers.openai||{};const chatgpt=openai.chatgpt||{};
+  const login=d.provider_login||{};const button=document.getElementById('connect-chatgpt');
+  const detail=document.getElementById('chatgpt-detail');
+  if(chatgpt.connected){
+    detail.textContent='Connected'+(chatgpt.email?' as '+chatgpt.email:'')+(chatgpt.plan?' · '+chatgpt.plan:'')
+      +'. Usage follows this ChatGPT workspace and plan.';button.textContent='Connected';button.disabled=true;
+  }else if(login.status==='running'){
+    detail.innerHTML=esc(login.detail||'Complete sign in in your browser')
+      +(login.url?' · <a class="login-link" href="'+esc(login.url)+'">Open ChatGPT ↗</a>':'');
+    button.textContent='Waiting…';button.disabled=true;
+  }else{
+    detail.textContent=chatgpt.detail||'Use the official Codex login and an eligible ChatGPT plan. CrossAudit never receives the OAuth token.';
+    button.textContent=login.status==='failed'?'Try again':'Connect';button.disabled=!chatgpt.available;
   }
   const deps=d.dependencies||{};
   for(const [id,value] of [['git-state',deps.git],['ghcli-state',deps.github_cli]]){
@@ -670,7 +699,11 @@ function renderSettings(d){
 }
 async function openSettings(){
   settingsModal.className='project-modal on';document.getElementById('settings-error').className='wizard-error';
-  try{renderSettings(await api('/api/settings'));}catch(e){const box=document.getElementById('settings-error');
+  try{renderSettings(await api('/api/settings'));if(!settingsSource){
+    settingsSource=new EventSource('/api/settings/stream?t='+encodeURIComponent(T));
+    settingsSource.onmessage=ev=>{try{renderSettings(JSON.parse(ev.data));}catch(e){}};
+    settingsSource.onerror=()=>{};
+  }}catch(e){const box=document.getElementById('settings-error');
     box.textContent=e.message;box.className='wizard-error on';}
 }
 function closeSettings(){settingsModal.className='project-modal';settingsForm.reset();}
@@ -679,6 +712,15 @@ document.getElementById('hub-settings').onclick=openSettings;
 document.getElementById('close-settings').onclick=closeSettings;
 document.getElementById('cancel-settings').onclick=closeSettings;
 settingsModal.addEventListener('click',ev=>{if(ev.target===settingsModal)closeSettings();});
+document.getElementById('connect-chatgpt').onclick=async()=>{
+  const button=document.getElementById('connect-chatgpt');const error=document.getElementById('settings-error');
+  button.disabled=true;button.textContent='Starting…';error.className='wizard-error';
+  try{const result=await api('/api/providers/connect',{provider:'openai',method:'chatgpt'});
+    if(result.url){const link=document.createElement('a');link.href=result.url;
+      document.body.appendChild(link);link.click();link.remove();}
+    renderSettings(await api('/api/settings'));
+  }catch(e){error.textContent=e.message;error.className='wizard-error on';button.disabled=false;button.textContent='Connect';}
+};
 settingsForm.onsubmit=async ev=>{ev.preventDefault();const save=document.getElementById('save-settings');
   const error=document.getElementById('settings-error');error.className='wizard-error';save.disabled=true;
   const payload={openai_key:document.getElementById('openai-key').value,
@@ -698,6 +740,8 @@ const projectModal=document.getElementById('project-modal');
 const projectForm=document.getElementById('project-form');
 const auditorVendor=document.getElementById('auditor-vendor');
 const generatorVendor=document.getElementById('generator-vendor');
+const auditorConnection=document.getElementById('auditor-connection');
+const generatorConnection=document.getElementById('generator-connection');
 const auditorModel=document.getElementById('auditor-model');
 const generatorModel=document.getElementById('generator-model');
 const projectType=document.getElementById('project-type');
@@ -710,6 +754,17 @@ function modelOptions(vendor,target){
   if([...target.options].some(o=>o.value===previous))target.value=previous;
   syncCustomModel(target.id.startsWith('auditor')?'auditor':'generator');
 }
+function connectionOptions(vendor,target){
+  const previous=target.value;const state=projectState&&projectState.connections&&projectState.connections[vendor]||{};
+  const rows=[];
+  if(vendor==='openai')rows.push({id:'chatgpt',label:'ChatGPT subscription',ready:Boolean(state.chatgpt&&state.chatgpt.connected)});
+  rows.push({id:'api',label:vendor[0].toUpperCase()+vendor.slice(1)+' API key',ready:Boolean(state.api_key&&state.api_key.configured)});
+  const readyRows=rows.filter(x=>x.ready);
+  target.innerHTML=(readyRows.length?'':'<option value="" selected disabled>Connect '+esc(vendor)+' in Settings first</option>')
+    +rows.map(x=>'<option value="'+x.id+'"'+(x.ready?'':' disabled')+'>'+esc(x.label)+(x.ready?'':' — connect in Settings')+'</option>').join('');
+  if([...target.options].some(o=>o.value===previous&&!o.disabled))target.value=previous;
+  else{const ready=[...target.options].find(o=>!o.disabled);if(ready)target.value=ready.value;}
+}
 function syncCustomModel(role){
   const select=role==='auditor'?auditorModel:generatorModel;
   document.getElementById(role+'-custom-wrap').className='field custom-model'+(select.value==='__custom__'?'':' off');
@@ -721,6 +776,7 @@ function syncRoleChoices(){
   if(generatorVendor.selectedOptions[0]&&generatorVendor.selectedOptions[0].disabled){
     generatorVendor.value=[...generatorVendor.options].find(o=>!o.disabled).value;
   }
+  connectionOptions(auditorVendor.value,auditorConnection);connectionOptions(generatorVendor.value,generatorConnection);
   modelOptions(auditorVendor.value,auditorModel);modelOptions(generatorVendor.value,generatorModel);
 }
 function configureProjectForm(){
@@ -827,11 +883,14 @@ function openProjectModal(){projectForm.reset();document.getElementById('wizard-
 function closeProjectModal(){projectModal.className='project-modal';}
 
 auditorVendor.onchange=syncRoleChoices;generatorVendor.onchange=syncRoleChoices;
+auditorConnection.onchange=()=>modelOptions(auditorVendor.value,auditorModel);
+generatorConnection.onchange=()=>modelOptions(generatorVendor.value,generatorModel);
 auditorModel.onchange=()=>syncCustomModel('auditor');generatorModel.onchange=()=>syncCustomModel('generator');
 document.querySelectorAll('[data-refresh-models]').forEach(button=>button.onclick=async()=>{
   const role=button.getAttribute('data-refresh-models');const vendor=role==='auditor'?auditorVendor.value:generatorVendor.value;
+  const method=role==='auditor'?auditorConnection.value:generatorConnection.value;
   button.disabled=true;button.textContent='Refreshing…';
-  try{const result=await api('/api/models/refresh',{role,vendor});
+  try{const result=await api('/api/models/refresh',{role,vendor,method});
     projectState.models[vendor]=result.models.map(id=>({id,hint:'visible to this account'}));
     modelOptions(vendor,role==='auditor'?auditorModel:generatorModel);
     button.textContent='Updated '+new Date(result.refreshed*1000).toLocaleTimeString();}
@@ -840,6 +899,9 @@ document.querySelectorAll('[data-refresh-models]').forEach(button=>button.onclic
   finally{button.disabled=false;setTimeout(()=>button.textContent='Refresh from provider',3500);}
 });
 document.getElementById('project-name').addEventListener('input',syncRepoNames);
+document.getElementById('max-rounds-choice').onchange=ev=>{
+  const n=Number(ev.target.value);document.getElementById('round-limit-help').textContent='Up to '+n
+    +' generator → auditor round'+(n===1?'':'s')+', then the task pauses for you. It never auto-passes.';};
 projectType.onchange=syncProjectType;
 document.getElementById('github-toggle').onchange=syncGithubFields;
 document.getElementById('github-connection').onclick=async ev=>{
@@ -1119,6 +1181,7 @@ function render(d){
   lastState = d;
   const preview=document.getElementById('contract-preview');preview.className='contract-preview';preview.innerHTML='';
   document.getElementById('version-badge').textContent = 'V' + d.version;
+  document.getElementById('hub-version').textContent = 'V' + d.version;
   document.getElementById('proj').textContent = d.project;
   document.getElementById('side-project').textContent = d.project;
   document.getElementById('tier-label').textContent = d.tier.tier + ' · local controller';

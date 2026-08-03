@@ -1,14 +1,14 @@
-# CrossAudit 4.0.0 enterprise release assessment
+# CrossAudit 4.1.0 enterprise release assessment
 
 Date: 2026-08-03
 
 Target: Apple Silicon macOS 13 or later
 
-Release candidate: 4.0.0
+Release candidate: 4.1.0
 
 ## Executive result
 
-CrossAudit 4.0.0 is suitable for local evaluation and controlled pilot use. It
+CrossAudit 4.1.0 is suitable for local evaluation and controlled pilot use. It
 preserves the V3.2 audited protocol while adding a native AppKit/WebKit shell,
 Keychain credentials, UI-first project creation, independent background
 projects, GitHub connection, chunked file transfer, final-artifact downloads,
@@ -32,6 +32,7 @@ Policy rather than hidden behind an installation workaround.
 | Frozen runtime | Isolated first-launch bootstrap and API smoke test | Required before tag |
 | UI security | Missing token, wrong token, foreign Host, path traversal | Automated |
 | Credential boundary | Keychain write/read/delete; no secret in argv or response | Automated and local smoke |
+| Subscription boundary | Official ChatGPT browser flow; allowlisted state; text-only fail-closed turns | Automated and live smoke |
 | Live state | Same-process event latency below 250 ms; external fallback at 100 ms | Automated |
 | Project isolation | Separate worker, token, lock, ledger, and progress state | Automated |
 | GitHub setup | Auth states, idempotent adoption, partial-failure retry, origin refusal | Automated |
@@ -41,6 +42,22 @@ Policy rather than hidden behind an installation workaround.
 The final command outputs and artifact hashes are recorded in the GitHub release
 and CI logs. Tests that spend provider credits remain explicitly opt-in and use
 repository secrets in CI.
+
+## V4.1.0 release-candidate evidence
+
+- Automated suite: **378 passed, 2 skipped**. The skipped cases are the
+  intentionally opt-in paid-provider tests.
+- Paid-provider smoke suite: **2 passed** using real OpenAI API and Anthropic
+  API calls.
+- Subscription smoke: official ChatGPT browser-session state was read through
+  App Server, seven account-visible models were returned, and an exact-marker
+  completion passed through both the development runtime and the runtime bundled
+  in the installed app.
+- Installed frozen core: reported 4.1.0, `frozen-app` identity, loopback-only
+  listening, 403 for missing token and foreign Host, and a 13.2 ms initial
+  Settings SSE frame in the measured local run.
+- Distribution: arm64 shell and Codex runtime, strict deep codesign validation,
+  valid Info.plist, valid DMG CRC, and a separately published SHA-256 checksum.
 
 ## Failures found and corrected in V4
 

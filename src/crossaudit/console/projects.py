@@ -23,6 +23,8 @@ from pathlib import Path
 
 from ..config import CONFIG_NAME, Config, load
 from ..app_keys import env_for_vendor
+from .. import connections
+from ..providers import codex_subscription
 from ..controller import StateStore
 from ..errors import ConfigDenial, Denial
 from ..providers.catalog import list_models
@@ -376,20 +378,26 @@ def models() -> dict:
     }
 
 
-def refresh_models(current: Config, vendor: str, role: str) -> dict:
+def refresh_models(current: Config, vendor: str, role: str,
+                   method: str = "api") -> dict:
     """Ask the provider which models this role's exact credential can access."""
     if vendor not in models():
         raise ConfigDenial(f"{vendor!r} has no supported model catalogue")
     if role not in {"auditor", "generator"}:
         raise ConfigDenial("model role must be auditor or generator")
-    vendor_env = env_for_vendor(vendor)
-    role_env = (current.auditor.key_env if role == "auditor"
-                else "CROSSAUDIT_GENERATOR_KEY")
-    key_env = vendor_env if os.environ.get(vendor_env, "").strip() else role_env
-    rows = list_models(vendor, key_env)
+    if vendor == "openai" and method == "chatgpt":
+        rows = codex_subscription.list_models()
+    else:
+        if method != "api":
+            raise ConfigDenial(f"{vendor} does not support connection {method!r}")
+        vendor_env = env_for_vendor(vendor)
+        role_env = (current.auditor.key_env if role == "auditor"
+                    else "CROSSAUDIT_GENERATOR_KEY")
+        key_env = vendor_env if os.environ.get(vendor_env, "").strip() else role_env
+        rows = list_models(vendor, key_env)
     if not rows:
         raise ConfigDenial(f"{vendor} returned no models visible to this key")
-    return {"vendor": vendor, "role": role, "models": rows,
+    return {"vendor": vendor, "role": role, "method": method, "models": rows,
             "refreshed": int(time.time())}
 
 
@@ -453,7 +461,8 @@ def snapshot(current: Config) -> dict:
     return {"workspace": str(base), "items": rows, "jobs": JOBS.snapshot(),
             "capacity": daemon.workspace_capacity(current),
             "github_auth": GITHUB_AUTH.snapshot(),
-            "github": github_status(), "models": models()}
+            "github": github_status(), "models": models(),
+            "connections": connections.status()}
 
 
 def _clean_text(payload: dict, key: str, limit: int, *, required: bool = True) -> str:
@@ -487,6 +496,8 @@ def create_project(base: Path, payload: dict, progress) -> dict:
     tree = GENERAL_TREE if project_type == "general" else SCIENCE_TREE
     auditor_vendor = _clean_text(payload, "auditor_vendor", 30)
     generator_vendor = _clean_text(payload, "generator_vendor", 30)
+    auditor_connection = str(payload.get("auditor_connection", "api")).strip()
+    generator_connection = str(payload.get("generator_connection", "api")).strip()
     auditor_model = _clean_text(payload, "auditor_model", 120)
     generator_model = (_clean_text(payload, "generator_model", 120,
                                    required=generator_vendor != "human")
@@ -502,14 +513,22 @@ def create_project(base: Path, payload: dict, progress) -> dict:
         raise ConfigDenial("model ids contain unsupported characters")
     auditor_key_env = env_for_vendor(auditor_vendor)
     generator_key_env = env_for_vendor(generator_vendor)
+    auditor_provider = connections.provider_for(auditor_vendor, auditor_connection)
+    generator_provider = (connections.provider_for(generator_vendor,
+                                                     generator_connection)
+                          if generator_vendor != "human" else "")
     if os.environ.get("CROSSAUDIT_APP_MODE") == "1":
-        if not os.environ.get(auditor_key_env, "").strip():
+        if not connections.ready(auditor_vendor, auditor_connection):
             raise ConfigDenial(
-                f"Add the {auditor_vendor.title()} API key in Settings before creating this project")
+                f"Connect {auditor_vendor.title()} "
+                f"{'API key' if auditor_connection == 'api' else 'subscription'} in "
+                "Settings before creating this project")
         if (generator_vendor != "human" and
-                not os.environ.get(generator_key_env, "").strip()):
+                not connections.ready(generator_vendor, generator_connection)):
             raise ConfigDenial(
-                f"Add the {generator_vendor.title()} API key in Settings before creating this project")
+                f"Connect {generator_vendor.title()} "
+                f"{'API key' if generator_connection == 'api' else 'subscription'} in "
+                "Settings before creating this project")
 
     target = (base / name).resolve()
     if target.parent != base.resolve():
@@ -551,13 +570,17 @@ def create_project(base: Path, payload: dict, progress) -> dict:
 
     const_name = "AUDIT_RULES.md"
     const_path = target / const_name
-    provider, default_model, _url = wizard.VENDORS[auditor_vendor]
+    _default_provider, default_model, _url = wizard.VENDORS[auditor_vendor]
     drafted = False
-    if os.environ.get(auditor_key_env, "").strip():
+    can_draft = (connections.ready(auditor_vendor, auditor_connection)
+                 if os.environ.get("CROSSAUDIT_APP_MODE") == "1" else
+                 bool(os.environ.get(auditor_key_env, "").strip()) or
+                 auditor_provider == "openai_codex")
+    if can_draft:
         record("constitution", "Drafting the Constitution with the auditor")
         try:
             draft = wizard._distil(
-                description, provider, auditor_model or default_model, "",
+                description, auditor_provider, auditor_model or default_model, "",
                 key_env=auditor_key_env)
             const_path.write_text(draft.render(name), encoding="utf-8", newline="\n")
             drafted = True
@@ -568,9 +591,6 @@ def create_project(base: Path, payload: dict, progress) -> dict:
                    else const_name)
         const_path.write_text(read(starter), encoding="utf-8", newline="\n")
 
-    gen_provider = ""
-    if generator_vendor != "human":
-        gen_provider = wizard.VENDORS[generator_vendor][0]
     try:
         max_rounds = int(payload.get("max_rounds", 3))
     except (TypeError, ValueError) as exc:
@@ -581,10 +601,10 @@ def create_project(base: Path, payload: dict, progress) -> dict:
         science_repo=science,
         audit_repo_line=f"audit_repo: {audit}" if audit else "# audit_repo: (local ledger)",
         constitution=const_name, max_rounds=max_rounds,
-        auditor_vendor=auditor_vendor, auditor_provider=provider,
+        auditor_vendor=auditor_vendor, auditor_provider=auditor_provider,
         auditor_model=auditor_model, base_url_line="",
         generator_vendor=generator_vendor,
-        generator_details=(f"  provider: {gen_provider}\n  model: {generator_model}\n"
+        generator_details=(f"  provider: {generator_provider}\n  model: {generator_model}\n"
                            f"  key_env: {generator_key_env}"
                            if generator_vendor != "human" else
                            "  # Human-written changes are committed first."),

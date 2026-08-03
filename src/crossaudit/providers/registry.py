@@ -4,10 +4,11 @@ from __future__ import annotations
 from typing import Callable
 
 from ..errors import ConfigDenial
-from . import anthropic, openai_compat, replay
+from . import anthropic, codex_subscription, openai_compat, replay
 
 _PROVIDERS: dict[str, Callable[..., object]] = {
     "anthropic": anthropic.complete,
+    "openai_codex": codex_subscription.complete,
     "openai_compat": openai_compat.complete,
     "replay": replay.complete,
 }
@@ -17,7 +18,8 @@ NON_EVIDENTIAL = frozenset({"replay"})
 
 #: Providers that authenticate with a key. The replay provider reads a local
 #: transcript and needs none, so its absence must not demote a run to offline.
-NEEDS_KEY = {"anthropic": True, "openai_compat": True, "replay": False}
+NEEDS_KEY = {"anthropic": True, "openai_compat": True,
+             "openai_codex": False, "replay": False}
 
 
 def list_providers() -> list[str]:

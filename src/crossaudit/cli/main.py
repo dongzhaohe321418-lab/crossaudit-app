@@ -184,9 +184,12 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     add("heterogeneity (I1)", het_ok, why,
         "declare generator.vendor, and make it differ from auditor.vendor")
 
-    key_present = bool(os.environ.get(cfg.auditor.key_env, "").strip())
-    if not key_present and _offer(args, f"enter the auditor API key (hidden, saved to "
-                                        f"{wizard.keys_file()})"):
+    from ..providers.registry import NEEDS_KEY
+    key_needed = NEEDS_KEY.get(cfg.auditor.provider, True)
+    key_present = (not key_needed or
+                   bool(os.environ.get(cfg.auditor.key_env, "").strip()))
+    if key_needed and not key_present and _offer(
+            args, f"enter the auditor API key (hidden, saved to {wizard.keys_file()})"):
         import getpass
         entered = getpass.getpass("       auditor API key: ").strip()
         if entered:
@@ -196,9 +199,12 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             print(f"       saved; future shells: source {written}")
     # Presence only. Doctor output is commonly copied into bug reports; even a
     # key suffix and length are unnecessary credential metadata there.
-    add("auditor key", key_present,
-        f"${cfg.auditor.key_env} " + ("present" if key_present else "is empty"),
-        f"source {wizard.keys_file()} or export {cfg.auditor.key_env}")
+    add("auditor connection", key_present,
+        ("provider-managed subscription; no API key needed"
+         if not key_needed else
+         f"${cfg.auditor.key_env} " + ("present" if key_present else "is empty")),
+        ("sign in through CrossAudit Settings" if not key_needed else
+         f"source {wizard.keys_file()} or export {cfg.auditor.key_env}"))
 
     generator_key_present = bool(os.environ.get(
         cfg.generator_key_env or "CROSSAUDIT_GENERATOR_KEY", "").strip())
@@ -208,7 +214,8 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             "run the auditor in a separate credential boundary, or deliberately lower "
             "isolation.minimum.permissive between cycles")
 
-    add("provider", cfg.auditor.provider in ("anthropic", "openai_compat", "replay"),
+    add("provider", cfg.auditor.provider in (
+        "anthropic", "openai_compat", "openai_codex", "replay"),
         f"{cfg.auditor.provider}:{cfg.auditor.model}", "check auditor.provider")
 
     # A trust store this interpreter cannot read fails every call to every

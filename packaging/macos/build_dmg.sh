@@ -8,6 +8,11 @@ PYTHON_BIN="${PYTHON_BIN:-python3}"
 VERSION="$($PYTHON_BIN -c 'import sys;sys.path.insert(0,"src");import crossaudit;print(crossaudit.__version__)' 2>/dev/null)"
 BUILD_NUMBER="${CROSSAUDIT_BUILD_NUMBER:-1}"
 ARCH="$(uname -m)"
+CODEX_VERSION="0.146.0"
+CODEX_TAG="rust-v$CODEX_VERSION"
+CODEX_ARCHIVE="$BUILD/codex-aarch64-apple-darwin-$CODEX_VERSION.tar.gz"
+CODEX_SHA256="2750132d300e64f1dbffb95e3d913fd9c9dc7812bc8e1bce5c61357248b7929e"
+CODEX_LICENSE_SHA256="d17f227e4df5da1600391338865ce0f3055211760a36688f816941d58232d8dc"
 
 if [[ "$ARCH" != "arm64" ]]; then
   echo "This build currently targets Apple Silicon; found $ARCH." >&2
@@ -49,6 +54,35 @@ if [[ -z "$GH_BIN" ]]; then
 fi
 cp "$GH_BIN" "$APP/Contents/Resources/bin/gh"
 chmod 755 "$APP/Contents/Resources/bin/gh"
+
+# ChatGPT subscription access is provided only through OpenAI's official,
+# open-source Codex runtime. Pin both the release and its digest so packaging
+# cannot silently absorb a changed binary. The runtime, not CrossAudit, owns
+# browser login, refresh tokens, and account storage.
+if [[ ! -f "$CODEX_ARCHIVE" ]] || \
+   [[ "$(shasum -a 256 "$CODEX_ARCHIVE" | awk '{print $1}')" != "$CODEX_SHA256" ]]; then
+  curl -fL --retry 3 -o "$CODEX_ARCHIVE" \
+    "https://github.com/openai/codex/releases/download/$CODEX_TAG/codex-aarch64-apple-darwin.tar.gz"
+fi
+if [[ "$(shasum -a 256 "$CODEX_ARCHIVE" | awk '{print $1}')" != "$CODEX_SHA256" ]]; then
+  echo "The pinned OpenAI Codex runtime failed its SHA-256 check." >&2
+  exit 4
+fi
+tar -xzf "$CODEX_ARCHIVE" -C "$STAGE"
+CODEX_BIN="$STAGE/codex-aarch64-apple-darwin"
+if [[ ! -x "$CODEX_BIN" ]]; then
+  echo "The pinned OpenAI Codex archive did not contain the expected executable." >&2
+  exit 5
+fi
+cp "$CODEX_BIN" "$APP/Contents/Resources/bin/codex"
+chmod 755 "$APP/Contents/Resources/bin/codex"
+curl -fsSL --retry 3 -o "$STAGE/OpenAI-Codex-LICENSE" \
+  "https://raw.githubusercontent.com/openai/codex/$CODEX_TAG/LICENSE"
+if [[ "$(shasum -a 256 "$STAGE/OpenAI-Codex-LICENSE" | awk '{print $1}')" != "$CODEX_LICENSE_SHA256" ]]; then
+  echo "The pinned OpenAI Codex license failed its SHA-256 check." >&2
+  exit 6
+fi
+cp "$STAGE/OpenAI-Codex-LICENSE" "$APP/Contents/Resources/licenses/OpenAI-Codex-LICENSE"
 cp packaging/macos/GITHUB_CLI_LICENSE "$APP/Contents/Resources/licenses/GitHub-CLI-LICENSE"
 cp LICENSE "$APP/Contents/Resources/licenses/CrossAudit-LICENSE"
 

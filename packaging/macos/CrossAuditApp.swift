@@ -119,10 +119,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
         process.currentDirectoryURL = support
         var environment = ProcessInfo.processInfo.environment
         let bundledGH = resources.appendingPathComponent("bin/gh")
+        let bundledCodex = resources.appendingPathComponent("bin/codex")
         if FileManager.default.isExecutableFile(atPath: bundledGH.path) {
             environment["CROSSAUDIT_BUNDLED_GH"] = bundledGH.path
-            environment["PATH"] = resources.appendingPathComponent("bin").path + ":" + (environment["PATH"] ?? "/usr/bin:/bin")
         }
+        if FileManager.default.isExecutableFile(atPath: bundledCodex.path) {
+            environment["CROSSAUDIT_BUNDLED_CODEX"] = bundledCodex.path
+        }
+        environment["PATH"] = resources.appendingPathComponent("bin").path + ":" + (environment["PATH"] ?? "/usr/bin:/bin")
         environment["PYTHONUNBUFFERED"] = "1"
         process.environment = environment
         let output = Pipe()

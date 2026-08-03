@@ -34,7 +34,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, quote, urlparse
 
 from ..config import Config
-from .. import app_keys
+from .. import app_keys, connections
 from ..controller import StateStore
 from ..errors import ConfigDenial, Denial
 from ..receipt.verify import (admit as admit_receipt, load as load_receipt,
@@ -63,7 +63,8 @@ def app_settings() -> dict:
     return {
         "app_mode": os.environ.get("CROSSAUDIT_APP_MODE") == "1",
         "workspace": os.environ.get("CROSSAUDIT_WORKSPACE_ROOT", ""),
-        "providers": app_keys.status(),
+        "providers": connections.status(),
+        "provider_login": connections.LOGINS.snapshot(),
         "dependencies": {
             "git": bool(shutil.which("git")),
             "github_cli": bool(os.environ.get("CROSSAUDIT_BUNDLED_GH", "") or
@@ -194,7 +195,11 @@ def snapshot(cfg: Config) -> dict:
         "check_contracts": check_contracts(cfg.checks),
         "max_rounds": cfg.max_rounds,
         # Presence, never the value: a console that can show a key can leak one.
-        "key_present": bool(os.environ.get(cfg.auditor.key_env, "").strip()),
+        "key_present": (
+            connections.ready("openai", "chatgpt")
+            if cfg.auditor.provider == "openai_codex"
+            else bool(os.environ.get(cfg.auditor.key_env, "").strip())
+        ),
         "cycles": _ordered_cycles(controller_state),
         "tier": tier.as_dict(),
         # Every figure below is derived from the ledger; where it cannot answer,
@@ -451,6 +456,8 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                 self._stream_projects(cfg, touch)
             elif parsed.path == "/api/settings":
                 self._send(json.dumps(app_settings()).encode(), "application/json")
+            elif parsed.path == "/api/settings/stream":
+                self._stream_settings(touch)
             elif parsed.path == "/api/file":
                 try:
                     body, filename = read_artifact(
@@ -491,6 +498,37 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                         last_beat = now
                         touch()
                     change_version = STREAM_CHANGES.wait(change_version, 0.5)
+            except (BrokenPipeError, ConnectionResetError, OSError):
+                return
+
+        def _stream_settings(self, touch) -> None:
+            self.send_response(200)
+            self.send_header("content-type", "text/event-stream; charset=utf-8")
+            self.send_header("cache-control", "no-store")
+            self.send_header("connection", "close")
+            self.send_header("content-security-policy",
+                             "default-src 'none'; style-src 'unsafe-inline'; "
+                             "script-src 'unsafe-inline'; connect-src 'self'")
+            self.end_headers()
+            last_digest = ""
+            last_beat = time.monotonic()
+            change_version = STREAM_CHANGES.current()
+            try:
+                while True:
+                    payload = json.dumps(app_settings(), sort_keys=True)
+                    digest = hashlib.sha256(payload.encode()).hexdigest()
+                    now = time.monotonic()
+                    if digest != last_digest:
+                        self.wfile.write(f"data: {payload}\n\n".encode())
+                        self.wfile.flush()
+                        last_digest, last_beat = digest, now
+                        touch()
+                    elif now - last_beat > STREAM_HEARTBEAT_S:
+                        self.wfile.write(b": keepalive\n\n")
+                        self.wfile.flush()
+                        last_beat = now
+                        touch()
+                    change_version = STREAM_CHANGES.wait(change_version, 1.0)
             except (BrokenPipeError, ConnectionResetError, OSError):
                 return
 
@@ -545,7 +583,8 @@ def make_handler(cfg: Config, token: str, touch) -> type:
             if parsed.path not in {"/api/say", "/api/upload", "/api/projects/create",
                                    "/api/projects/open", "/api/projects/resume",
                                    "/api/github/connect", "/api/models/refresh",
-                                   "/api/settings", "/api/admit"}:
+                                   "/api/settings", "/api/providers/connect",
+                                   "/api/admit"}:
                 self._deny(404, "no such action")
                 return
             touch()
@@ -585,16 +624,25 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                 if parsed.path == "/api/models/refresh":
                     result = projects.refresh_models(
                         cfg, str(payload.get("vendor", "")),
-                        str(payload.get("role", "")))
+                        str(payload.get("role", "")),
+                        str(payload.get("method", "api")))
                     self._send(json.dumps(result).encode(), "application/json")
                     return
                 if parsed.path == "/api/settings":
                     if os.environ.get("CROSSAUDIT_APP_MODE") != "1":
                         raise ConfigDenial("Keychain settings are available in the macOS app")
-                    result = app_keys.apply(payload)
+                    app_keys.apply(payload)
+                    connections.invalidate()
                     STREAM_CHANGES.notify()
-                    self._send(json.dumps({**app_settings(), **result}).encode(),
-                               "application/json")
+                    self._send(json.dumps(app_settings()).encode(), "application/json")
+                    return
+                if parsed.path == "/api/providers/connect":
+                    if os.environ.get("CROSSAUDIT_APP_MODE") != "1":
+                        raise ConfigDenial("provider login is available in the macOS app")
+                    result = connections.LOGINS.start(
+                        str(payload.get("provider", "")),
+                        str(payload.get("method", "")), STREAM_CHANGES.notify)
+                    self._send(json.dumps(result).encode(), "application/json")
                     return
                 if parsed.path == "/api/admit":
                     result = admit_latest(cfg)

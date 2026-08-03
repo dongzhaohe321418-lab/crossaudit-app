@@ -409,6 +409,11 @@ def test_app_settings_write_is_tokened_app_only_and_never_echoes_secret(
                               "anthropic": {"configured": False}}}
 
     monkeypatch.setattr(server_mod.app_keys, "apply", apply)
+    monkeypatch.setattr(server_mod.connections, "status", lambda: {
+        "openai": {"configured": True, "api_key": {"configured": True},
+                   "chatgpt": {"available": True, "connected": False}},
+        "anthropic": {"configured": False,
+                      "api_key": {"configured": False}}})
     status, body, headers = post_json_to(
         console, "/api/settings", {"openai_key": secret})
 
