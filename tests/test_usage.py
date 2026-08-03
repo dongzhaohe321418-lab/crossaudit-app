@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -134,6 +135,29 @@ def test_writes_wake_live_views_after_the_event_is_durable(cfg):
         system="s", prompt="p")
 
     assert seen[-1] == 1
+
+
+def test_windows_locking_fallback(monkeypatch, tmp_path):
+    calls = []
+
+    class FakeMsvcrt:
+        LK_LOCK = 1
+        LK_UNLCK = 2
+
+        @staticmethod
+        def locking(fd, mode, length):
+            calls.append((fd, mode, length))
+
+    path = tmp_path / "ledger"
+    fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        monkeypatch.setattr(usage, "_fcntl", None)
+        monkeypatch.setattr(usage, "_msvcrt", FakeMsvcrt)
+        assert usage._lock_file(fd) is True
+        usage._unlock_file(fd)
+    finally:
+        os.close(fd)
+    assert [(mode, length) for _fd, mode, length in calls] == [(1, 1), (2, 1)]
 
 
 def test_malformed_lines_do_not_break_the_usage_page(cfg):

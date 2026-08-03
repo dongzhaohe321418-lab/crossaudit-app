@@ -46,7 +46,7 @@ repository secrets in CI.
 
 ## V4.3.0 release-candidate evidence
 
-- Automated suite: **389 passed, 2 skipped**. The skipped cases are the
+- Automated suite: **390 passed, 2 skipped**. The skipped cases are the
   intentionally opt-in paid-provider tests.
 - Paid-provider smoke: **2 passed**, covering real OpenAI and Anthropic API
   completions and requiring provider-reported token usage for both vendors.

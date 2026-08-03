@@ -10,7 +10,6 @@ from __future__ import annotations
 import json
 import math
 import os
-import fcntl
 import threading
 import time
 import uuid
@@ -22,12 +21,42 @@ from typing import Any, Callable
 
 from .providers.base import Reply
 
+try:  # Unix advisory locking.
+    import fcntl as _fcntl
+except ImportError:  # pragma: no cover - exercised by Windows CI
+    _fcntl = None
+
+try:  # Windows advisory locking.
+    import msvcrt as _msvcrt
+except ImportError:  # pragma: no cover - exercised by Unix CI
+    _msvcrt = None
+
 LEDGER_NAME = "usage.jsonl"
 PRICE_SNAPSHOT = "2026-08-03"
 _WRITE_LOCK = threading.Lock()
 _CACHE_LOCK = threading.Lock()
 _SUMMARY_CACHE: dict[str, tuple[tuple[int, int, int], dict]] = {}
 _LISTENERS: list[Callable[[], None]] = []
+
+
+def _lock_file(fd: int) -> bool:
+    """Serialize ledger appends across app and CLI processes."""
+    if _fcntl is not None:
+        _fcntl.flock(fd, _fcntl.LOCK_EX)
+        return True
+    if _msvcrt is not None:
+        os.lseek(fd, 0, os.SEEK_SET)
+        _msvcrt.locking(fd, _msvcrt.LK_LOCK, 1)
+        return True
+    return False
+
+
+def _unlock_file(fd: int) -> None:
+    if _fcntl is not None:
+        _fcntl.flock(fd, _fcntl.LOCK_UN)
+    elif _msvcrt is not None:
+        os.lseek(fd, 0, os.SEEK_SET)
+        _msvcrt.locking(fd, _msvcrt.LK_UNLCK, 1)
 
 
 def subscribe(listener: Callable[[], None]) -> None:
@@ -184,14 +213,15 @@ def record_reply(*, root: Path, state_dir: str, role: str, phase: str,
     path = root / state_dir / LEDGER_NAME
     path.parent.mkdir(parents=True, exist_ok=True)
     line = json.dumps(event, sort_keys=True, separators=(",", ":")) + "\n"
-    flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND
+    flags = os.O_RDWR | os.O_CREAT | os.O_APPEND
     with _WRITE_LOCK:
         fd = os.open(path, flags, 0o600)
+        locked = False
         try:
             # CLI and app workers are separate processes. O_APPEND protects the
-            # offset; flock plus a complete write protects the JSONL record.
-            fcntl.flock(fd, fcntl.LOCK_EX)
-            os.fchmod(fd, 0o600)
+            # offset; an advisory lock plus a complete write protects the record.
+            locked = _lock_file(fd)
+            os.chmod(path, 0o600)
             pending = memoryview(line.encode("utf-8"))
             while pending:
                 written = os.write(fd, pending)
@@ -200,6 +230,8 @@ def record_reply(*, root: Path, state_dir: str, role: str, phase: str,
                 pending = pending[written:]
             os.fsync(fd)
         finally:
+            if locked:
+                _unlock_file(fd)
             os.close(fd)
     with _CACHE_LOCK:
         _SUMMARY_CACHE.pop(str(path), None)
