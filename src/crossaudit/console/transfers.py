@@ -26,14 +26,11 @@ from pathlib import Path, PurePosixPath
 
 from ..config import Config
 
-MAX_ATTACHMENTS = 8
-MAX_FILE_BYTES = 200_000
-MAX_TOTAL_BYTES = 500_000
 MAX_REQUEST_BYTES = 800_000
-MAX_DOWNLOAD_BYTES = 1_000_000
 UPLOAD_CHUNK_BYTES = 512_000
 MAX_INLINE_TEXT_BYTES = 400_000
 UPLOAD_ID = re.compile(r"[a-f0-9]{32}")
+UPLOAD_BATCH = re.compile(r"[a-f0-9]{32}")
 
 
 class TransferError(ValueError):
@@ -61,7 +58,7 @@ class PreparedAttachment:
 
 def _safe_name(value: object) -> str:
     name = unicodedata.normalize("NFC", str(value or "").strip())
-    if (not name or len(name) > 200 or name in {".", ".."}
+    if (not name or name in {".", ".."}
             or "/" in name or "\\" in name
             or any(ord(ch) < 32 or ord(ch) == 127 for ch in name)):
         raise TransferError("attachment name is empty, unsafe, or contains a path")
@@ -71,18 +68,18 @@ def _safe_name(value: object) -> str:
 
 
 def decode_attachments(raw: object) -> list[PreparedAttachment]:
-    """Validate and decode the JSON attachment envelope entirely in memory."""
+    """Validate an older inline attachment envelope entirely in memory.
+
+    This compatibility path has no attachment quota either. Desktop clients use
+    the disk-backed chunk protocol because one large inline JSON request is an
+    inefficient transport, not because the file itself is disallowed.
+    """
     if raw in (None, []):
         return []
     if not isinstance(raw, list):
         raise TransferError("attachments must be a list")
-    if len(raw) > MAX_ATTACHMENTS:
-        raise TransferError(
-            f"at most {MAX_ATTACHMENTS} attachments may be sent at once", 413)
-
     out: list[PreparedAttachment] = []
     names: set[str] = set()
-    total = 0
     for item in raw:
         if not isinstance(item, dict):
             raise TransferError("each attachment must be an object")
@@ -98,13 +95,6 @@ def decode_attachments(raw: object) -> list[PreparedAttachment]:
             data = base64.b64decode(encoded.encode("ascii"), validate=True)
         except (UnicodeEncodeError, binascii.Error, ValueError) as exc:
             raise TransferError(f"attachment {name!r} is not valid base64") from exc
-        if len(data) > MAX_FILE_BYTES:
-            raise TransferError(
-                f"attachment {name!r} exceeds the {MAX_FILE_BYTES // 1000} KB limit", 413)
-        total += len(data)
-        if total > MAX_TOTAL_BYTES:
-            raise TransferError(
-                f"attachments exceed the {MAX_TOTAL_BYTES // 1000} KB total limit", 413)
         declared = item.get("size")
         if declared is not None and (not isinstance(declared, int)
                                      or isinstance(declared, bool)
@@ -112,10 +102,8 @@ def decode_attachments(raw: object) -> list[PreparedAttachment]:
             raise TransferError(f"attachment {name!r} size does not match its data")
         try:
             text = data.decode("utf-8")
-        except UnicodeDecodeError as exc:
-            raise TransferError(
-                f"attachment {name!r} is not UTF-8 text; binary and multimodal "
-                "attachments are not supported yet", 415) from exc
+        except UnicodeDecodeError:
+            text = None
         media_type = str(item.get("type") or "text/plain")[:120]
         if any(ord(ch) < 32 or ord(ch) == 127 for ch in media_type):
             raise TransferError(f"attachment {name!r} has an unsafe media type")
@@ -146,6 +134,21 @@ def receive_upload_chunk(cfg: Config, raw: object) -> dict:
     upload_id = str(raw.get("id", ""))
     if not UPLOAD_ID.fullmatch(upload_id):
         raise TransferError("upload id is invalid")
+    batch = raw.get("batch")
+    ordinal = raw.get("ordinal")
+    batch_count = raw.get("batch_count")
+    if batch is not None:
+        batch = str(batch)
+        if not UPLOAD_BATCH.fullmatch(batch):
+            raise TransferError("upload batch id is invalid")
+        try:
+            ordinal, batch_count = int(ordinal), int(batch_count)
+        except (TypeError, ValueError) as exc:
+            raise TransferError("upload batch position must be an integer") from exc
+        if ordinal < 0 or batch_count < 1 or ordinal >= batch_count:
+            raise TransferError("upload batch position is invalid")
+    elif ordinal is not None or batch_count is not None:
+        raise TransferError("upload batch metadata is incomplete")
     name = _safe_name(raw.get("name"))
     media_type = str(raw.get("type") or "application/octet-stream")[:120]
     if any(ord(ch) < 32 or ord(ch) == 127 for ch in media_type):
@@ -177,6 +180,8 @@ def receive_upload_chunk(cfg: Config, raw: object) -> dict:
             raise TransferError("upload id is already in use", 409)
         meta = {"id": upload_id, "name": name, "type": media_type,
                 "size": total, "received": 0, "complete": False}
+        if batch is not None:
+            meta.update(batch=batch, ordinal=ordinal, batch_count=batch_count)
         meta_path.write_text(json.dumps(meta), encoding="utf-8", newline="\n")
         part.touch(mode=0o600)
     else:
@@ -185,7 +190,10 @@ def receive_upload_chunk(cfg: Config, raw: object) -> dict:
         except (OSError, ValueError) as exc:
             raise TransferError("upload session is missing", 404) from exc
         if (meta.get("name") != name or meta.get("type") != media_type
-                or meta.get("size") != total or meta.get("complete")):
+                or meta.get("size") != total or meta.get("complete")
+                or meta.get("batch") != batch
+                or meta.get("ordinal") != ordinal
+                or meta.get("batch_count") != batch_count):
             raise TransferError("upload metadata changed between chunks")
     current = part.stat().st_size if part.is_file() else -1
     if current != offset:
@@ -209,15 +217,11 @@ def receive_upload_chunk(cfg: Config, raw: object) -> dict:
             "size": total, "complete": complete}
 
 
-def resolve_uploads(cfg: Config, raw: object) -> list[PreparedAttachment]:
-    """Resolve completed project uploads without reading large files in memory."""
-    if raw in (None, []):
-        return []
-    if not isinstance(raw, list) or not all(isinstance(v, str) for v in raw):
-        raise TransferError("uploads must be a list of ids")
+def _resolve_upload_ids(cfg: Config, upload_ids: list[str]) -> list[PreparedAttachment]:
+    """Resolve known IDs without reading large files into process memory."""
     root = _upload_root(cfg).resolve()
     out, names, seen = [], set(), set()
-    for upload_id in raw:
+    for upload_id in upload_ids:
         if not UPLOAD_ID.fullmatch(upload_id) or upload_id in seen:
             raise TransferError("upload reference is invalid or duplicated")
         seen.add(upload_id)
@@ -248,6 +252,60 @@ def resolve_uploads(cfg: Config, raw: object) -> list[PreparedAttachment]:
     return out
 
 
+def resolve_uploads(cfg: Config, raw: object) -> list[PreparedAttachment]:
+    """Resolve a legacy explicit ID list.
+
+    The desktop uses :func:`resolve_upload_batch`, whose final request stays the
+    same size whether the user selected one file or one million files.
+    """
+    if raw in (None, []):
+        return []
+    if not isinstance(raw, list) or not all(isinstance(v, str) for v in raw):
+        raise TransferError("uploads must be a list of ids")
+    return _resolve_upload_ids(cfg, raw)
+
+
+def resolve_upload_batch(cfg: Config, raw: object) -> list[PreparedAttachment]:
+    """Resolve every completed upload in an opaque browser batch.
+
+    Batch lookup deliberately uses disk metadata rather than a giant JSON list
+    in ``/api/say``. The final request is therefore constant-sized and CrossAudit
+    does not acquire a hidden attachment-count limit from its HTTP envelope.
+    """
+    batch = str(raw or "")
+    if not UPLOAD_BATCH.fullmatch(batch):
+        raise TransferError("upload batch id is invalid")
+    root = _upload_root(cfg)
+    rows: list[tuple[int, str, int]] = []
+    for meta_path in root.glob("*.json"):
+        try:
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if meta.get("batch") != batch:
+            continue
+        upload_id = str(meta.get("id", ""))
+        try:
+            ordinal = int(meta.get("ordinal"))
+            count = int(meta.get("batch_count"))
+        except (TypeError, ValueError) as exc:
+            raise TransferError("upload batch metadata is invalid") from exc
+        if not UPLOAD_ID.fullmatch(upload_id):
+            raise TransferError("upload batch contains an invalid reference")
+        rows.append((ordinal, upload_id, count))
+    if not rows:
+        raise TransferError("upload batch is missing", 404)
+    counts = {row[2] for row in rows}
+    ordinals = {row[0] for row in rows}
+    expected = next(iter(counts)) if len(counts) == 1 else -1
+    ordered_ordinals = sorted(ordinals)
+    if (expected < 1 or len(rows) != expected or len(ordinals) != expected
+            or not all(value == index
+                       for index, value in enumerate(ordered_ordinals))):
+        raise TransferError("upload batch is incomplete or inconsistent", 409)
+    return _resolve_upload_ids(cfg, [row[1] for row in sorted(rows)])
+
+
 def stage_attachments(cfg: Config,
                       attachments: list[PreparedAttachment]) -> list[dict]:
     """Atomically preserve a validated batch in the ignored controller state."""
@@ -270,7 +328,13 @@ def stage_attachments(cfg: Config,
                 with open(target, "xb") as handle:
                     handle.write(attachment.data)
             else:
-                shutil.copyfile(attachment.source, target)
+                # The upload and inbox normally share a filesystem. A hard link
+                # makes staging atomic without temporarily doubling a huge file's
+                # disk use; filesystems without hard links fall back to copying.
+                try:
+                    os.link(attachment.source, target)
+                except OSError:
+                    shutil.copyfile(attachment.source, target)
             try:
                 os.chmod(target, 0o600)
             except OSError:
@@ -333,8 +397,8 @@ def prompt_section(attachments: list[dict]) -> str:
     return "\n\n".join(blocks)
 
 
-def read_artifact(cfg: Config, relative: str) -> tuple[bytes, str]:
-    """Read one generator-recorded output, never an arbitrary project file."""
+def resolve_artifact(cfg: Config, relative: str) -> tuple[Path, str, int]:
+    """Resolve one generator-recorded output, never an arbitrary project file."""
     from .streams import generator_stream
     from ..router import history as routing_history
 
@@ -359,7 +423,15 @@ def read_artifact(cfg: Config, relative: str) -> tuple[bytes, str]:
         resolved.relative_to(root)
     except ValueError as exc:
         raise TransferError("artifact resolves outside the project", 404) from exc
-    size = resolved.stat().st_size
-    if size > MAX_DOWNLOAD_BYTES:
-        raise TransferError("artifact is too large for the Console download", 413)
-    return resolved.read_bytes(), path.name
+    return resolved, path.name, resolved.stat().st_size
+
+
+def read_artifact(cfg: Config, relative: str) -> tuple[bytes, str]:
+    """Compatibility helper for callers that explicitly need artifact bytes.
+
+    The Console download endpoint uses :func:`resolve_artifact` and streams from
+    disk. This helper intentionally has no CrossAudit size cap, but callers that
+    choose it necessarily opt into holding the file in memory.
+    """
+    resolved, name, _size = resolve_artifact(cfg, relative)
+    return resolved.read_bytes(), name

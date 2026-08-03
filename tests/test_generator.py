@@ -107,19 +107,19 @@ def test_an_empty_round_is_refused():
                      complete=stub({"summary": "s", "files": []}), allowed_dirs=ALLOWED)
 
 
-def test_an_oversized_file_is_refused():
-    huge = "x" * (gen.MAX_FILE_BYTES + 1)
-    with pytest.raises(ProviderDenial, match="size bound"):
-        gen.generate(task="t", constitution="r", current={},
-                     complete=stub(work_payload(content=huge)), allowed_dirs=ALLOWED)
+def test_generator_output_has_no_crossaudit_file_size_quota():
+    huge = "x" * 900_000
+    work = gen.generate(task="t", constitution="r", current={},
+                        complete=stub(work_payload(content=huge)), allowed_dirs=ALLOWED)
+    assert len(work.files["work/a.md"]) == len(huge)
 
 
-def test_a_round_that_rewrites_the_world_is_refused():
+def test_generator_output_has_no_crossaudit_file_count_quota():
     many = {"summary": "s", "files": [{"path": f"work/{i}.md", "content": "x"}
-                                      for i in range(gen.MAX_FILES_PER_ROUND + 1)]}
-    with pytest.raises(ProviderDenial, match="should be an increment"):
-        gen.generate(task="t", constitution="r", current={}, complete=stub(many),
-                     allowed_dirs=ALLOWED)
+                                      for i in range(75)]}
+    work = gen.generate(task="t", constitution="r", current={}, complete=stub(many),
+                        allowed_dirs=ALLOWED)
+    assert len(work.files) == 75
 
 
 def test_prose_instead_of_json_denies_rather_than_writing_nothing():

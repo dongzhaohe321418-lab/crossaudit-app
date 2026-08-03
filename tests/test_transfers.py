@@ -10,13 +10,13 @@ from dataclasses import replace
 import pytest
 
 from crossaudit.console.transfers import (
-    MAX_ATTACHMENTS,
-    MAX_FILE_BYTES,
     TransferError,
     decode_attachments,
     prompt_section,
     read_artifact,
     receive_upload_chunk,
+    resolve_artifact,
+    resolve_upload_batch,
     resolve_uploads,
     stage_attachments,
 )
@@ -39,24 +39,19 @@ def test_attachment_names_cannot_choose_a_path(name):
         decode_attachments([envelope(name, b"x")])
 
 
-def test_binary_bad_base64_and_lied_about_sizes_are_refused():
-    with pytest.raises(TransferError, match="not UTF-8") as binary:
-        decode_attachments([envelope("image.bin", b"\xff\x00")])
-    assert binary.value.status == 415
+def test_binary_bad_base64_and_lied_about_sizes_are_handled_honestly():
+    binary = decode_attachments([envelope("image.bin", b"\xff\x00")])[0]
+    assert binary.text is None and binary.data == b"\xff\x00"
     with pytest.raises(TransferError, match="base64"):
         decode_attachments([{"name": "x.txt", "data": "%%%"}])
     with pytest.raises(TransferError, match="size"):
         decode_attachments([envelope("x.txt", b"x", size=9)])
 
 
-def test_attachment_count_and_size_are_bounded():
-    with pytest.raises(TransferError) as count:
-        decode_attachments([envelope(f"{i}.txt", b"x")
-                            for i in range(MAX_ATTACHMENTS + 1)])
-    assert count.value.status == 413
-    with pytest.raises(TransferError) as size:
-        decode_attachments([envelope("huge.txt", b"x" * (MAX_FILE_BYTES + 1))])
-    assert size.value.status == 413
+def test_legacy_inline_decoder_adds_no_count_or_file_size_quota():
+    rows = decode_attachments([envelope(f"{i}.txt", b"x") for i in range(25)]
+                              + [envelope("large.txt", b"x" * 900_000)])
+    assert len(rows) == 26 and rows[-1].size == 900_000
 
 
 def test_names_are_unique_case_insensitively():
@@ -109,6 +104,29 @@ def test_chunked_project_upload_has_no_whole_file_size_limit(cfg):
     assert rows[0].source.read_bytes() == content
 
 
+def test_upload_batch_keeps_the_final_request_constant_size_for_many_files(cfg):
+    batch = "e" * 32
+    count = 257
+    for ordinal in range(count):
+        receive_upload_chunk(cfg, {
+            "id": f"{ordinal:032x}", "batch": batch, "ordinal": ordinal,
+            "batch_count": count, "name": f"input-{ordinal}.txt",
+            "type": "text/plain", "offset": 0, "total": 0, "data": ""})
+    rows = resolve_upload_batch(cfg, batch)
+    assert len(rows) == count
+    assert rows[0].name == "input-0.txt" and rows[-1].name == "input-256.txt"
+
+
+def test_an_incomplete_upload_batch_is_refused(cfg):
+    receive_upload_chunk(cfg, {
+        "id": "f" * 32, "batch": "1" * 32, "ordinal": 0,
+        "batch_count": 2, "name": "first.txt", "type": "text/plain",
+        "offset": 0, "total": 0, "data": ""})
+    with pytest.raises(TransferError, match="incomplete") as error:
+        resolve_upload_batch(cfg, "1" * 32)
+    assert error.value.status == 409
+
+
 def test_chunked_upload_preserves_binary_without_claiming_the_model_read_it(cfg):
     upload_id = "b" * 32
     data = b"\xff\x00\x89PNG"
@@ -159,6 +177,8 @@ def test_only_generator_recorded_scope_files_can_be_downloaded(cfg):
                    cwd=cfg.root, check=True)
     body, name = read_artifact(scoped, "experiments/download.txt")
     assert body == b"audited output\n" and name == "download.txt"
+    path, resolved_name, size = resolve_artifact(scoped, "experiments/download.txt")
+    assert path == out.resolve() and resolved_name == name and size == len(body)
     with pytest.raises(TransferError):
         read_artifact(scoped, "crossaudit.yml")
     with pytest.raises(TransferError):

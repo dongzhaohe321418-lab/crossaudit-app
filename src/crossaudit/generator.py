@@ -25,9 +25,6 @@ from pathlib import Path
 from .constitution import parse_json_reply
 from .errors import ConfigDenial, ProviderDenial
 
-MAX_FILE_BYTES = 400_000
-MAX_FILES_PER_ROUND = 40
-
 GENERATOR_SYSTEM = """You produce work for a supervised project. Another model \
 from a different vendor audits everything you commit, against rules you will be \
 shown. You cannot talk to that auditor and you cannot argue with the rules; you \
@@ -74,10 +71,6 @@ class Work:
     def validate(self, *, allowed_dirs: list[str] | None) -> None:
         if not self.files:
             raise ProviderDenial("the generator returned no files; nothing to commit")
-        if len(self.files) > MAX_FILES_PER_ROUND:
-            raise ProviderDenial(
-                f"the generator returned {len(self.files)} files in one round "
-                f"(limit {MAX_FILES_PER_ROUND}); a round should be an increment")
         for path, content in self.files.items():
             p = Path(path)
             if p.is_absolute() or ".." in p.parts:
@@ -92,8 +85,6 @@ class Work:
                 raise ProviderDenial(
                     f"{path!r} is outside the working directories {allowed_dirs}; the "
                     f"generator may not write rules, ledger or configuration")
-            if len(content.encode()) > MAX_FILE_BYTES:
-                raise ProviderDenial(f"{path!r} exceeds the per-file size bound")
 
     @staticmethod
     def from_json(raw: dict) -> "Work":

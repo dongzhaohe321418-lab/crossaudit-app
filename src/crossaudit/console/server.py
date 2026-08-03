@@ -45,8 +45,8 @@ from .page import PAGE
 from .progress import TRACKER
 from .streams import both
 from .transfers import (MAX_REQUEST_BYTES, TransferError, decode_attachments,
-                        prompt_section, read_artifact, receive_upload_chunk,
-                        resolve_uploads, stage_attachments)
+                        prompt_section, receive_upload_chunk, resolve_artifact,
+                        resolve_upload_batch, resolve_uploads, stage_attachments)
 
 IDLE_TIMEOUT_S = 900.0
 STREAM_POLL_S = 0.1          # fallback for changes made by another local process
@@ -419,16 +419,21 @@ def make_handler(cfg: Config, token: str, touch) -> type:
             self.end_headers()
             self.wfile.write(body)
 
-        def _send_download(self, body: bytes, filename: str) -> None:
+        def _send_download(self, path, filename: str, size: int) -> None:
             self.send_response(200)
             self.send_header("content-type", "application/octet-stream")
-            self.send_header("content-length", str(len(body)))
+            self.send_header("content-length", str(size))
             self.send_header("content-disposition",
                              "attachment; filename*=UTF-8''" + quote(filename))
             self.send_header("cache-control", "no-store")
             self.send_header("x-content-type-options", "nosniff")
             self.end_headers()
-            self.wfile.write(body)
+            try:
+                with open(path, "rb") as handle:
+                    for block in iter(lambda: handle.read(1024 * 1024), b""):
+                        self.wfile.write(block)
+            except (BrokenPipeError, ConnectionResetError):
+                return
 
         def _authorised(self, query: dict) -> bool:
             host = (self.headers.get("Host") or "").rsplit(":", 1)[0]
@@ -460,12 +465,12 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                 self._stream_settings(touch)
             elif parsed.path == "/api/file":
                 try:
-                    body, filename = read_artifact(
+                    path, filename, size = resolve_artifact(
                         cfg, (parse_qs(parsed.query).get("path") or [""])[0])
                 except TransferError as exc:
                     self._deny(exc.status, exc.reason)
                     return
-                self._send_download(body, filename)
+                self._send_download(path, filename, size)
             else:
                 self._deny(404, "no such page")
 
@@ -653,11 +658,17 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                 if len(text.encode()) > MAX_UTTERANCE:
                     self._deny(413, "that instruction is longer than this input allows")
                     return
-                if payload.get("attachments") and payload.get("uploads"):
-                    raise TransferError("use either legacy attachments or project uploads")
-                attachments = (resolve_uploads(cfg, payload.get("uploads"))
-                               if payload.get("uploads") is not None else
-                               decode_attachments(payload.get("attachments")))
+                transfer_kinds = sum(value is not None for value in (
+                    payload.get("upload_batch"), payload.get("uploads"),
+                    payload.get("attachments")))
+                if transfer_kinds > 1:
+                    raise TransferError("use one file-transfer method per message")
+                if payload.get("upload_batch") is not None:
+                    attachments = resolve_upload_batch(cfg, payload["upload_batch"])
+                elif payload.get("uploads") is not None:
+                    attachments = resolve_uploads(cfg, payload.get("uploads"))
+                else:
+                    attachments = decode_attachments(payload.get("attachments"))
             except TransferError as exc:
                 self._deny(exc.status, exc.reason)
                 return

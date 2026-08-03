@@ -6,7 +6,7 @@ and the audit context on the right.  The ledger remains the source of truth;
 the page only reshapes committed evidence and ephemeral in-flight progress.
 
 There is still one task write path. The composer uploads explicitly confirmed
-files in bounded chunks, then posts only their opaque local IDs to ``/api/say``;
+files in bounded chunks, then posts only one opaque batch ID to ``/api/say``;
 every task is routed through the same code as ``crossaudit talk``. Generated
 files are downloadable only when the ledger's generator history names that
 exact project-relative path.
@@ -239,11 +239,21 @@ button{cursor:pointer}
   font-weight:650}.choice-option input:disabled+span{opacity:.42;cursor:not-allowed;text-decoration:line-through}
 .choice-note{font-size:9.5px;color:var(--faint);margin:7px 0 0 79px}.choice-actions{display:flex;
   justify-content:flex-end;gap:6px;margin-top:10px}.choice-actions button{height:29px;font-size:10px}
-.attachments{display:none;gap:6px;flex-wrap:wrap;padding:2px 3px 7px}.attachments.on{display:flex}
-.attachment{display:flex;align-items:center;gap:6px;background:var(--surface-2);border:1px solid var(--line);
-  border-radius:7px;padding:5px 7px;font-size:10.5px;max-width:210px}.attachment span:first-child{
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.attachment button{border:0;background:none;color:var(--faint);padding:0}
-.attachment-note{width:100%;color:var(--amber);font-size:10.5px;padding:1px 2px}
+.attachments{display:none;gap:6px;padding:3px 3px 8px;max-height:172px;overflow:auto}
+.attachments.on{display:grid;grid-template-columns:repeat(auto-fit,minmax(205px,1fr))}
+.attachment{position:relative;display:grid;grid-template-columns:28px minmax(0,1fr) 20px;align-items:center;
+  gap:7px;background:var(--surface-2);border:1px solid var(--line);border-radius:9px;padding:7px 7px;
+  min-width:0;overflow:hidden}.attachment-type{width:28px;height:28px;border-radius:7px;background:var(--surface);
+  border:1px solid var(--line);display:grid;place-items:center;color:var(--blue);font-size:8px;font-weight:750}
+.attachment-copy{min-width:0}.attachment-name{display:block;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap;font-size:10.5px;font-weight:590}.attachment-state{display:block;color:var(--faint);
+  font-size:9.5px;margin-top:1px}.attachment button{border:0;background:none;color:var(--faint);padding:0;
+  width:20px;height:20px;border-radius:5px}.attachment button:hover{background:var(--hover);color:var(--text)}
+.attachment-progress{position:absolute;left:0;right:0;bottom:0;height:2px;background:transparent}
+.attachment-progress i{display:block;height:100%;background:var(--blue);transition:width .12s ease}
+.attachment.failed{border-color:var(--red)}.attachment.failed .attachment-state{color:var(--red)}
+.attachment-note{grid-column:1/-1;color:var(--muted);font-size:10.5px;padding:1px 2px;display:flex;gap:7px;
+  align-items:center}.attachment-note b{color:var(--text);font-weight:620}.attachment-more{color:var(--blue)}
 .transfer-consent{display:none;margin:6px 3px 1px;padding:9px 10px;border-radius:9px;
   background:var(--amber-bg);color:var(--muted);font-size:11px;align-items:center;gap:10px}
 .transfer-consent.on{display:flex}.transfer-consent b{display:block;color:var(--amber);font-weight:650}
@@ -263,6 +273,14 @@ textarea::placeholder{color:var(--faint)}.compose-button{border:0;background:tra
 .composer-meta{display:flex;align-items:center;gap:8px;padding:4px 5px 1px;color:var(--faint);font-size:10px}
 .route{display:none;margin:7px 3px 0;padding:7px 9px;border-radius:7px;background:var(--surface-2);
   color:var(--muted);font-size:11px;white-space:pre-wrap;word-break:break-word}.route.on{display:block}
+.drop-overlay{position:fixed;inset:0;z-index:100;display:none;place-items:center;padding:26px;
+  pointer-events:none;background:color-mix(in srgb,var(--surface) 76%,transparent);backdrop-filter:blur(5px)}
+.drop-overlay.on{display:grid}.drop-target{width:min(560px,calc(100vw - 52px));min-height:240px;
+  border:2px dashed var(--blue);border-radius:20px;background:var(--surface);box-shadow:var(--shadow);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:36px}
+.drop-icon{width:48px;height:48px;border-radius:14px;background:var(--blue-bg);color:var(--blue);
+  display:grid;place-items:center;font-size:27px;margin-bottom:14px}.drop-target b{font-size:17px}
+.drop-target span{color:var(--muted);font-size:12px;margin-top:6px;max-width:380px}
 .route b{color:var(--text)}.route .ask{color:var(--amber)}
 
 .inspector{position:fixed;right:0;top:48px;bottom:0;width:min(296px,100vw);z-index:12;
@@ -439,7 +457,7 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
 <body>
 <section class="project-hub" id="project-hub" aria-label="Projects">
   <header class="hub-bar"><button class="brand-button" id="hub-brand"><span class="brand-mark">◇</span>
-    CrossAudit <span class="version" id="hub-version">V4.1.0</span></button><span class="spacer"></span>
+    CrossAudit <span class="version" id="hub-version">V4.2.0</span></button><span class="spacer"></span>
     <button class="icon-button" id="hub-settings" aria-label="Settings" title="Settings">⚙</button>
     <button class="icon-button" id="hub-theme" aria-label="Switch theme">◐</button>
     <button class="primary" id="create-project">＋ New project</button></header>
@@ -519,13 +537,18 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
   </form>
 </div>
 
+<div class="drop-overlay" id="drop-overlay" aria-hidden="true"><div class="drop-target">
+  <div class="drop-icon">＋</div><b>Drop files to add them</b>
+  <span>No CrossAudit file-count or file-size quota. Available storage, filesystem limits and provider context still apply.</span>
+</div></div>
+
 <div class="app">
   <header class="topbar">
     <button class="icon-button mobile-sidebar" id="sidebar-toggle" aria-label="Open navigation"
       aria-controls="sidebar-panel" aria-expanded="false">☰</button>
     <button class="icon-button" id="back-projects" aria-label="Back to projects" title="Back to projects">←</button>
     <button class="brand-button" id="projects-home"><span class="brand-mark">◇</span>CrossAudit
-      <span class="version" id="version-badge">V4.1.0</span></button>
+      <span class="version" id="version-badge">V4.2.0</span></button>
     <button class="top-project" id="project-switcher"><b id="proj">…</b> <span id="branch-label">/ supervised workspace</span>⌄</button>
     <span class="spacer"></span>
     <div class="live-pill"><span class="live-dot" id="livedot"></span><span id="conn-text">connecting</span></div>
@@ -593,7 +616,7 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
       <button type="button" class="audience-chip active" data-audience="auto">Auto</button>
       <button type="button" class="audience-chip" data-audience="generator">@ Generator</button>
       <button type="button" class="audience-chip" data-audience="auditor">@ Auditor</button></div>
-    <div class="compose-row"><button type="button" class="compose-button" id="attach" aria-label="Attach files">＋</button>
+    <div class="compose-row"><button type="button" class="compose-button" id="attach" aria-label="Add files" title="Add files">＋</button>
       <textarea id="say" rows="1" placeholder="Message the group, or @ someone…"></textarea>
       <button id="send" class="compose-button send" aria-label="Run task">↑</button></div>
     <div class="composer-meta"><span id="model-summary">Generator → Auditor</span><span class="spacer"></span>
@@ -629,6 +652,7 @@ const MARK = {done:'✓',failed:'×',current:'·',pending:''};
 let lastState = null;
 let pendingFiles = [];
 let uploadProgress = new Map();
+let transferBusy = false;
 let attachmentConsent = false;
 let taskChoiceMode = '';
 let pendingChoiceTask = '';
@@ -963,9 +987,9 @@ function titleOf(d){
 function fileUrl(path){return '/api/file?t=' + encodeURIComponent(T) + '&path=' + encodeURIComponent(path);}
 function formatBytes(value){
   if(value===null||value===undefined) return '';
-  if(value<1000) return value+' B';
-  if(value<1000000) return (value/1000).toFixed(value<10000?1:0)+' KB';
-  return (value/1000000).toFixed(1)+' MB';
+  const units=['B','KB','MB','GB','TB','PB'];let size=Number(value),unit=0;
+  while(size>=1000&&unit<units.length-1){size/=1000;unit++;}
+  return (unit===0?String(size):size.toFixed(size<10?1:0))+' '+units[unit];
 }
 function artifactRecord(item){
   if(typeof item==='string'){
@@ -1253,25 +1277,41 @@ function toggleInspector(){const opening=!inspector.classList.contains('open');c
   if(opening){inspector.classList.add('open');document.getElementById('inspect-toggle').setAttribute('aria-expanded','true');}
   syncScrim();}
 function drawFiles(){filesBox.className='attachments'+(pendingFiles.length?' on':'');
-  filesBox.innerHTML=pendingFiles.map((f,i)=>'<div class="attachment"><span>'+esc(f.name)+' · '+formatBytes(f.size)
-    +(uploadProgress.has(f)?' · '+uploadProgress.get(f)+'%':'')+'</span>'
-    + '<button type="button" data-remove="'+i+'" aria-label="Remove attachment">×</button></div>').join('')
-    + (pendingFiles.length?'<div class="attachment-note">Any file count or size · chunked to project storage · model-readable content depends on file type and context.</div>':'');}
+  const visible=pendingFiles.slice(0,100);const total=pendingFiles.reduce((sum,e)=>sum+e.file.size,0);
+  filesBox.innerHTML=visible.map((entry,i)=>{const f=entry.file;const progress=uploadProgress.get(entry);
+    const failed=progress==='failed';const done=progress===100;const ext=(entry.name.includes('.')?entry.name.split('.').pop():'FILE').slice(0,4).toUpperCase();
+    const state=failed?'Upload failed':done?'Uploaded':typeof progress==='number'?'Uploading · '+progress+'%':formatBytes(f.size);
+    return '<div class="attachment'+(failed?' failed':'')+'"><span class="attachment-type">'+esc(ext)+'</span>'
+      +'<span class="attachment-copy"><span class="attachment-name" title="'+esc(entry.name)+'">'+esc(entry.name)+'</span>'
+      +'<span class="attachment-state">'+esc(state)+'</span></span><button type="button" data-remove="'+i+'" aria-label="Remove '+esc(entry.name)+'">×</button>'
+      +(typeof progress==='number'&&progress<100?'<span class="attachment-progress"><i style="width:'+progress+'%"></i></span>':'')+'</div>';}).join('')
+    +(pendingFiles.length?'<div class="attachment-note"><b>'+pendingFiles.length+' file'+(pendingFiles.length===1?'':'s')+' · '+formatBytes(total)+'</b>'
+      +(pendingFiles.length>visible.length?'<span class="attachment-more">+'+(pendingFiles.length-visible.length)+' more selected</span>':'')
+      +'<span>Stored in chunks without an app quota. Model inspection depends on file support and context.</span></div>':'');}
 function resetConsent(){attachmentConsent=false;consentBox.className='transfer-consent';}
-function addFiles(list){resetConsent();for(const f of list){
-  if(!pendingFiles.some(x=>x.name.toLowerCase()===f.name.toLowerCase()&&x.size===f.size
-    &&x.lastModified===f.lastModified))pendingFiles.push(f);
+function uniqueFileName(original){let name=original||'untitled';const used=new Set(pendingFiles.map(e=>e.name.toLowerCase()));
+  if(!used.has(name.toLowerCase()))return name;const dot=name.lastIndexOf('.');const base=dot>0?name.slice(0,dot):name;
+  const ext=dot>0?name.slice(dot):'';let n=2;while(used.has((base+' ('+n+')'+ext).toLowerCase()))n++;
+  return base+' ('+n+')'+ext;}
+function addFiles(list){resetConsent();for(const file of Array.from(list||[])){
+  if(transferBusy)return;
+  pendingFiles.push({file,name:uniqueFileName(file.name)});
 }drawFiles();}
 function uploadId(){const bytes=crypto.getRandomValues(new Uint8Array(16));return [...bytes].map(v=>v.toString(16).padStart(2,'0')).join('');}
-async function uploadFile(file){const id=uploadId();const chunkSize=384000;let offset=0;
+async function uploadFile(entry,batch,ordinal,count){const file=entry.file;const id=uploadId();const chunkSize=384000;let offset=0;
   do{const blob=file.slice(offset,Math.min(file.size,offset+chunkSize));
     const bytes=new Uint8Array(await blob.arrayBuffer());let binary='';
   for(let i=0;i<bytes.length;i+=32768)binary+=String.fromCharCode(...bytes.subarray(i,i+32768));
-    await api('/api/upload',{id,name:file.name,type:file.type||'application/octet-stream',
-      offset,total:file.size,data:btoa(binary)});offset+=bytes.length;
-    uploadProgress.set(file,file.size?Math.round(offset/file.size*100):100);drawFiles();
+    await api('/api/upload',{id,batch,ordinal,batch_count:count,name:entry.name,
+      type:file.type||'application/octet-stream',offset,total:file.size,data:btoa(binary)});offset+=bytes.length;
+    uploadProgress.set(entry,file.size?Math.round(offset/file.size*100):100);drawFiles();
   }while(offset<file.size);return id;}
-async function uploadFiles(files){const ids=[];for(const file of files)ids.push(await uploadFile(file));return ids;
+async function uploadFiles(files){const batch=uploadId();let next=0;const workers=[];
+  for(let worker=0;worker<Math.min(3,files.length);worker++)workers.push((async()=>{while(next<files.length){
+    const ordinal=next++;const entry=files[ordinal];try{await uploadFile(entry,batch,ordinal,files.length);}
+    catch(error){uploadProgress.set(entry,'failed');drawFiles();throw error;}}})());
+  const settled=await Promise.allSettled(workers);const failed=settled.find(result=>result.status==='rejected');
+  if(failed)throw failed.reason;return batch;
 }
 function showTransferConsent(){
   const target=lastState?lastState.generator:'the configured generator';
@@ -1288,11 +1328,20 @@ function setAudience(audience){const body=say.value.replace(mentionPrefix,'').tr
   say.value=(audience==='auto'?'':audience==='generator'?'@Generator ':'@Auditor ')+body;
   say.dispatchEvent(new Event('input'));say.focus();}
 document.getElementById('attach').onclick=()=>fileInput.click();fileInput.onchange=()=>{addFiles(fileInput.files);fileInput.value='';};
-filesBox.onclick=ev=>{const i=ev.target.getAttribute('data-remove');if(i!==null){uploadProgress.delete(pendingFiles[Number(i)]);pendingFiles.splice(Number(i),1);resetConsent();drawFiles();}};
+filesBox.onclick=ev=>{const button=ev.target.closest('[data-remove]');if(button){const i=Number(button.getAttribute('data-remove'));
+  if(transferBusy)return;
+  uploadProgress.delete(pendingFiles[i]);pendingFiles.splice(i,1);resetConsent();drawFiles();}};
 document.getElementById('confirm-transfer').onclick=()=>{attachmentConsent=true;consentBox.className='transfer-consent';form.requestSubmit();};
-for(const name of ['dragenter','dragover'])form.addEventListener(name,ev=>{ev.preventDefault();form.classList.add('drag');});
-for(const name of ['dragleave','drop'])form.addEventListener(name,ev=>{ev.preventDefault();form.classList.remove('drag');});
-form.addEventListener('drop',ev=>addFiles(ev.dataTransfer.files));
+const dropOverlay=document.getElementById('drop-overlay');let dragDepth=0;
+function fileDrag(ev){return Array.from((ev.dataTransfer&&ev.dataTransfer.types)||[]).includes('Files');}
+window.addEventListener('dragenter',ev=>{if(!fileDrag(ev))return;ev.preventDefault();dragDepth++;
+  dropOverlay.className='drop-overlay on';dropOverlay.setAttribute('aria-hidden','false');form.classList.add('drag');});
+window.addEventListener('dragover',ev=>{if(fileDrag(ev))ev.preventDefault();});
+window.addEventListener('dragleave',ev=>{if(!fileDrag(ev))return;ev.preventDefault();dragDepth=Math.max(0,dragDepth-1);
+  if(!dragDepth){dropOverlay.className='drop-overlay';dropOverlay.setAttribute('aria-hidden','true');form.classList.remove('drag');}});
+window.addEventListener('drop',ev=>{if(!fileDrag(ev))return;ev.preventDefault();dragDepth=0;
+  dropOverlay.className='drop-overlay';dropOverlay.setAttribute('aria-hidden','true');form.classList.remove('drag');
+  addFiles(ev.dataTransfer.files);say.focus();});
 say.addEventListener('input',()=>{say.style.height='auto';say.style.height=Math.min(say.scrollHeight,150)+'px';syncAudience();});
 say.addEventListener('keydown',ev=>{if(ev.key==='Enter'&&!ev.shiftKey&&!ev.isComposing){ev.preventDefault();form.requestSubmit();}});
 document.querySelectorAll('.audience-chip').forEach(button=>button.onclick=()=>setAudience(button.getAttribute('data-audience')));
@@ -1336,10 +1385,10 @@ form.onsubmit=async ev=>{ev.preventDefault();const rawText=say.value.trim();if(!
   const text=rawText;const deliveryChoices=taskChoiceMode&&pendingChoiceTask===rawText?taskChoicePayload():null;
   if(pendingFiles.length&&!attachmentConsent){showTransferConsent();return;}
   newTaskMode=false;activeView='tasks';if(lastState)render(lastState);
-  send.disabled=true;say.disabled=true;route.className='route on';
+  send.disabled=true;say.disabled=true;transferBusy=true;document.getElementById('attach').disabled=true;route.className='route on';
   route.textContent=pendingFiles.length?'Sending your files…':'Starting…';
-  try{const uploads=pendingFiles.length?await uploadFiles(pendingFiles):[];
-    const r=await api('/api/say',{text,uploads,attachment_consent:attachmentConsent,
+  try{const uploadBatch=pendingFiles.length?await uploadFiles(pendingFiles):null;
+    const r=await api('/api/say',{text,upload_batch:uploadBatch,attachment_consent:attachmentConsent,
       delivery_choices:deliveryChoices});if(r.asked){route.innerHTML='<b class="ask">Needs clarification</b> — '
     + esc(r.clarify);resetConsent();resetTaskChoices();}else{route.innerHTML=r.lane==='generator'
       ?'<b>Task started.</b> The result will appear in this conversation.'
@@ -1347,7 +1396,7 @@ form.onsubmit=async ev=>{ev.preventDefault();const rawText=say.value.trim();if(!
     if(!pendingFiles.length||r.attachments_accepted){say.value='';pendingFiles=[];uploadProgress=new Map();fileInput.value='';drawFiles();syncAudience();resetTaskChoices();}
     resetConsent();}}
   catch(e){resetConsent();route.innerHTML='<b>Refused</b> — '+esc(e.message);}
-  send.disabled=false;say.disabled=false;say.focus();};
+  transferBusy=false;document.getElementById('attach').disabled=false;send.disabled=false;say.disabled=false;say.focus();};
 api('/api/state').then(render).catch(e=>{document.getElementById('thread-title').textContent='Disconnected — '+e.message;});
 startStream();
 if(location.hash==='#projects')showProjects();

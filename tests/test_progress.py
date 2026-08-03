@@ -231,7 +231,9 @@ def test_console_has_one_primary_command_composer():
     assert 'id="project-type"' in PAGE
     assert "General work — documents, reviews, code" in PAGE
     assert "Scientific / data workflow" in PAGE
-    assert "Any file count or size" in PAGE
+    assert "No CrossAudit file-count or file-size quota" in PAGE
+    assert 'id="drop-overlay"' in PAGE and 'id="file-input" type="file" multiple' in PAGE
+    assert "upload_batch" in PAGE and "batch_count" in PAGE
     assert "/api/upload" in PAGE and "uploadFile" in PAGE
     assert PAGE.count('id="transfer-consent"') == 1
     assert PAGE.count('id="confirm-transfer"') == 1

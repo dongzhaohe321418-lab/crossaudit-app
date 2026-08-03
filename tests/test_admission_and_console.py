@@ -265,9 +265,8 @@ def test_attachment_contents_need_a_second_explicit_consent(console):
 
 @pytest.mark.parametrize("item,code", [
     (attachment("../secret.txt", b"x"), 400),
-    (attachment("image.bin", b"\xff\x00"), 415),
 ])
-def test_the_http_boundary_refuses_unsafe_or_binary_attachments(console, item, code):
+def test_the_http_boundary_refuses_unsafe_attachments(console, item, code):
     url = console.replace("/?t=", "/api/say?t=")
     req = urllib.request.Request(
         url, data=json.dumps({"text": "Use it", "attachments": [item],
@@ -301,15 +300,17 @@ def test_validated_attachments_reach_say_only_after_consent(console, monkeypatch
     assert seen["attachments"][0].text == "x,y\n1,2\n"
 
 
-def test_chunked_http_upload_accepts_large_binary_and_reaches_say(
+def test_chunked_http_batch_accepts_large_binary_and_reaches_say(
         console, monkeypatch):
     """The supported browser path has no legacy count/type/file-size quota."""
     from crossaudit.console import server as server_mod
 
     data = bytes(range(256)) * 1200  # 307,200 bytes: above the legacy 200 KB cap.
     upload_id = "a" * 32
+    batch = "b" * 32
     status, uploaded, _headers = post_json_to(console, "/api/upload", {
-        "id": upload_id, "name": "evidence.bin",
+        "id": upload_id, "batch": batch, "ordinal": 0, "batch_count": 1,
+        "name": "evidence.bin",
         "type": "application/octet-stream", "offset": 0, "total": len(data),
         "data": base64.b64encode(data).decode(),
     })
@@ -325,7 +326,7 @@ def test_chunked_http_upload_accepts_large_binary_and_reaches_say(
 
     monkeypatch.setattr(server_mod, "say", fake_say)
     status, body, _headers = post_json(console, {
-        "text": "Preserve this evidence", "uploads": [upload_id],
+        "text": "Preserve this evidence", "upload_batch": batch,
         "attachment_consent": True,
     })
 
@@ -357,14 +358,18 @@ def test_delivery_choices_refuse_an_unimplemented_binary_format():
             "tone": "Editorial and readable"})
 
 
-def test_artifact_download_is_tokened_and_forces_a_download(console, monkeypatch):
+def test_artifact_download_is_tokened_streamed_and_forces_a_download(
+        console, monkeypatch, tmp_path):
     from crossaudit.console import server as server_mod
 
-    monkeypatch.setattr(server_mod, "read_artifact",
-                        lambda _cfg, path: (b"audited output\n", "result.txt"))
+    output = tmp_path / "result.txt"
+    output.write_bytes(b"audited output\n" + b"x" * 2_000_000)
+    monkeypatch.setattr(server_mod, "resolve_artifact",
+                        lambda _cfg, path: (output, "result.txt", output.stat().st_size))
     url = console.replace("/?t=", "/api/file?path=experiments%2Fresult.txt&t=")
     status, body, headers = fetch(url)
-    assert status == 200 and body == "audited output\n"
+    assert status == 200 and body.startswith("audited output\n")
+    assert len(body.encode()) == output.stat().st_size
     assert headers["content-disposition"].startswith("attachment;")
     assert headers["cache-control"] == "no-store"
     bare = url.split("&t=")[0]
