@@ -135,7 +135,16 @@ class _ChangeSignal:
 
 
 STREAM_CHANGES = _ChangeSignal()
-TRACKER.subscribe(STREAM_CHANGES.notify)
+PROGRESS_CHANGES = _ChangeSignal()
+
+
+def _notify_progress() -> None:
+    """Wake the main stream and identify the cheap in-memory-only change."""
+    PROGRESS_CHANGES.notify()
+    STREAM_CHANGES.notify()
+
+
+TRACKER.subscribe(_notify_progress)
 usage.subscribe(STREAM_CHANGES.notify)
 
 
@@ -562,9 +571,24 @@ def make_handler(cfg: Config, token: str, touch) -> type:
             last_digest = ""
             last_beat = time.monotonic()
             change_version = STREAM_CHANGES.current()
+            progress_version = PROGRESS_CHANGES.current()
+            last_state = None
             try:
                 while True:
-                    payload = json.dumps(snapshot(cfg), sort_keys=True)
+                    current_progress_version = PROGRESS_CHANGES.current()
+                    if (last_state is not None and
+                            current_progress_version != progress_version):
+                        # A progress step is already held in memory. Reusing the
+                        # last full ledger view keeps the composer/loop response
+                        # immediate even when git and filesystem scans are slow;
+                        # the 100 ms fallback re-derives the durable state next.
+                        state = dict(last_state)
+                        state["progress"] = TRACKER.snapshot()
+                    else:
+                        state = snapshot(cfg)
+                    progress_version = current_progress_version
+                    last_state = state
+                    payload = json.dumps(state, sort_keys=True)
                     digest = hashlib.sha256(payload.encode()).hexdigest()
                     now = time.monotonic()
                     if digest != last_digest:

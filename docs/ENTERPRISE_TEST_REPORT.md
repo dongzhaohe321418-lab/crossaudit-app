@@ -46,7 +46,7 @@ repository secrets in CI.
 
 ## V4.5.0 release-candidate evidence
 
-- Automated suite: **422 passed, 2 skipped** in 42.06 seconds. The skipped cases
+- Automated suite: **422 passed, 2 skipped** in 38.99 seconds. The skipped cases
   are only the explicitly opt-in paid-provider tests.
 - Paid-provider smoke: **2 passed**, using real OpenAI and Anthropic completions
   and provider-reported usage. No credential value was printed or persisted in
@@ -64,6 +64,9 @@ repository secrets in CI.
   `max_completion_tokens`; OpenAI-compatible providers retry only a named token
   parameter mismatch; MiniMax uses its documented non-zero temperature; and
   single-origin providers cannot acquire a duplicated `/v1` path from the UI.
+- Live update stress: the 250 ms same-process SSE gate passed 20 consecutive
+  repetitions after the progress fast path was introduced; the 100 ms fallback
+  continues to re-derive durable Git/controller changes.
 - Browser acceptance: the installed frozen UI rendered V4.5.0, ten provider
   cards and ten write-only key fields with no horizontal overflow or console
   error. Project setup displayed the regional choices and continued to disable
@@ -74,7 +77,7 @@ repository secrets in CI.
   child core; normal AppKit Quit stopped both.
 - Distribution: valid APFS DMG CRC, valid Info.plist, arm64 shell/core/`gh`/Codex
   executables, and strict deep code-sign verification. SHA-256:
-  `db213b5308c5ace44af7aafb35bfff992ac6e2ca7ea4f6fbc0f3bff85959c3d5`.
+  `8d0cbeef86788c1a2b817b545b1c6ead53f65a116fd4b94c91719d031ef0ba83`.
 
 ## V4.4.0 release-candidate evidence
 
@@ -193,6 +196,10 @@ repository secrets in CI.
 25. OpenAI's token-limit migration and MiniMax's non-zero temperature contract
     produced avoidable provider HTTP 400 failures. Both are now encoded in the
     adapter contract with a narrowly scoped one-retry compatibility path.
+26. A loaded Linux runner exposed that a progress event could wait behind a
+    complete Git/ledger snapshot before reaching SSE. The stream now reuses its
+    last complete durable view for an in-memory progress-only update, then
+    performs the usual full derivation on the 100 ms fallback tick.
 
 ## Residual risks and recommendations
 
