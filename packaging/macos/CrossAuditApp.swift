@@ -1,16 +1,20 @@
 import AppKit
+import Darwin
 import WebKit
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
-                         WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate {
+                         WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate,
+                         WKScriptMessageHandler {
     private var window: NSWindow!
     private var webView: WKWebView!
     private var core: Process?
     private var stdoutBuffer = Data()
     private var loadedURL = false
     private var logHandle: FileHandle?
+    private var terminationSignals: [DispatchSourceSignal] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        installTerminationHandlers()
         buildMenus()
         buildWindow()
         launchCore()
@@ -31,9 +35,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
         try? logHandle?.close()
     }
 
+    private func installTerminationHandlers() {
+        for value in [SIGINT, SIGTERM] {
+            signal(value, SIG_IGN)
+            let source = DispatchSource.makeSignalSource(signal: value, queue: .main)
+            source.setEventHandler { NSApp.terminate(nil) }
+            source.resume()
+            terminationSignals.append(source)
+        }
+    }
+
     private func buildWindow() {
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .default()
+        configuration.userContentController.add(self, name: "crossaudit")
         webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = self
         webView.uiDelegate = self
@@ -197,6 +212,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
     @objc private func openNewTask(_ sender: Any?) { runJavaScript("document.getElementById('new-task')?.click()") }
     @objc private func showProjects(_ sender: Any?) { runJavaScript("document.getElementById('projects-home')?.click()") }
     @objc private func reload(_ sender: Any?) { webView.reload() }
+
+    func userContentController(_ userContentController: WKUserContentController,
+                               didReceive message: WKScriptMessage) {
+        guard message.name == "crossaudit",
+              ["127.0.0.1", "localhost"].contains(message.frameInfo.securityOrigin.host),
+              let body = message.body as? [String: Any],
+              body["action"] as? String == "chooseWorkspace" else { return }
+        let panel = NSOpenPanel()
+        panel.title = "Choose CrossAudit Workspace"
+        panel.message = "New projects will be created as folders inside this location."
+        panel.prompt = "Use This Folder"
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.allowsMultipleSelection = false
+        if let current = body["current"] as? String,
+           FileManager.default.fileExists(atPath: current) {
+            panel.directoryURL = URL(fileURLWithPath: current, isDirectory: true)
+        }
+        panel.beginSheetModal(for: window) { [weak self] result in
+            guard result == .OK, let url = panel.url,
+                  let data = try? JSONSerialization.data(withJSONObject: ["path": url.path]),
+                  let json = String(data: data, encoding: .utf8) else { return }
+            self?.runJavaScript("window.crossauditWorkspaceSelected?.(\(json))")
+        }
+    }
 
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
                  decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {

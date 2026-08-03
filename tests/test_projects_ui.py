@@ -8,6 +8,7 @@ import pytest
 
 from crossaudit.cli import pair
 from crossaudit.config import load
+from crossaudit import workspace
 from crossaudit.console import daemon, projects
 from crossaudit.errors import ConfigDenial
 
@@ -163,6 +164,19 @@ def test_github_failures_explain_the_user_action(stderr, hint, monkeypatch):
         pair._gh("repo", "create", "owner/project")
 
 
+def test_repository_availability_does_not_hide_network_failures(monkeypatch):
+    class Result:
+        returncode = 1
+        stdout = ""
+        stderr = "connection reset by peer"
+
+    monkeypatch.setattr(pair, "gh", lambda: "/usr/bin/gh")
+    monkeypatch.setattr(pair.subprocess, "run", lambda *a, **k: Result())
+    with pytest.raises(ConfigDenial) as caught:
+        pair._exists("owner/project")
+    assert caught.value.detail == {"issue": "github_check", "action": "retry"}
+
+
 def test_project_page_contains_the_control_plane_contract():
     from crossaudit.console.page import PAGE
 
@@ -172,8 +186,70 @@ def test_project_page_contains_the_control_plane_contract():
                  'role="progressbar"', "project-live-copy",
                  'aria-label="Back to projects"',
                  "document.getElementById('back-projects').onclick=showProjects",
-                 "Connect GitHub", "/api/github/connect", "Open GitHub"):
+                 "Connect GitHub", "/api/github/connect", "Open GitHub",
+                 "Local workspace folder", "Choose folder…",
+                 "/api/workspace/select", "/api/github/check",
+                 "Check names", "Edit repository names", "recovery-modal"):
         assert text in PAGE
+    assert "data-copy-recovery-github" in PAGE
+    assert "This dialog updates automatically after approval." in PAGE
+
+
+def test_repository_check_preserves_editable_names_and_requires_explicit_adoption(
+        monkeypatch):
+    monkeypatch.setattr(projects, "github_status", lambda force=False: {
+        "connected": True, "owner": "owner", "detail": "Connected as owner"})
+    monkeypatch.setattr(pair, "_exists", lambda repo: repo.endswith("/audit-ledger"))
+    selected = payload(name="local-folder", github=True,
+                       science_repo="owner/customer-work",
+                       audit_repo="owner/audit-ledger")
+
+    checked = projects.check_repositories(selected)
+    assert checked["science"] == "owner/customer-work"
+    assert checked["audit"] == "owner/audit-ledger"
+    assert checked["ready"] is False
+    with pytest.raises(ConfigDenial) as caught:
+        projects.check_repositories(selected, enforce=True)
+    assert caught.value.detail["issue"] == "repo_exists"
+    selected["adopt_existing"] = True
+    assert projects.check_repositories(selected, enforce=True)["ready"] is True
+
+
+def test_workspace_selection_is_app_only_and_immediately_changes_project_base(
+        tmp_path, monkeypatch, cfg):
+    selected = tmp_path / "Chosen Workspace"
+    selected.mkdir()
+    support = tmp_path / "support"
+    monkeypatch.setenv("CROSSAUDIT_WORKSPACE_ROOT", str(tmp_path / "original"))
+    monkeypatch.delenv("CROSSAUDIT_APP_MODE", raising=False)
+    with pytest.raises(ConfigDenial, match="macOS app"):
+        projects.select_workspace(cfg, str(selected))
+
+    monkeypatch.setenv("CROSSAUDIT_APP_MODE", "1")
+    monkeypatch.setenv("CROSSAUDIT_APP_SUPPORT", str(support))
+    result = projects.select_workspace(cfg, str(selected))
+    assert result == {"workspace": str(selected.resolve()), "selected": True}
+    assert projects.workspace_base(cfg) == selected.resolve()
+
+
+def test_projects_in_every_native_selected_workspace_remain_visible(
+        tmp_path, monkeypatch, cfg):
+    support = tmp_path / "support"
+    first = tmp_path / "First"
+    second = tmp_path / "Second"
+    first.mkdir()
+    second.mkdir()
+    monkeypatch.setenv("CROSSAUDIT_APP_SUPPORT", str(support))
+    monkeypatch.setenv("CROSSAUDIT_WORKSPACE_ROOT", str(first))
+    workspace.select_workspace(support, str(first))
+    workspace.select_workspace(support, str(second))
+    monkeypatch.delenv("CROSSAUDIT_APP_MODE", raising=False)
+    projects.create_project(first, payload(name="first-project"), lambda *_: None)
+    projects.create_project(second, payload(name="second-project"), lambda *_: None)
+    monkeypatch.setenv("CROSSAUDIT_APP_MODE", "1")
+
+    names = {item["name"] for item in projects.snapshot(cfg)["items"]}
+    assert {"first-project", "second-project"} <= names
 
 
 def test_default_conversation_exposes_only_audited_deliverables():
@@ -265,9 +341,10 @@ def test_failed_github_setup_is_visible_and_resumes_idempotently(tmp_path, monke
     current = load(tmp_path / "control" / "crossaudit.yml")
     monkeypatch.setattr(projects, "github_status", lambda force=False: {
         "connected": True, "owner": "owner", "detail": "Connected as owner"})
+    monkeypatch.setattr(pair, "_exists", lambda _repo: False)
 
     attempts = []
-    def fail_once(cfg, science, audit, *, private, progress):
+    def fail_once(cfg, science, audit, *, private, progress, allow_existing=True):
         attempts.append((science, audit))
         progress("github", f"Created {science}")
         raise ConfigDenial("simulated failure after the first repository")
@@ -284,7 +361,7 @@ def test_failed_github_setup_is_visible_and_resumes_idempotently(tmp_path, monke
     row = next(p for p in projects.snapshot(current)["items"] if p["name"] == "recover")
     assert row["status"] == "setup_failed" and row["setup"]["recoverable"] is True
 
-    def succeed(cfg, science, audit, *, private, progress):
+    def succeed(cfg, science, audit, *, private, progress, allow_existing=True):
         attempts.append((science, audit))
         progress("github", f"Adopting existing {science}")
         progress("audit", f"Seeded {audit}")

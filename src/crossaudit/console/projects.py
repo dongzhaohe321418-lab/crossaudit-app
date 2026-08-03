@@ -28,6 +28,7 @@ from ..providers import codex_subscription
 from ..controller import StateStore
 from ..errors import ConfigDenial, Denial
 from ..providers.catalog import list_models
+from .. import workspace as workspace_mod
 from ..scaffold import (CONFIG_TEMPLATE, GENERAL_CHECKS, GENERAL_TREE,
                         SCIENCE_CHECKS, SCIENCE_TREE, read, write_tree)
 from ..dcl import describe as describe_checks
@@ -45,6 +46,21 @@ def workspace_base(current: Config) -> Path:
     override = os.environ.get("CROSSAUDIT_WORKSPACE_ROOT", "").strip()
     return (Path(override).expanduser().resolve() if override
             else current.root.parent.resolve())
+
+
+def workspace_roots(current: Config) -> tuple[Path, ...]:
+    """Folders explicitly selected in the app, plus the current project parent."""
+    roots = [workspace_base(current)]
+    support_raw = os.environ.get("CROSSAUDIT_APP_SUPPORT", "").strip()
+    if os.environ.get("CROSSAUDIT_APP_MODE") == "1" and support_raw:
+        roots.extend(workspace_mod.known_workspaces(Path(support_raw)))
+    if current.root.name != ".crossaudit-home":
+        roots.append(current.root.parent.resolve())
+    return tuple(dict.fromkeys(root.resolve() for root in roots))
+
+
+def _trusted_project(current: Config, path: Path) -> bool:
+    return path.parent in workspace_roots(current)
 
 
 def _setup_path(root: Path) -> Path:
@@ -71,10 +87,51 @@ def _write_setup(root: Path, value: dict) -> None:
     tmp.replace(path)
 
 
-def _fail_setup(root: Path, detail: str) -> None:
+def _guidance(exc: Exception) -> dict:
+    detail = exc.detail if isinstance(exc, Denial) else {}
+    code = str(detail.get("issue", "")).strip()
+    action = str(detail.get("action", "")).strip()
+    url = str(detail.get("url", "")).strip()
+    reason = exc.reason if isinstance(exc, Denial) else str(exc)
+    low = reason.casefold()
+    if not code:
+        if "not authenticated" in low or "connect github" in low:
+            code, action = "github_auth", "connect_github"
+        elif "already exists" in low or "name exists" in low:
+            code, action = "repo_exists", "edit_repositories"
+        elif "permission" in low or "forbidden" in low or "403" in low:
+            code, action = "github_permission", "open_github"
+        elif "rate" in low and "limit" in low:
+            code, action = "github_rate_limit", "retry"
+        elif "origin" in low:
+            code, action = "origin_conflict", "edit_repositories"
+        elif "workspace" in low or "folder" in low:
+            code, action = "workspace", "choose_workspace"
+        else:
+            code, action = "setup", "retry"
+    titles = {
+        "github_auth": "Connect GitHub to continue",
+        "github_sso": "Authorize your organisation's SSO",
+        "github_permission": "GitHub permission is required",
+        "github_rate_limit": "GitHub is temporarily rate-limited",
+        "repo_exists": "One or both repository names are already used",
+        "origin_conflict": "The local Git remote needs attention",
+        "workspace": "Choose a writable workspace",
+        "workspace_permission": "Choose a writable workspace",
+        "setup": "Project setup needs your attention",
+    }
+    return {"code": code[:60], "title": titles.get(code, titles["setup"]),
+            "action": action[:60] or "retry", "url": url[:500] or None,
+            "retryable": action in {"retry", "connect_github",
+                                     "edit_repositories", "choose_workspace"}}
+
+
+def _fail_setup(root: Path, detail: str, issue: dict | None = None) -> None:
     value = _read_setup(root)
     if value:
         value.update(status="failed", detail=detail[:500], finished=time.time())
+        if issue:
+            value["issue"] = issue
         _write_setup(root, value)
 
 
@@ -92,23 +149,30 @@ class ProjectJobs:
         return self._start(
             current, project, notify,
             lambda step: create_project(base, payload, step),
-            failure_root=failure_root)
+            failure_root=failure_root,
+            context={"science": str(payload.get("science_repo", ""))[:170],
+                     "audit": str(payload.get("audit_repo", ""))[:170],
+                     "workspace": str(base), "github": payload.get("github") is True})
 
-    def resume(self, current: Config, root: str, notify) -> dict:
+    def resume(self, current: Config, root: str, payload: dict, notify) -> dict:
         path = Path(root).resolve()
-        base = workspace_base(current)
+        base = path.parent if _trusted_project(current, path) else workspace_base(current)
         return self._start(
             current, path.name[:80], notify,
-            lambda step: resume_project(base, path, step),
+            lambda step: resume_project(base, path, step, payload),
             failure_root=(path if path.parent == base
-                          else None))
+                          else None), context={"science": str(payload.get("science_repo", ""))[:170],
+                                              "audit": str(payload.get("audit_repo", ""))[:170],
+                                              "github": True})
 
     def _start(self, current: Config, project: str, notify, operation, *,
-               failure_root: Path | None) -> dict:
+               failure_root: Path | None, context: dict | None = None) -> dict:
         job_id = uuid.uuid4().hex[:12]
         row = {"id": job_id, "status": "running", "stage": "validate",
                "detail": "Validating project settings", "started": time.time(),
-               "steps": [], "project": project}
+               "steps": [], "project": project,
+               "root": str(failure_root) if failure_root is not None else None}
+        row.update(context or {})
         with self._lock:
             if any(j["status"] == "running" and
                    j["project"].casefold() == project.casefold()
@@ -136,16 +200,24 @@ class ProjectJobs:
                                result=result, finished=time.time())
             except (Denial, OSError, ValueError) as exc:
                 why = exc.reason if isinstance(exc, Denial) else str(exc)
+                issue = _guidance(exc)
                 if failure_root is not None:
-                    _fail_setup(failure_root, why)
+                    _fail_setup(failure_root, why, issue)
                 with self._lock:
-                    row.update(status="failed", detail=why[:500], finished=time.time())
+                    row.update(status="failed", detail=why[:500], issue=issue,
+                               recoverable=bool(failure_root and
+                                                (failure_root / CONFIG_NAME).is_file()),
+                               finished=time.time())
             except Exception as exc:  # noqa: BLE001 - background boundary
+                issue = _guidance(exc)
                 if failure_root is not None:
-                    _fail_setup(failure_root, str(exc))
+                    _fail_setup(failure_root, str(exc), issue)
                 with self._lock:
                     row.update(status="failed",
                                detail=f"{type(exc).__name__}: {exc}"[:500],
+                               issue=issue,
+                               recoverable=bool(failure_root and
+                                                (failure_root / CONFIG_NAME).is_file()),
                                finished=time.time())
             notify()
 
@@ -207,10 +279,12 @@ class RuntimeRelays:
         self._active: set[tuple[str, int, int]] = set()
 
     def ensure(self, current: Config, notify) -> None:
-        try:
-            candidates = tuple(workspace_base(current).iterdir())
-        except OSError:
-            return
+        candidates = []
+        for base in workspace_roots(current):
+            try:
+                candidates.extend(base.iterdir())
+            except OSError:
+                continue
         for root in candidates:
             if root.resolve() == current.root or not (root / CONFIG_NAME).is_file():
                 continue
@@ -258,7 +332,10 @@ def github_status(*, force: bool = False) -> dict:
         owner = pair_mod._owner()
         value = {"connected": True, "owner": owner, "detail": f"Connected as {owner}"}
     except Denial as exc:
-        value = {"connected": False, "owner": None, "detail": exc.reason}
+        value = {"connected": False, "owner": None, "detail": exc.reason,
+                 "issue": exc.detail.get("issue"),
+                 "action": exc.detail.get("action"),
+                 "url": exc.detail.get("url")}
     except (OSError, ValueError, KeyError, TypeError) as exc:
         value = {"connected": False, "owner": None,
                  "detail": f"GitHub connection unavailable: {exc}"}
@@ -283,7 +360,9 @@ class GithubAuthJobs:
         path = shutil.which("gh")
         if not path:
             raise ConfigDenial(
-                "Install the GitHub CLI from https://cli.github.com first")
+                "Install the GitHub CLI before connecting an account",
+                issue="github_cli", action="install_github_cli",
+                url="https://cli.github.com")
         with self._lock:
             if self._job and self._job["status"] == "running":
                 return {"job": self._job["id"]}
@@ -429,7 +508,12 @@ def _project_row(path: Path, current: Config) -> dict | None:
             "setup": ({"status": setup.get("status"),
                        "detail": str(setup.get("detail", ""))[:300],
                        "steps": setup.get("steps", [])[-8:],
-                       "recoverable": recoverable} if setup else None),
+                       "recoverable": recoverable,
+                       "issue": setup.get("issue"),
+                       "science": setup.get("science"),
+                       "audit": setup.get("audit"),
+                       "private": setup.get("private") is not False}
+                      if setup else None),
             "auditor": f"{cfg.auditor.vendor} · {cfg.auditor.model}",
             "generator": ("human" if cfg.generator_vendor == "human" else
                           f"{cfg.generator_vendor or 'unset'} · "
@@ -443,10 +527,13 @@ def _project_row(path: Path, current: Config) -> dict | None:
 def snapshot(current: Config) -> dict:
     base = workspace_base(current)
     rows = []
-    try:
-        candidates = sorted(p for p in base.iterdir() if p.is_dir())
-    except OSError:
-        candidates = [current.root]
+    candidates = []
+    for root in workspace_roots(current):
+        try:
+            candidates.extend(p for p in root.iterdir() if p.is_dir())
+        except OSError:
+            continue
+    candidates = sorted(dict.fromkeys(path.resolve() for path in candidates))
     app_home = os.environ.get("CROSSAUDIT_APP_MODE") == "1"
     if current.root not in candidates and not (app_home and current.root.name == ".crossaudit-home"):
         candidates.append(current.root)
@@ -481,6 +568,48 @@ def _repo(value: str, owner: str, fallback: str) -> str:
     if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", value):
         raise ConfigDenial(f"repository must be owner/name, got {value!r}")
     return value
+
+
+def select_workspace(current: Config, selected: str) -> dict:
+    if os.environ.get("CROSSAUDIT_APP_MODE") != "1":
+        raise ConfigDenial(
+            "Choose folder is available in the CrossAudit macOS app",
+            issue="workspace_app_required", action="open_app")
+    support_raw = os.environ.get("CROSSAUDIT_APP_SUPPORT", "").strip()
+    if not support_raw:
+        raise ConfigDenial("The application support folder is unavailable")
+    root = workspace_mod.select_workspace(Path(support_raw), selected)
+    _RUNTIME_CACHE.clear()
+    return {"workspace": str(root), "selected": True}
+
+
+def check_repositories(payload: dict, *, enforce: bool = False) -> dict:
+    status = github_status(force=True)
+    if not status["connected"]:
+        raise ConfigDenial(
+            status["detail"], issue="github_auth", action="connect_github")
+    owner = str(status["owner"])
+    fallback = _clean_text(payload, "name", 80)
+    science = _repo(str(payload.get("science_repo", "")), owner, fallback)
+    audit = _repo(str(payload.get("audit_repo", "")), owner,
+                  f"{science.split('/', 1)[1]}-audit")
+    if science == audit:
+        raise ConfigDenial(
+            "Work and audit repositories must use different names",
+            issue="repo_names", action="edit_repositories")
+    rows = [{"repo": repo, "exists": pair_mod._exists(repo)}
+            for repo in (science, audit)]
+    existing = [row["repo"] for row in rows if row["exists"]]
+    adopt = payload.get("adopt_existing") is True
+    if enforce and existing and not adopt:
+        raise ConfigDenial(
+            "Already exists: " + ", ".join(existing) + ". Edit the names, or "
+            "explicitly allow CrossAudit to use repositories you can access.",
+            issue="repo_exists", action="edit_repositories",
+            repositories=existing)
+    return {"owner": owner, "science": science, "audit": audit,
+            "repositories": rows, "ready": not existing or adopt,
+            "adopt_existing": adopt}
 
 
 def create_project(base: Path, payload: dict, progress) -> dict:
@@ -530,6 +659,12 @@ def create_project(base: Path, payload: dict, progress) -> dict:
                 f"{'API key' if generator_connection == 'api' else 'subscription'} in "
                 "Settings before creating this project")
 
+    requested_workspace = str(payload.get("workspace", "")).strip()
+    if requested_workspace and Path(requested_workspace).expanduser().resolve() != base.resolve():
+        raise ConfigDenial(
+            "The workspace changed in another window. Review the selected folder "
+            "and create the project again.",
+            issue="workspace_changed", action="choose_workspace")
     target = (base / name).resolve()
     if target.parent != base.resolve():
         raise ConfigDenial("projects can only be created inside this workspace")
@@ -541,15 +676,9 @@ def create_project(base: Path, payload: dict, progress) -> dict:
     science = name
     audit = ""
     if github:
-        status = github_status()
-        if not status["connected"]:
-            raise ConfigDenial(status["detail"])
-        owner = status["owner"]
-        science = _repo(str(payload.get("science_repo", "")), owner, name)
-        audit = _repo(str(payload.get("audit_repo", "")), owner,
-                      f"{science.split('/', 1)[1]}-audit")
-        if science == audit:
-            raise ConfigDenial("science and audit repositories must be different")
+        checked = check_repositories(payload, enforce=True)
+        owner = checked["owner"]
+        science, audit = checked["science"], checked["audit"]
 
     progress("local", f"Creating {target}")
     gitignore_existed = (target / ".gitignore").exists()
@@ -558,7 +687,8 @@ def create_project(base: Path, payload: dict, progress) -> dict:
              "status": "running",
              "detail": "Creating the local project", "started": time.time(),
              "steps": [], "github": github, "science": science,
-             "audit": audit, "private": payload.get("public") is not True}
+             "audit": audit, "private": payload.get("public") is not True,
+             "adopt_existing": payload.get("adopt_existing") is True}
     _write_setup(target, setup)
 
     def record(stage: str, detail: str) -> None:
@@ -631,7 +761,8 @@ def create_project(base: Path, payload: dict, progress) -> dict:
         record("github", "Creating and connecting the two GitHub repositories")
         pairing = pair_mod.apply_pair(
             cfg, science, audit, private=payload.get("public") is not True,
-            progress=record)
+            progress=record,
+            allow_existing=payload.get("adopt_existing") is True)
     setup.update(status="complete", detail="Project ready", finished=time.time())
     _write_setup(target, setup)
     return {"name": name, "project_type": project_type, "root": str(target),
@@ -639,7 +770,8 @@ def create_project(base: Path, payload: dict, progress) -> dict:
             "setup_commit": commit, "drafted_rules": drafted, "pairing": pairing}
 
 
-def resume_project(base: Path, target: Path, progress) -> dict:
+def resume_project(base: Path, target: Path, progress,
+                   payload: dict | None = None) -> dict:
     target = target.resolve()
     if target.parent != base.resolve():
         raise ConfigDenial("that project is outside this workspace")
@@ -647,11 +779,20 @@ def resume_project(base: Path, target: Path, progress) -> dict:
     if not setup or setup.get("status") != "failed" or not setup.get("github"):
         raise ConfigDenial("this project has no recoverable GitHub setup")
     cfg = load(target / CONFIG_NAME)
-    science = str(setup.get("science") or cfg.science_repo)
-    audit = str(setup.get("audit") or cfg.audit_repo or "")
+    payload = payload or {}
+    checked = check_repositories({
+        "name": target.name,
+        "science_repo": payload.get("science_repo") or setup.get("science")
+                        or cfg.science_repo,
+        "audit_repo": payload.get("audit_repo") or setup.get("audit")
+                      or cfg.audit_repo or "",
+        "adopt_existing": True,
+    })
+    science, audit = checked["science"], checked["audit"]
     if not audit:
         raise ConfigDenial("the failed setup did not record an audit repository")
-    setup.update(status="running", detail="Resuming GitHub setup")
+    setup.update(status="running", detail="Resuming GitHub setup",
+                 science=science, audit=audit, issue=None)
     _write_setup(target, setup)
 
     def record(stage: str, detail: str) -> None:
@@ -663,7 +804,7 @@ def resume_project(base: Path, target: Path, progress) -> dict:
 
     pairing = pair_mod.apply_pair(
         cfg, science, audit, private=setup.get("private") is not False,
-        progress=record)
+        progress=record, allow_existing=True)
     setup.update(status="complete", detail="Project ready", finished=time.time())
     _write_setup(target, setup)
     return {"name": target.name, "root": str(target), "config": str(cfg.path),
@@ -672,8 +813,8 @@ def resume_project(base: Path, target: Path, progress) -> dict:
 
 def open_project(current: Config, root: str) -> dict:
     path = Path(root).resolve()
-    if path.parent != workspace_base(current) or not (path / CONFIG_NAME).is_file():
-        raise ConfigDenial("that project is outside this workspace")
+    if not _trusted_project(current, path) or not (path / CONFIG_NAME).is_file():
+        raise ConfigDenial("that project is outside your selected workspaces")
     cfg = load(path / CONFIG_NAME)
     info = daemon.live(cfg) or daemon.spawn(cfg, 0)
     return {"url": daemon.url_for(info), "project": cfg.science_repo}

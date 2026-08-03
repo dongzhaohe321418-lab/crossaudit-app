@@ -401,10 +401,13 @@ def make_handler(cfg: Config, token: str, touch) -> type:
     class Handler(BaseHTTPRequestHandler):
         server_version = "crossaudit-console"
 
-        def _deny(self, code: int, why: str) -> None:
-            body = why.encode()
+        def _deny(self, code: int, why: str | Denial) -> None:
+            structured = isinstance(why, Denial)
+            body = (json.dumps(why.as_dict()).encode() if structured
+                    else str(why).encode())
             self.send_response(code)
-            self.send_header("content-type", "text/plain; charset=utf-8")
+            self.send_header("content-type", ("application/json" if structured
+                                                else "text/plain; charset=utf-8"))
             self.send_header("content-length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
@@ -589,7 +592,8 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                 return
             if parsed.path not in {"/api/say", "/api/upload", "/api/projects/create",
                                    "/api/projects/open", "/api/projects/resume",
-                                   "/api/github/connect", "/api/models/refresh",
+                                   "/api/github/connect", "/api/github/check",
+                                   "/api/workspace/select", "/api/models/refresh",
                                    "/api/settings", "/api/providers/connect",
                                    "/api/admit"}:
                 self._deny(404, "no such action")
@@ -621,11 +625,22 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                     return
                 if parsed.path == "/api/projects/resume":
                     result = projects.JOBS.resume(
-                        cfg, str(payload.get("root", "")), STREAM_CHANGES.notify)
+                        cfg, str(payload.get("root", "")), payload,
+                        STREAM_CHANGES.notify)
                     self._send(json.dumps(result).encode(), "application/json")
                     return
                 if parsed.path == "/api/github/connect":
                     result = projects.GITHUB_AUTH.start(STREAM_CHANGES.notify)
+                    self._send(json.dumps(result).encode(), "application/json")
+                    return
+                if parsed.path == "/api/github/check":
+                    result = projects.check_repositories(payload)
+                    self._send(json.dumps(result).encode(), "application/json")
+                    return
+                if parsed.path == "/api/workspace/select":
+                    result = projects.select_workspace(
+                        cfg, str(payload.get("path", "")))
+                    STREAM_CHANGES.notify()
                     self._send(json.dumps(result).encode(), "application/json")
                     return
                 if parsed.path == "/api/models/refresh":
@@ -678,7 +693,7 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                 self._deny(400, "expected {\"text\": \"...\"}")
                 return
             except Denial as exc:
-                self._deny(400, exc.reason)
+                self._deny(400, exc)
                 return
             if not text:
                 self._deny(400, "say something")
@@ -692,7 +707,7 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                 self._deny(exc.status, exc.reason)
                 return
             except Denial as exc:
-                self._deny(400, exc.reason)
+                self._deny(400, exc)
                 return
             # Routing, amendments, disputes and resolutions change files other
             # than the in-memory progress tracker. Publish those immediately too.

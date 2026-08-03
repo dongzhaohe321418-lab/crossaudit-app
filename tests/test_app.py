@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from crossaudit import _selfid, app, app_keys
+from crossaudit import _selfid, app, app_keys, workspace
 from crossaudit.config import load
 from crossaudit.console import projects
 from crossaudit.constitution import Draft, Rule
@@ -80,6 +80,48 @@ def test_app_bootstrap_creates_a_clean_hidden_controller(tmp_path):
 def test_app_workspace_override_is_trusted_process_state(tmp_path, monkeypatch, cfg):
     monkeypatch.setenv("CROSSAUDIT_WORKSPACE_ROOT", str(tmp_path))
     assert projects.workspace_base(cfg) == tmp_path.resolve()
+
+
+def test_native_workspace_choice_persists_across_app_restarts(tmp_path, monkeypatch):
+    support = tmp_path / "support"
+    selected = tmp_path / "My Projects"
+    another = tmp_path / "Client Projects"
+    selected.mkdir()
+    another.mkdir()
+    # Track the process override before select_workspace changes it directly,
+    # so pytest restores the caller's original environment after this test.
+    monkeypatch.setenv("CROSSAUDIT_WORKSPACE_ROOT", str(tmp_path / "original"))
+
+    chosen = workspace.select_workspace(support, str(selected))
+    workspace.select_workspace(support, str(another))
+    assert chosen == selected.resolve()
+    assert not list(selected.glob(".crossaudit-write-test-*"))
+    if os.name != "nt":
+        assert (support / workspace.SETTINGS_NAME).stat().st_mode & 0o777 == 0o600
+
+    monkeypatch.delenv("CROSSAUDIT_WORKSPACE_ROOT", raising=False)
+    assert app.workspace_root(support) == another.resolve()
+    assert workspace.known_workspaces(support) == (
+        selected.resolve(), another.resolve())
+
+
+def test_workspace_choice_refuses_a_missing_path_with_ui_action(tmp_path):
+    with pytest.raises(ConfigDenial) as caught:
+        workspace.select_workspace(tmp_path / "support", str(tmp_path / "missing"))
+    assert caught.value.detail == {
+        "issue": "workspace_missing", "action": "choose_workspace"}
+
+
+def test_native_shell_exposes_only_the_local_workspace_picker_bridge():
+    source = (Path(__file__).parents[1] / "packaging" / "macos" /
+              "CrossAuditApp.swift").read_text()
+    assert "WKScriptMessageHandler" in source
+    assert 'body["action"] as? String == "chooseWorkspace"' in source
+    assert '["127.0.0.1", "localhost"]' in source
+    assert "canChooseDirectories = true" in source
+    assert "canChooseFiles = false" in source
+    assert "DispatchSource.makeSignalSource" in source
+    assert "[SIGINT, SIGTERM]" in source
 
 
 def test_app_project_creation_requires_both_selected_provider_keys(

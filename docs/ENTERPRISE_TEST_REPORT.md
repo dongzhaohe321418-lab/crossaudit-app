@@ -1,14 +1,14 @@
-# CrossAudit 4.3.0 enterprise release assessment
+# CrossAudit 4.4.0 enterprise release assessment
 
 Date: 2026-08-03
 
 Target: Apple Silicon macOS 13 or later
 
-Release candidate: 4.3.0
+Release candidate: 4.4.0
 
 ## Executive result
 
-CrossAudit 4.3.0 is suitable for local evaluation and controlled pilot use. It
+CrossAudit 4.4.0 is suitable for local evaluation and controlled pilot use. It
 preserves the V3.2 audited protocol while adding a native AppKit/WebKit shell,
 Keychain credentials, UI-first project creation, independent background
 projects, GitHub connection, chunked file transfer, final-artifact downloads,
@@ -44,9 +44,9 @@ The final command outputs and artifact hashes are recorded in the GitHub release
 and CI logs. Tests that spend provider credits remain explicitly opt-in and use
 repository secrets in CI.
 
-## V4.3.0 release-candidate evidence
+## V4.4.0 release-candidate evidence
 
-- Automated suite: **390 passed, 2 skipped**. The skipped cases are the
+- Automated suite: **397 passed, 2 skipped**. The skipped cases are the
   intentionally opt-in paid-provider tests.
 - Paid-provider smoke: **2 passed**, covering real OpenAI and Anthropic API
   completions and requiring provider-reported token usage for both vendors.
@@ -54,15 +54,22 @@ repository secrets in CI.
   both themes without horizontal overflow or console errors. Provider-reported,
   estimated, and unpriced states were distinct; an externally appended usage
   event appeared over the live stream within 250 ms without a refresh.
-- Installed frozen core: reported 4.3.0 through its authenticated state API,
+- Installed frozen core: reports 4.4.0 through its authenticated state API,
   exposed the complete usage schema, used `frozen-app` identity, listened only on
   loopback, and returned 403 for both missing-token and foreign-Host requests.
 - Distribution: arm64 shell and Codex runtime, strict deep codesign validation,
-  valid Info.plist, valid DMG CRC, and a separately published SHA-256 checksum.
+  valid Info.plist, valid DMG CRC, and SHA-256
+  `826de30cf09dbd73bd0c99b26c96923de8e1ccfadf6cc96a8d906ac0aed63ab5`.
 - Transfer stress: a 257-file batch resolved through one fixed-size reference,
   a 900 KB generated file passed without a CrossAudit output quota, a 2 MB
   artifact streamed through the HTTP endpoint, and incomplete batches failed
   closed.
+- GitHub first-use E2E: the same project-creation transaction used by the UI
+  created private `crossaudit-v44-e2e-20260803` and
+  `crossaudit-v44-e2e-20260803-audit` repositories under the connected account,
+  pushed both default branches as `main`, persisted the exact names in
+  `crossaudit.yml`, and seeded the audit repository with the Constitution and
+  ledger. The project row advanced live from setup to `GitHub paired`.
 
 ## Failures found and corrected in V4
 
@@ -132,6 +139,18 @@ repository secrets in CI.
     consumes the official Codex runtime's token-usage notifications, so ChatGPT
     subscription turns show reported counts while still labelling money as
     comparable API value rather than a subscription invoice.
+21. New-project setup used one fixed workspace and regenerated repository names
+    whenever the project name changed. V4.4 adds a native per-project parent
+    folder picker, a persisted set of explicitly approved workspaces, stable
+    independently editable work/audit names, preflight availability checks,
+    explicit adoption consent, structured GitHub guidance, and resumable UI
+    recovery after partial remote setup. Recovery embeds the live GitHub device
+    code, copy action, browser link, and automatic connected-state transition.
+22. The native shell cleaned up its core during a normal AppKit Quit but did
+    not translate terminal or service-manager `SIGINT`/`SIGTERM` into that same
+    lifecycle. V4.4 installs main-queue signal sources so managed shutdowns use
+    `applicationWillTerminate`, terminate the frozen core, and close its
+    provider runtime instead of leaving a local orphan process.
 
 ## Residual risks and recommendations
 

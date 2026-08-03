@@ -21,6 +21,7 @@ from .console import serve
 from .console import daemon
 from .dcl import describe as describe_checks
 from .scaffold import CONFIG_TEMPLATE, GENERAL_CHECKS, read
+from .workspace import configured_workspace
 
 
 def app_support() -> Path:
@@ -29,10 +30,8 @@ def app_support() -> Path:
             Path.home() / "Library" / "Application Support" / "CrossAudit")
 
 
-def workspace_root() -> Path:
-    override = os.environ.get("CROSSAUDIT_WORKSPACE_ROOT", "").strip()
-    return (Path(override).expanduser() if override else
-            Path.home() / "Documents" / "CrossAudit Projects")
+def workspace_root(support: Path | None = None) -> Path:
+    return configured_workspace(support or app_support())
 
 
 def _git(root: Path, *args: str) -> None:
@@ -85,7 +84,7 @@ def main() -> int:
         return project_console(root, port)
     os.environ["CROSSAUDIT_APP_MODE"] = "1"
     support = app_support()
-    workspace = workspace_root()
+    workspace = workspace_root(support)
     support.mkdir(parents=True, exist_ok=True, mode=0o700)
     workspace.mkdir(parents=True, exist_ok=True)
     os.environ["CROSSAUDIT_APP_SUPPORT"] = str(support)

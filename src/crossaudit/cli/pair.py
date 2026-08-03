@@ -46,10 +46,15 @@ def gh() -> str:
         raise ConfigDenial(
             "pairing needs the GitHub CLI: install it from https://cli.github.com "
             "and run `gh auth login`. CrossAudit deliberately does not implement "
-            "its own OAuth flow or handle your token")
+            "its own OAuth flow or handle your token",
+            issue="github_cli", action="install_github_cli",
+            url="https://cli.github.com")
     proc = subprocess.run([path, "auth", "status"], capture_output=True, text=True)
     if proc.returncode != 0:
-        raise ConfigDenial("gh is installed but not authenticated; run `gh auth login`")
+        raise ConfigDenial(
+            "GitHub is not connected. Connect the account in CrossAudit and retry.",
+            issue="github_auth", action="connect_github",
+            url="https://github.com/login/device")
     return path
 
 
@@ -61,13 +66,23 @@ def _gh(*args: str, check: bool = True) -> str:
         hint = ""
         if "saml" in low or "sso" in low:
             hint = " Authorize GitHub CLI for the organisation's SSO, then retry."
+            issue, action, url = ("github_sso", "open_github",
+                                  "https://github.com/settings/applications")
         elif "rate limit" in low:
             hint = " GitHub rate-limited this account; wait for the reset, then retry."
+            issue, action, url = ("github_rate_limit", "retry",
+                                  "https://www.githubstatus.com")
         elif "resource not accessible" in low or "forbidden" in low or "403" in low:
             hint = " The connected account lacks repository or organisation permission."
+            issue, action, url = ("github_permission", "open_github",
+                                  "https://github.com/settings/repositories")
         elif "already exists" in low:
             hint = " The name exists but may not be visible to this account; verify ownership."
-        raise ConfigDenial(f"gh {' '.join(args[:2])} failed: {said}.{hint}".rstrip())
+            issue, action, url = ("repo_exists", "edit_repositories", "")
+        else:
+            issue, action, url = ("github_error", "retry", "")
+        raise ConfigDenial(f"gh {' '.join(args[:2])} failed: {said}.{hint}".rstrip(),
+                           issue=issue, action=action, url=url)
     return proc.stdout.strip()
 
 
@@ -76,8 +91,17 @@ def _owner() -> str:
 
 
 def _exists(repo: str) -> bool:
-    return subprocess.run([gh(), "repo", "view", repo],
-                          capture_output=True).returncode == 0
+    proc = subprocess.run([gh(), "repo", "view", repo], capture_output=True,
+                          text=True)
+    if proc.returncode == 0:
+        return True
+    said = f"{proc.stdout}\n{proc.stderr}".casefold()
+    if ("not found" in said or "could not resolve to a repository" in said or
+            "could not resolve to a repo" in said):
+        return False
+    raise ConfigDenial(
+        f"GitHub could not check {repo}: {(proc.stderr or proc.stdout).strip()[:240]}",
+        issue="github_check", action="retry")
 
 
 def _git(root: Path, *args: str, check: bool = True) -> str:
@@ -117,7 +141,7 @@ def _write_pair_config(cfg, science: str, audit: str) -> None:
 
 
 def apply_pair(cfg, science: str, audit: str, *, private: bool,
-               progress=None) -> dict:
+               progress=None, allow_existing: bool = True) -> dict:
     """Create, connect and seed the two repositories, checking every mutation.
 
     This is shared by the CLI and the browser project wizard.  It is idempotent:
@@ -139,7 +163,8 @@ def apply_pair(cfg, science: str, audit: str, *, private: bool,
     current = _git(cfg.root, "remote", "get-url", "origin", check=False)
     if current and _normalise_remote(current) != _normalise_remote(expected):
         raise ConfigDenial(
-            f"local origin is {current}, not {expected}; refusing to replace it")
+            f"local origin is {current}, not {expected}; refusing to replace it",
+            issue="origin_conflict", action="edit_repositories")
     config_rel = cfg.path.relative_to(cfg.root).as_posix()
     for staged in (False, True):
         args = ["git", "diff"]
@@ -157,6 +182,12 @@ def apply_pair(cfg, science: str, audit: str, *, private: bool,
     created = []
     for repo in (science, audit):
         if _exists(repo):
+            if not allow_existing:
+                raise ConfigDenial(
+                    f"repository {repo} already exists; edit the name or explicitly "
+                    "allow CrossAudit to use repositories you can access",
+                    issue="repo_exists", action="edit_repositories",
+                    repositories=[repo])
             tell("github", f"Adopting existing {repo}")
         else:
             _gh("repo", "create", repo, "--private" if private else "--public")
@@ -221,7 +252,10 @@ def apply_pair(cfg, science: str, audit: str, *, private: bool,
                               capture_output=True)
         if proc.returncode != 0:
             raise ConfigDenial(f"could not upload {cfg.auditor.key_env}: "
-                               f"{proc.stderr.strip()[:240]}")
+                               f"{proc.stderr.strip()[:240]}",
+                               issue="github_secret_permission",
+                               action="open_github",
+                               url=f"https://github.com/{audit}/settings/secrets/actions")
         secret_uploaded = True
         tell("secret", f"Uploaded {cfg.auditor.key_env} to the audit repository")
     else:

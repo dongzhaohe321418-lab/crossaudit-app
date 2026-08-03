@@ -402,7 +402,8 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
 .primary{height:34px;border:0;border-radius:8px;padding:0 13px;background:var(--inverse);
   color:var(--inverse-text);font-weight:620}.primary:hover{background:var(--send-hover)}
 .primary:disabled{opacity:.45;cursor:not-allowed}.secondary{height:34px;border:1px solid var(--line-strong);
-  border-radius:8px;padding:0 12px;background:var(--surface)}.secondary:hover{background:var(--hover)}
+  border-radius:8px;padding:0 12px;background:var(--surface);display:inline-flex;align-items:center;
+  justify-content:center;text-decoration:none;color:var(--text)}.secondary:hover{background:var(--hover)}
 .hub-main{width:min(1100px,calc(100% - 48px));margin:0 auto;padding:44px 0 72px}
 .hub-heading{display:flex;gap:18px;align-items:flex-end;margin-bottom:26px}.hub-heading h1{margin:0;
   font-size:26px;letter-spacing:-.035em}.hub-heading p{margin:5px 0 0;color:var(--muted)}
@@ -457,6 +458,9 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
 .field input,.field select,.field textarea{width:100%;border:1px solid var(--line-strong);border-radius:8px;
   background:var(--surface);padding:9px 10px;outline:0}.field textarea{resize:vertical;min-height:74px}
 .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--blue);box-shadow:0 0 0 2px var(--blue-bg)}
+.path-picker{display:flex;gap:8px;align-items:center}.path-picker input{min-width:0;flex:1;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10.5px}.path-picker button{white-space:nowrap}
+.path-preview{display:block;margin-top:6px;color:var(--faint);font-size:10px;overflow-wrap:anywhere}
 .role-card{border:1px solid var(--line);border-radius:10px;padding:13px;background:var(--panel)}
 .role-card b{display:block;margin-bottom:9px}.role-card .field+.field{margin-top:10px}
 .model-actions{display:flex;justify-content:flex-end;margin-top:6px}.model-actions button{height:27px;font-size:10px}
@@ -472,8 +476,17 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
   letter-spacing:.12em;padding:4px 7px;border-radius:5px;background:var(--surface-2);user-select:all}
 .github-device-actions{display:flex;gap:7px;margin-top:8px;align-items:center}.github-device a{color:var(--blue);
   font-weight:620;text-decoration:none}.github-device small{display:block;color:var(--muted);margin-top:5px}
+.repo-actions{display:flex;align-items:center;gap:8px;margin-top:11px}.repo-actions .secondary{height:29px}
+.repo-check{font-size:10.5px;color:var(--muted)}.repo-check.ok{color:var(--green)}.repo-check.warn{color:var(--amber)}
+.job-guidance{display:none;margin-top:10px;padding:10px;border:1px solid color-mix(in srgb,var(--red) 30%,var(--line));
+  border-radius:8px;background:var(--surface)}.job-guidance.on{display:block}.job-guidance b{font-size:11px}
+.job-guidance p{margin:4px 0 8px;color:var(--muted);font-size:10.5px}.guidance-actions{display:flex;gap:7px;flex-wrap:wrap}
+.guidance-actions a,.guidance-actions button{height:28px;font-size:10px}
+.recovery-note{padding:11px;border:1px solid var(--amber);background:var(--amber-bg);border-radius:9px;
+  color:var(--text);font-size:11px;line-height:1.5;margin-bottom:14px}.recovery-note b{display:block;margin-bottom:3px}
 .wizard-error{display:none;color:var(--red);background:var(--red-bg);border-radius:8px;padding:9px 11px;
   margin-top:14px;font-size:11px}.wizard-error.on{display:block}
+.wizard-error a{color:inherit;font-weight:700;margin-left:7px}
 .wizard-foot{padding:15px 24px;border-top:1px solid var(--line);display:flex;align-items:center;gap:9px}
 .wizard-foot span{font-size:10.5px;color:var(--muted);margin-right:auto;max-width:390px}
 .credential-card{border:1px solid var(--line);border-radius:10px;padding:14px;background:var(--panel)}
@@ -496,12 +509,14 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
 @media(max-width:760px){.hub-bar{padding:0 14px}.hub-main{width:calc(100% - 24px);padding-top:26px}
   .hub-heading{align-items:flex-start;flex-direction:column}.hub-summary{margin-left:0}.project-row{grid-template-columns:minmax(0,1fr) 60px 62px 16px;gap:8px}
   .project-models,.project-tier{display:none}.form-grid{grid-template-columns:1fr}
-  .field.full{grid-column:auto}.project-modal{padding:8px}.wizard{max-height:calc(100vh - 16px)}}
+  .field.full{grid-column:auto}.project-modal{padding:8px}.wizard{max-height:calc(100vh - 16px)}
+  .path-picker{align-items:stretch;flex-direction:column}.path-picker button{width:100%}.repo-actions{align-items:flex-start;
+    flex-direction:column}.hub-tools,.hub-search{width:100%;min-width:0}}
 </style></head>
 <body>
 <section class="project-hub" id="project-hub" aria-label="Projects">
   <header class="hub-bar"><button class="brand-button" id="hub-brand"><span class="brand-mark">◇</span>
-    CrossAudit <span class="version" id="hub-version">V4.3.0</span></button><span class="spacer"></span>
+    CrossAudit <span class="version" id="hub-version">V4.4.0</span></button><span class="spacer"></span>
     <button class="icon-button" id="hub-settings" aria-label="Settings" title="Settings">⚙</button>
     <button class="icon-button" id="hub-theme" aria-label="Switch theme">◐</button>
     <button class="primary" id="create-project">＋ New project</button></header>
@@ -509,7 +524,7 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
     <p>Supervised workspaces on this computer.</p></div><div class="hub-summary" id="workspace-label">Discovering workspace…</div></div>
     <div class="job-panel" id="project-job"><span class="job-spinner"></span><div class="job-copy">
       <b id="job-title">Creating project</b><span id="job-detail">Validating settings…</span>
-      <ul class="job-steps" id="job-steps"></ul></div>
+      <ul class="job-steps" id="job-steps"></ul><div class="job-guidance" id="job-guidance"></div></div>
       <button class="secondary" id="open-created" hidden>Open project</button></div>
     <div class="hub-tools"><input class="hub-search" id="project-search" placeholder="Search projects…"></div>
     <div class="project-table" id="project-list"><div class="hub-empty">Loading projects…</div></div>
@@ -523,6 +538,7 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
     <div class="wizard-body"><section class="form-section"><div class="form-title">Project</div><div class="form-grid">
       <label class="field"><span>Project name</span><input name="name" id="project-name" maxlength="80" required placeholder="chem-agent"></label>
       <label class="field"><span>Automatic revision limit</span><select name="max_rounds" id="max-rounds-choice"><option value="1">1 — quick stop</option><option value="3" selected>3 — recommended</option><option value="5">5 — persistent</option><option value="10">10 — maximum</option></select><small class="field-help" id="round-limit-help">Up to 3 generator → auditor rounds, then the task pauses for you. It never auto-passes.</small></label>
+      <label class="field full"><span>Local workspace folder</span><div class="path-picker"><input id="project-workspace" readonly aria-label="Selected local workspace"><button type="button" class="secondary" id="choose-project-workspace">Choose folder…</button></div><small class="path-preview" id="project-path-preview">Choose where this project's local folder will be created.</small></label>
       <label class="field full"><span>Project type</span><select name="project_type" id="project-type">
         <option value="general" selected>General work — documents, reviews, code</option>
         <option value="science">Scientific / data workflow — structured experiment outputs</option></select></label>
@@ -547,12 +563,29 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
         <small>The work repository holds deliverables. The audit repository holds rules, reports and the auditor secret.</small></span></label>
       <div class="connection" id="github-connection">Checking GitHub connection…</div>
       <div class="github-fields" id="github-fields"><div class="form-grid">
-        <label class="field"><span>Work repository</span><input name="science_repo" id="science-repo" placeholder="owner/project"></label>
-        <label class="field"><span>Audit repository</span><input name="audit_repo" id="audit-repo" placeholder="owner/project-audit"></label>
+        <label class="field"><span>Work repository name</span><input name="science_repo" id="science-repo" maxlength="161" placeholder="owner/project"></label>
+        <label class="field"><span>Audit repository name</span><input name="audit_repo" id="audit-repo" maxlength="161" placeholder="owner/project-audit"></label>
+        <label class="toggle-line full"><input type="checkbox" name="adopt_existing" id="adopt-existing"><span><b>Use accessible repositories if these names already exist</b><small>Off by default. Leave it off when you want two new repositories.</small></span></label>
         <label class="toggle-line full"><input type="checkbox" name="public"><span><b>Public repositories</b><small>Off by default. Private is safer for a new project.</small></span></label>
-      </div></div></div><div class="wizard-error" id="wizard-error"></div></section></div>
+      </div><div class="repo-actions"><button type="button" class="secondary" id="check-repositories">Check names</button><span class="repo-check" id="repo-check">Names will be checked again before anything is created.</span></div></div></div><div class="wizard-error" id="wizard-error"></div></section></div>
     <div class="wizard-foot"><span>Creating may send the description to the auditor model and create repositories in your connected GitHub account.</span>
       <button type="button" class="secondary" id="cancel-project">Cancel</button><button class="primary" id="submit-project">Create project</button></div>
+  </form>
+</div>
+
+<div class="project-modal" id="recovery-modal" role="dialog" aria-modal="true" aria-labelledby="recovery-title">
+  <form class="wizard" id="recovery-form"><div class="wizard-head"><div><h2 id="recovery-title">Finish GitHub setup</h2>
+    <p>Correct the repository settings and continue from the last durable step.</p></div><span class="spacer"></span>
+    <button type="button" class="icon-button" id="close-recovery" aria-label="Close">×</button></div>
+    <div class="wizard-body"><div class="recovery-note" id="recovery-note"></div><input type="hidden" id="recovery-root">
+      <div class="form-grid"><label class="field"><span>Work repository</span><input id="recovery-science" maxlength="161" required></label>
+        <label class="field"><span>Audit repository</span><input id="recovery-audit" maxlength="161" required></label></div>
+      <div class="connection" id="recovery-connection"></div>
+      <div class="repo-actions"><button type="button" class="secondary" id="recovery-connect-github">Connect GitHub</button>
+        <a class="secondary" id="recovery-help" target="_blank" rel="noopener" hidden>Open GitHub help ↗</a></div>
+      <div class="wizard-error" id="recovery-error"></div></div>
+    <div class="wizard-foot"><span>Retry is idempotent: repositories created before the interruption are reused, not duplicated.</span>
+      <button type="button" class="secondary" id="cancel-recovery">Cancel</button><button class="primary" id="retry-recovery">Retry setup</button></div>
   </form>
 </div>
 
@@ -574,7 +607,7 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
         <div class="readiness-item">GitHub connection tool<span id="ghcli-state">…</span></div>
         <div class="readiness-item">Application build<span id="runtime-state">…</span></div>
         <div class="readiness-item">Code identity<span id="digest-state">…</span></div></div>
-      <label class="field" style="margin-top:12px"><span>Project workspace</span><input id="settings-workspace" readonly></label>
+      <label class="field" style="margin-top:12px"><span>Project workspace</span><div class="path-picker"><input id="settings-workspace" readonly><button type="button" class="secondary" id="choose-settings-workspace">Choose folder…</button></div></label>
     </section><div class="wizard-error" id="settings-error"></div></div>
     <div class="wizard-foot"><span>API keys are write-only macOS Keychain items. Subscription credentials stay with the official provider runtime.</span>
       <button type="button" class="secondary" id="cancel-settings">Cancel</button><button class="primary" id="save-settings">Save settings</button></div>
@@ -592,7 +625,7 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
       aria-controls="sidebar-panel" aria-expanded="false">☰</button>
     <button class="icon-button" id="back-projects" aria-label="Back to projects" title="Back to projects">←</button>
     <button class="brand-button" id="projects-home"><span class="brand-mark">◇</span>CrossAudit
-      <span class="version" id="version-badge">V4.3.0</span></button>
+      <span class="version" id="version-badge">V4.4.0</span></button>
     <button class="top-project" id="project-switcher"><b id="proj">…</b> <span id="branch-label">/ supervised workspace</span>⌄</button>
     <span class="spacer"></span>
     <div class="live-pill"><span class="live-dot" id="livedot"></span><span id="conn-text">connecting</span></div>
@@ -728,9 +761,45 @@ async function api(path, body){
   const opt = body ? {method:'POST',headers:{'content-type':'application/json'},
     body:JSON.stringify(body)} : {};
   const r = await fetch(path + '?t=' + encodeURIComponent(T), opt);
-  if(!r.ok) throw new Error(r.status + ' ' + await r.text());
-  return r.json();
+  const text=await r.text();let data=null;try{data=text?JSON.parse(text):{};}catch(e){}
+  if(!r.ok){const error=new Error((data&&data.reason)||text||('Request failed ('+r.status+')'));
+    if(data&&typeof data==='object')Object.assign(error,data);throw error;}
+  return data||{};
 }
+
+let workspacePickerContext='project';
+function updateWorkspaceFields(path){
+  const value=path||'Not selected';
+  document.getElementById('project-workspace').value=value;
+  document.getElementById('settings-workspace').value=value;
+  const name=document.getElementById('project-name').value.trim()||'your-project';
+  document.getElementById('project-path-preview').textContent=value==='Not selected'
+    ?'Choose where this project\'s local folder will be created.'
+    :'Local project: '+value.replace(/\/$/,'')+'/'+name;
+}
+function workspaceError(message){
+  const id=workspacePickerContext==='settings'?'settings-error':'wizard-error';
+  const box=document.getElementById(id);box.textContent=message;box.className='wizard-error on';
+}
+function showInlineError(id,error){
+  const box=document.getElementById(id),message=error&&error.message?error.message:String(error||'Something went wrong');
+  box.innerHTML=esc(message)+(error&&error.url?' <a href="'+esc(error.url)+'" target="_blank" rel="noopener">Open help ↗</a>':'');
+  box.className='wizard-error on';
+}
+function chooseWorkspace(context){
+  workspacePickerContext=context;
+  const current=(projectState&&projectState.workspace)||document.getElementById('settings-workspace').value||'';
+  const bridge=window.webkit&&window.webkit.messageHandlers&&window.webkit.messageHandlers.crossaudit;
+  if(!bridge){workspaceError('Use the CrossAudit macOS app to choose a local folder. The browser console cannot read arbitrary folder paths.');return;}
+  bridge.postMessage({action:'chooseWorkspace',current});
+}
+window.crossauditWorkspaceSelected=async choice=>{
+  if(!choice||!choice.path)return;
+  try{const result=await api('/api/workspace/select',{path:choice.path});
+    if(projectState)projectState.workspace=result.workspace;updateWorkspaceFields(result.workspace);
+    await refreshProjects();
+  }catch(e){showInlineError(workspacePickerContext==='settings'?'settings-error':'wizard-error',e);}
+};
 
 const settingsModal=document.getElementById('settings-modal');
 const settingsForm=document.getElementById('settings-form');
@@ -762,7 +831,7 @@ function renderSettings(d){
   for(const [id,value] of [['git-state',deps.git],['ghcli-state',deps.github_cli]]){
     const el=document.getElementById(id);el.textContent=value?'Ready':'Missing';el.className=value?'':'bad';
   }
-  document.getElementById('settings-workspace').value=d.workspace||'Not selected';
+  updateWorkspaceFields(d.workspace||'Not selected');
   const runtime=d.runtime||{};document.getElementById('runtime-state').textContent=runtime.install_mode||'unknown';
   document.getElementById('digest-state').textContent=runtime.code_digest||'unavailable';
 }
@@ -780,6 +849,7 @@ document.getElementById('settings-open').onclick=openSettings;
 document.getElementById('hub-settings').onclick=openSettings;
 document.getElementById('close-settings').onclick=closeSettings;
 document.getElementById('cancel-settings').onclick=closeSettings;
+document.getElementById('choose-settings-workspace').onclick=()=>chooseWorkspace('settings');
 settingsModal.addEventListener('click',ev=>{if(ev.target===settingsModal)closeSettings();});
 document.getElementById('connect-chatgpt').onclick=async()=>{
   const button=document.getElementById('connect-chatgpt');const error=document.getElementById('settings-error');
@@ -805,8 +875,12 @@ let projectState=null;
 let projectSource=null;
 let activeProjectJob=null;
 let createdRoot=null;
+let repoNameTouched={science:false,audit:false};
+let repositoryCheckNonce=0;
 const projectModal=document.getElementById('project-modal');
 const projectForm=document.getElementById('project-form');
+const recoveryModal=document.getElementById('recovery-modal');
+const recoveryForm=document.getElementById('recovery-form');
 const auditorVendor=document.getElementById('auditor-vendor');
 const generatorVendor=document.getElementById('generator-vendor');
 const auditorConnection=document.getElementById('auditor-connection');
@@ -867,29 +941,78 @@ function configureProjectForm(){
         +'<button type="button" class="secondary" data-copy-github="'+esc(auth.code)+'">Copy code</button>'
         +'<a href="'+esc(auth.url)+'" target="_blank" rel="noopener">Open GitHub ↗</a></div>'
         +'<small>Sign in, enter the code, and approve GitHub CLI. This page updates automatically.</small>':'')+'</div>';
-  }else{connection.className='connection bad';connection.innerHTML='<div class="github-connect"><span>'
-    +esc(auth.detail||gh.detail||'GitHub is not connected')+'</span><button type="button" class="secondary" data-connect-github>Connect GitHub</button></div>';}
-  document.getElementById('github-toggle').disabled=!gh.connected;
-  if(!gh.connected)document.getElementById('github-toggle').checked=false;
-  syncGithubFields();
+  }else{const help=gh.url?'<a class="secondary" href="'+esc(gh.url)+'" target="_blank" rel="noopener">Install GitHub tool ↗</a>':'';
+    connection.className='connection bad';connection.innerHTML='<div class="github-connect"><span>'
+    +esc(auth.detail||gh.detail||'GitHub is not connected')+'</span>'+(gh.action==='install_github_cli'?help
+      :'<button type="button" class="secondary" data-connect-github>Connect GitHub</button>')+'</div>';}
+  document.getElementById('github-toggle').disabled=false;
+  updateWorkspaceFields(projectState.workspace);syncGithubFields();renderRecoveryGithub();
 }
-function syncRepoNames(){
+function renderRecoveryGithub(){
+  if(!recoveryModal.classList.contains('on')||!projectState)return;
+  const gh=projectState.github||{},auth=projectState.github_auth||{};
+  const box=document.getElementById('recovery-connection');
+  const connect=document.getElementById('recovery-connect-github');
+  if(gh.connected){box.textContent=gh.detail||'GitHub connected';box.className='connection ok';connect.hidden=true;}
+  else if(auth.status==='running'){
+    box.className='connection';box.innerHTML='<div class="github-device"><b>'+esc(auth.detail||'Authorize CrossAudit in GitHub')+'</b>'
+      +(auth.code?'<div class="github-device-actions"><span class="device-code">'+esc(auth.code)+'</span>'
+        +'<button type="button" class="secondary" data-copy-recovery-github="'+esc(auth.code)+'">Copy code</button>'
+        +'<a href="'+esc(auth.url)+'" target="_blank" rel="noopener">Open GitHub ↗</a></div>'
+        +'<small>Enter the code in GitHub. This dialog updates automatically after approval.</small>':'')+'</div>';
+    connect.hidden=true;
+  }else{box.textContent=auth.detail||gh.detail||'GitHub is not connected';box.className='connection bad';
+    connect.hidden=false;connect.disabled=false;connect.textContent='Connect GitHub';}
+}
+function resetRepositoryCheck(){
+  repositoryCheckNonce++;const state=document.getElementById('repo-check');
+  state.textContent='Names will be checked again before anything is created.';state.className='repo-check';
+}
+function syncRepoNames(force=false){
   if(!projectState||!projectState.github||!projectState.github.owner)return;
   const name=document.getElementById('project-name').value.trim();
   if(!name)return;
   const owner=projectState.github.owner;
-  document.getElementById('science-repo').value=owner+'/'+name;
-  document.getElementById('audit-repo').value=owner+'/'+name+'-audit';
+  if(force||!repoNameTouched.science)document.getElementById('science-repo').value=owner+'/'+name;
+  if(force||!repoNameTouched.audit)document.getElementById('audit-repo').value=owner+'/'+name+'-audit';
+  updateWorkspaceFields(projectState.workspace);resetRepositoryCheck();
 }
 function syncGithubFields(){
   const on=document.getElementById('github-toggle').checked;
   document.getElementById('github-fields').className='github-fields'+(on?'':' off');
+}
+function repositoryPayload(){return {name:document.getElementById('project-name').value.trim(),
+  science_repo:document.getElementById('science-repo').value.trim(),
+  audit_repo:document.getElementById('audit-repo').value.trim(),
+  adopt_existing:document.getElementById('adopt-existing').checked};}
+async function checkRepositoryNames(showError=true){
+  const status=document.getElementById('repo-check');const nonce=++repositoryCheckNonce;
+  status.textContent='Checking GitHub…';status.className='repo-check';
+  try{const result=await api('/api/github/check',repositoryPayload());if(nonce!==repositoryCheckNonce)return result;
+    const existing=(result.repositories||[]).filter(r=>r.exists).map(r=>r.repo);
+    if(existing.length){status.textContent=(result.adopt_existing?'Ready to use: ':'Already exists: ')+existing.join(', ');
+      status.className='repo-check '+(result.ready?'ok':'warn');}
+    else{status.textContent='Both names are available · one click will create both repositories';status.className='repo-check ok';}
+    return result;
+  }catch(e){if(nonce===repositoryCheckNonce){status.textContent=e.message;status.className='repo-check warn';}
+    if(showError)showInlineError('wizard-error',e);throw e;}
 }
 function syncProjectType(){
   const science=projectType.value==='science';
   document.getElementById('project-contract-hint').textContent=science
     ?'Scientific projects require the visible metadata.yml/results.json, units, convergence, and provenance contract.'
     :'General projects use format, reference, link, and completeness checks. They do not require scientific metadata sidecars.';
+}
+function guidanceMarkup(row){
+  const issue=row&&row.issue;if(!issue)return '';
+  const root=row.root||'';let actions='';
+  if(issue.action==='connect_github')actions+='<button type="button" class="secondary" data-job-action="connect_github">Connect GitHub</button>';
+  if(issue.action==='edit_repositories')actions+='<button type="button" class="secondary" data-job-action="'+(row.recoverable?'edit_repositories':'edit_new_repositories')+'" data-root="'+esc(root)+'">Edit repository names</button>';
+  if(issue.action==='choose_workspace')actions+='<button type="button" class="secondary" data-job-action="choose_workspace">Choose another folder</button>';
+  if(issue.action==='retry'&&root)actions+='<button type="button" class="secondary" data-job-action="retry" data-root="'+esc(root)+'">Try again</button>';
+  if(issue.url)actions+='<a class="secondary" href="'+esc(issue.url)+'" target="_blank" rel="noopener">Open help ↗</a>';
+  return '<b>'+esc(issue.title||'Setup needs attention')+'</b><p>'+esc(row.detail||'Review the settings and retry.')+'</p>'
+    +(actions?'<div class="guidance-actions">'+actions+'</div>':'');
 }
 function renderProjectJob(jobs){
   const row=(jobs||[]).find(j=>j.id===activeProjectJob);
@@ -901,6 +1024,8 @@ function renderProjectJob(jobs){
   document.getElementById('job-detail').textContent=row.detail;
   document.getElementById('job-steps').innerHTML=(row.steps||[]).slice(-8).map(s=>
     '<li>'+esc(s.stage)+' - '+esc(s.detail)+'</li>').join('');
+  const guidance=document.getElementById('job-guidance');guidance.innerHTML=guidanceMarkup(row);
+  guidance.className='job-guidance'+(guidance.innerHTML?' on':'');
   createdRoot=row.result&&row.result.root||null;
   document.getElementById('open-created').hidden=row.status!=='complete';
 }
@@ -917,8 +1042,8 @@ function renderProjects(d){
     +(p.progress?'<span class="project-live"><span class="project-progress" role="progressbar" aria-label="Live project activity"><i></i></span>'
       +'<span class="project-live-copy">'+esc(p.progress.actor)+' · '+esc(p.progress.step)+'</span>'
       +'<span class="project-live-time">'+p.progress.elapsed+'s</span></span>':'')
-    +(p.setup&&p.setup.recoverable?'<span class="project-recovery"><span>'+esc(p.setup.detail||'GitHub setup stopped')+'</span>'
-      +'<span class="retry-setup" role="button" tabindex="0" data-resume-root="'+esc(p.root)+'">Retry setup</span></span>':'')
+    +(p.setup&&p.setup.recoverable?'<span class="project-recovery"><span>'+esc((p.setup.issue&&p.setup.issue.title)||p.setup.detail||'GitHub setup stopped')+'</span>'
+      +'<span class="retry-setup" role="button" tabindex="0" data-resume-root="'+esc(p.root)+'">Fix & retry</span></span>':'')
     +(p.interrupted?'<span class="project-interrupted">Interrupted · open to review and run again</span>':'')+'</span>'
     +'<span class="project-models">'+esc(p.generator)+' → '+esc(p.auditor)+'</span>'
     +'<span class="project-stat">'+p.cycles+' cycles</span><span class="status '+esc(p.status)+'">'+esc(p.status)+'</span>'
@@ -944,10 +1069,12 @@ async function openProject(root,current){
     document.getElementById('job-title').textContent='Could not open project';document.getElementById('job-detail').textContent=e.message;}
 }
 function openProjectModal(){projectForm.reset();document.getElementById('wizard-error').className='wizard-error';
+  repoNameTouched={science:false,audit:false};resetRepositoryCheck();
   configureProjectForm();const vendors=Object.keys((projectState&&projectState.models)||{});
   auditorVendor.value=vendors.includes('openai')?'openai':vendors[0];
   generatorVendor.value=vendors.includes('anthropic')?'anthropic':vendors.find(v=>v!==auditorVendor.value);
-  syncRoleChoices();syncProjectType();projectModal.className='project-modal on';
+  syncRoleChoices();syncProjectType();syncRepoNames(true);updateWorkspaceFields(projectState&&projectState.workspace);
+  projectModal.className='project-modal on';
   setTimeout(()=>document.getElementById('project-name').focus(),0);}
 function closeProjectModal(){projectModal.className='project-modal';}
 
@@ -967,7 +1094,12 @@ document.querySelectorAll('[data-refresh-models]').forEach(button=>button.onclic
     error.textContent=e.message;error.className='wizard-error on';}
   finally{button.disabled=false;setTimeout(()=>button.textContent='Refresh from provider',3500);}
 });
-document.getElementById('project-name').addEventListener('input',syncRepoNames);
+document.getElementById('project-name').addEventListener('input',()=>syncRepoNames(false));
+document.getElementById('science-repo').addEventListener('input',()=>{repoNameTouched.science=true;resetRepositoryCheck();});
+document.getElementById('audit-repo').addEventListener('input',()=>{repoNameTouched.audit=true;resetRepositoryCheck();});
+document.getElementById('adopt-existing').onchange=resetRepositoryCheck;
+document.getElementById('check-repositories').onclick=()=>checkRepositoryNames(true).catch(()=>{});
+document.getElementById('choose-project-workspace').onclick=()=>chooseWorkspace('project');
 document.getElementById('max-rounds-choice').onchange=ev=>{
   const n=Number(ev.target.value);document.getElementById('round-limit-help').textContent='Up to '+n
     +' generator → auditor round'+(n===1?'':'s')+', then the task pauses for you. It never auto-passes.';};
@@ -978,8 +1110,7 @@ document.getElementById('github-connection').onclick=async ev=>{
   if(copy){try{await navigator.clipboard.writeText(copy.getAttribute('data-copy-github'));copy.textContent='Copied';}catch(e){}
     return;}
   if(connect){connect.disabled=true;connect.textContent='Connecting…';try{await api('/api/github/connect',{});}
-    catch(e){connect.disabled=false;connect.textContent='Connect GitHub';document.getElementById('wizard-error').textContent=e.message;
-      document.getElementById('wizard-error').className='wizard-error on';}}
+    catch(e){connect.disabled=false;connect.textContent='Connect GitHub';showInlineError('wizard-error',e);}}
 };
 document.getElementById('create-project').onclick=openProjectModal;
 document.getElementById('close-project-modal').onclick=closeProjectModal;
@@ -991,17 +1122,54 @@ document.getElementById('hub-brand').onclick=hideProjects;
 document.getElementById('project-search').oninput=()=>projectState&&renderProjects(projectState);
 document.getElementById('project-list').onclick=ev=>{const row=ev.target.closest('[data-root]');
   const retry=ev.target.closest('[data-resume-root]');
-  if(retry){ev.preventDefault();ev.stopPropagation();resumeProject(retry.getAttribute('data-resume-root'));return;}
+  if(retry){ev.preventDefault();ev.stopPropagation();openRecovery(retry.getAttribute('data-resume-root'));return;}
   if(row)openProject(row.getAttribute('data-root'),row.getAttribute('data-current')==='1');};
 document.getElementById('project-list').onkeydown=ev=>{
   if((ev.key==='Enter'||ev.key===' ')&&ev.target.matches('[data-root]')){ev.preventDefault();ev.target.click();}
   if((ev.key==='Enter'||ev.key===' ')&&ev.target.matches('[data-resume-root]')){ev.preventDefault();ev.target.click();}}
-async function resumeProject(root){
-  try{const r=await api('/api/projects/resume',{root});activeProjectJob=r.job;createdRoot=null;
+function openRecovery(root){
+  const row=projectState&&projectState.items.find(p=>p.root===root);if(!row||!row.setup)return;
+  const issue=row.setup.issue||{};document.getElementById('recovery-root').value=root;
+  document.getElementById('recovery-science').value=row.setup.science||row.label||'';
+  document.getElementById('recovery-audit').value=row.setup.audit||'';
+  const note=document.getElementById('recovery-note');note.innerHTML='<b>'+esc(issue.title||'GitHub setup stopped')+'</b>'
+    +esc(row.setup.detail||'Review the repository settings and retry.');
+  const help=document.getElementById('recovery-help');help.hidden=!issue.url;if(issue.url)help.href=issue.url;
+  document.getElementById('recovery-error').className='wizard-error';recoveryModal.className='project-modal on';
+  renderRecoveryGithub();
+  setTimeout(()=>document.getElementById('recovery-science').focus(),0);
+}
+function closeRecovery(){recoveryModal.className='project-modal';recoveryForm.reset();}
+async function resumeProject(root,science,audit){
+  try{const r=await api('/api/projects/resume',{root,science_repo:science,audit_repo:audit});activeProjectJob=r.job;createdRoot=null;
+    closeRecovery();
     renderProjectJob([{id:r.job,status:'running',project:root.split('/').pop(),detail:'Resuming GitHub setup',steps:[]}]);}
   catch(e){const panel=document.getElementById('project-job');panel.className='job-panel on failed';
     document.getElementById('job-title').textContent='Could not resume setup';
     document.getElementById('job-detail').textContent=e.message;document.getElementById('job-steps').innerHTML='';}}
+document.getElementById('close-recovery').onclick=closeRecovery;
+document.getElementById('cancel-recovery').onclick=closeRecovery;
+recoveryModal.addEventListener('click',ev=>{if(ev.target===recoveryModal)closeRecovery();});
+document.getElementById('recovery-connect-github').onclick=async()=>{
+  const button=document.getElementById('recovery-connect-github');button.disabled=true;button.textContent='Connecting…';
+  try{await api('/api/github/connect',{});renderRecoveryGithub();}
+  catch(e){button.disabled=false;button.textContent='Connect GitHub';showInlineError('recovery-error',e);}};
+document.getElementById('recovery-connection').onclick=async ev=>{
+  const copy=ev.target.closest('[data-copy-recovery-github]');if(!copy)return;
+  try{await navigator.clipboard.writeText(copy.getAttribute('data-copy-recovery-github'));copy.textContent='Copied';}catch(e){}
+};
+recoveryForm.onsubmit=ev=>{ev.preventDefault();resumeProject(document.getElementById('recovery-root').value,
+  document.getElementById('recovery-science').value.trim(),document.getElementById('recovery-audit').value.trim());};
+document.getElementById('project-job').onclick=ev=>{const action=ev.target.closest('[data-job-action]');if(!action)return;
+  const kind=action.getAttribute('data-job-action'),root=action.getAttribute('data-root');
+  if(kind==='connect_github')document.querySelector('[data-connect-github]')?.click();
+  else if(kind==='edit_repositories'&&root)openRecovery(root);
+  else if(kind==='edit_new_repositories'){const row=(projectState&&projectState.jobs||[]).find(j=>j.id===activeProjectJob);
+    openProjectModal();if(row){document.getElementById('project-name').value=row.project||'';
+      document.getElementById('science-repo').value=row.science||'';document.getElementById('audit-repo').value=row.audit||'';
+      repoNameTouched={science:true,audit:true};resetRepositoryCheck();}}
+  else if(kind==='choose_workspace')chooseWorkspace('project');
+  else if(kind==='retry'&&root)openRecovery(root);};
 document.getElementById('open-created').onclick=()=>createdRoot&&openProject(createdRoot,false);
 projectModal.addEventListener('click',ev=>{if(ev.target===projectModal)closeProjectModal();});
 projectForm.onsubmit=async ev=>{ev.preventDefault();const submit=document.getElementById('submit-project');
@@ -1010,11 +1178,15 @@ projectForm.onsubmit=async ev=>{ev.preventDefault();const submit=document.getEle
   payload.auditor_model=auditorModel.value==='__custom__'?document.getElementById('auditor-custom').value.trim():auditorModel.value;
   payload.generator_model=generatorModel.value==='__custom__'?document.getElementById('generator-custom').value.trim():generatorModel.value;
   payload.github=document.getElementById('github-toggle').checked;payload.public=fd.has('public');
+  payload.adopt_existing=document.getElementById('adopt-existing').checked;
+  payload.workspace=projectState&&projectState.workspace||'';
   payload.max_rounds=Number(payload.max_rounds);
-  try{const r=await api('/api/projects/create',payload);activeProjectJob=r.job;createdRoot=null;
+  try{if(payload.github){const checked=await checkRepositoryNames(false);if(!checked.ready){
+      throw new Error('Choose unused names, or explicitly allow CrossAudit to use the accessible repositories.');}}
+    const r=await api('/api/projects/create',payload);activeProjectJob=r.job;createdRoot=null;
     closeProjectModal();renderProjectJob([{id:r.job,status:'running',project:payload.name,
       detail:'Starting local project setup'}]);}
-  catch(e){error.textContent=e.message;error.className='wizard-error on';}
+  catch(e){showInlineError('wizard-error',e);}
   submit.disabled=false;};
 
 function statusOf(d){

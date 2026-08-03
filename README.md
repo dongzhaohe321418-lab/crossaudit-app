@@ -1,10 +1,10 @@
-# CrossAudit 4.3.0
+# CrossAudit 4.4.0
 
-[![Version 4.3.0](https://img.shields.io/badge/version-4.3.0-6d5dfc)](https://github.com/dongzhaohe321418-lab/crossaudit_v4/releases/tag/v4.3.0)
+[![Version 4.4.0](https://img.shields.io/badge/version-4.4.0-6d5dfc)](https://github.com/dongzhaohe321418-lab/crossaudit_v4/releases/tag/v4.4.0)
 [![macOS 13+](https://img.shields.io/badge/macOS-13%2B-111111)](https://github.com/dongzhaohe321418-lab/crossaudit_v4#install)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776ab)](https://github.com/dongzhaohe321418-lab/crossaudit_v4#command-line-installation)
 
-**Latest release: [CrossAudit 4.3.0](https://github.com/dongzhaohe321418-lab/crossaudit_v4/releases/tag/v4.3.0).**
+**Latest release: [CrossAudit 4.4.0](https://github.com/dongzhaohe321418-lab/crossaudit_v4/releases/tag/v4.4.0).**
 
 CrossAudit is a local, cross-vendor AI work loop. One model creates files, a
 model from a different provider audits the committed result, and every task,
@@ -95,12 +95,12 @@ official OpenAI Codex runtime.
 
 ### macOS application
 
-1. Download `CrossAudit-4.3.0-arm64.dmg` and its checksum from the
-   [V4.3.0 release](https://github.com/dongzhaohe321418-lab/crossaudit_v4/releases/tag/v4.3.0).
+1. Download `CrossAudit-4.4.0-arm64.dmg` and its checksum from the
+   [V4.4.0 release](https://github.com/dongzhaohe321418-lab/crossaudit_v4/releases/tag/v4.4.0).
 2. Optionally verify it in Terminal:
 
    ```bash
-   shasum -a 256 -c CrossAudit-4.3.0-arm64.dmg.sha256
+   shasum -a 256 -c CrossAudit-4.4.0-arm64.dmg.sha256
    ```
 
 3. Open the DMG and drag **CrossAudit** to **Applications**.
@@ -130,7 +130,7 @@ crossaudit --version
 Expected version output:
 
 ```text
-crossaudit 4.3.0 (receipt schema 2)
+crossaudit 4.4.0 (receipt schema 2)
 ```
 
 Use a virtual environment instead when developing CrossAudit, testing source
@@ -305,9 +305,11 @@ project; CrossAudit maintains its own provider adapters and price snapshot.
 #### Create and switch projects in the browser
 
 Click the CrossAudit name or the project switcher in the top bar to open the
-local Projects view. It discovers CrossAudit projects in the current workspace;
-it does not scan the rest of your home directory. Selecting a project starts or
-reattaches to that project's own token-protected console.
+local Projects view. For each new project, **Choose folder** opens the native
+macOS directory picker. CrossAudit remembers only folders you explicitly
+approved and discovers projects across all of them; it never scans the rest of
+your home directory. Selecting a project starts or reattaches to that project's
+own token-protected console.
 
 Each project runs in its own detached local process, with its own working tree,
 one-build lock, progress tracker, session token, and ledger. Work in one project
@@ -323,14 +325,21 @@ machine or provider quota together. The Projects header shows active/available
 capacity live; `CROSSAUDIT_MAX_ACTIVE_PROJECTS` changes the limit. Stale slots
 left by a crashed process are reclaimed automatically.
 
-**New project** opens the complete setup flow in the browser: project name and
-description, round budget, independent generator and auditor vendors, and the
-model for each role. The form will not permit both roles to use the same vendor.
+**New project** opens the complete setup flow in the app: project name and
+description, local parent folder, round budget, independent generator and
+auditor vendors, and the model for each role. The selected folder is tested with
+a real create/remove probe before it is saved. Unwritable, missing, or stale
+folders stay in the form with a direct **Choose another folder** recovery action.
+The form will not permit both roles to use the same vendor.
 Every model menu includes a custom-ID escape hatch and **Refresh from provider**,
 which asks the selected vendor which models the exact role credential can use;
 this avoids freezing the UI at the model list current when CrossAudit shipped.
 It can also use the account already authenticated with `gh` to create a private
-science repository and a separate audit repository. Before reporting success,
+work repository and a separate audit repository. Both names are independently
+editable. **Check names** verifies the exact connected account and both names
+before any local or remote mutation. If an accessible repository exists,
+CrossAudit requires the user to explicitly choose adoption; it never silently
+reuses it. Before reporting success,
 CrossAudit verifies every step: repository creation or adoption, the science
 `origin` and initial push, the audit Constitution and ledger push, and auditor
 secret upload. Creation progress is sent live to the Projects view.
@@ -344,13 +353,15 @@ the connected account when authorization completes. Authentication is not
 started merely by opening the page or enabling repository creation.
 
 GitHub setup is explicit: leave **Create and connect two repositories** off for
-a local-only project. Turning it on and submitting the final form creates the
-named repositories in the connected account. Existing repositories are adopted
-idempotently, but an unrelated local `origin` is never replaced. Setup steps
-are persisted locally. If authorization, push, seeding, or secret upload fails
-after one repository has already been created, the project row shows the failed
-step and a **Retry setup** action. Retry adopts completed resources and
-continues; CrossAudit never silently deletes a repository during recovery.
+a local-only project. Turning it on and submitting the final form creates both
+named repositories in one guided action. Existing repositories are adopted
+idempotently only after explicit consent, and an unrelated local `origin` is
+never replaced. Setup steps are persisted locally. If authentication, SSO,
+permissions, rate limits, push, seeding, or secret upload fails after one
+repository has already been created, the project row shows the exact failed
+step and a **Fix & retry** action. The recovery dialog preserves both names,
+offers the relevant GitHub or connection action, and resumes from durable state;
+CrossAudit never silently deletes a repository during recovery.
 
 #### Attach inputs and download outputs
 
@@ -698,13 +709,13 @@ Exit codes are stable so scripts do not need to parse prose:
 
 V4 sends `max_completion_tokens` to the built-in OpenAI endpoint and retries
 once when a compatible endpoint explicitly asks for that field. Confirm that
-`crossaudit --version` reports 4.3.0 and reinstall if an older package is still
+`crossaudit --version` reports 4.4.0 and reinstall if an older package is still
 on your PATH. Restart a background console after upgrading because an existing
 daemon keeps the Python code that was loaded when it started.
 
 ### The macOS app is blocked on first launch
 
-V4.3.0 is structurally signed with the hardened runtime but is not notarized.
+V4.4.0 is structurally signed with the hardened runtime but is not notarized.
 Control-click **CrossAudit.app**, choose **Open**, and confirm only after you
 have verified the published SHA-256 checksum. An Apple Developer ID signed and
 notarized build is required before broad organizational deployment.

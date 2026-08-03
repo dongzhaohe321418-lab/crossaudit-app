@@ -8,10 +8,13 @@
 - [ ] Start the copied frozen core with isolated support/workspace directories.
 - [ ] Test project creation, independent worker attachment, token refusals, and
       final-artifact download.
+- [ ] Test a native folder choice, two editable repository names, name
+      preflight, explicit adoption, one-click creation, and partial-failure UI
+      recovery against an isolated test project.
 - [ ] Verify provider-reported API and subscription token events, custom-model
       unpriced handling, local-ledger privacy, and immediate Usage SSE refresh.
 - [ ] Confirm no key, tokenized localhost URL, build directory, or app support
       data is tracked by Git.
-- [ ] Confirm `main` is clean, version is 4.3.0, and README links target V4.
-- [ ] Push `main`, create the `v4.3.0` release, upload DMG and checksum, and
+- [ ] Confirm `main` is clean, version is 4.4.0, and README links target V4.
+- [ ] Push `main`, create the `v4.4.0` release, upload DMG and checksum, and
       verify the repository default branch is `main`.
