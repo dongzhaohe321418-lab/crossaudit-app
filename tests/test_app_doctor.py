@@ -127,6 +127,7 @@ def test_first_launch_still_builds_recovery_ui_when_git_cannot_run(
         tmp_path, monkeypatch):
     workspace = tmp_path / "workspace"
     workspace.mkdir()
+    monkeypatch.setattr(app.sys, "platform", "darwin")
     monkeypatch.setattr(app.shutil, "which", lambda name: "/usr/bin/git")
 
     calls = []
