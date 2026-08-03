@@ -35,6 +35,7 @@ from ..errors import (EXIT_ESCALATED, EXIT_OK, ConfigDenial, Denial,
 from ..gitio import git, is_repo
 from ..providers import get_provider
 from ..providers.registry import NEEDS_KEY
+from ..usage import record_completion
 from .main import cmd_run
 from .talk import _routing_path
 
@@ -74,8 +75,13 @@ def _generator_complete(cfg: Config, allow_custom: bool):
     fn = get_provider(provider)
 
     def complete(*, system: str, prompt: str):
-        return fn(model=model, system=system, prompt=prompt, key_env=key_env,
-                  base_url=base_url, allow_custom=allow_custom)
+        reply = fn(model=model, system=system, prompt=prompt, key_env=key_env,
+                   base_url=base_url, allow_custom=allow_custom)
+        record_completion(root=cfg.root, state_dir=cfg.state_dir, role="generator",
+                          phase="generation", vendor=cfg.generator_vendor or "unknown",
+                          provider=provider, model=model, reply=reply, system=system,
+                          prompt=prompt, base_url=base_url)
+        return reply
 
     return complete
 

@@ -23,6 +23,7 @@ from ..dcl import run_checks
 from ..errors import ConfigDenial, Denial, ProviderDenial
 from ..providers import get_provider
 from ..providers.registry import NON_EVIDENTIAL
+from ..usage import record_completion
 from . import prompt as prompt_mod
 from .validate import known_rules, parse_reply, validate_reply
 
@@ -122,6 +123,11 @@ def run_audit(*, cfg: Config, sha: str, round_: int, files: Mapping[str, bytes],
                            prompt=prompt, key_env=cfg.auditor.key_env,
                            base_url=cfg.auditor.base_url,
                            allow_custom=allow_custom_endpoint)
+            record_completion(root=cfg.root, state_dir=cfg.state_dir, role="auditor",
+                              phase="audit", vendor=cfg.auditor.vendor,
+                              provider=cfg.auditor.provider, model=cfg.auditor.model,
+                              reply=raw, system=prompt_mod.SYSTEM, prompt=prompt,
+                              base_url=cfg.auditor.base_url)
             exchange = {"mode": retention, "provider": cfg.auditor.provider,
                         **raw.commitments(retention)}
             parsed, perr = parse_reply(raw.text)

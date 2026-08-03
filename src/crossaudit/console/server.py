@@ -34,7 +34,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, quote, urlparse
 
 from ..config import Config
-from .. import app_keys, connections
+from .. import app_keys, connections, usage
 from ..controller import StateStore
 from ..errors import ConfigDenial, Denial
 from ..receipt.verify import (admit as admit_receipt, load as load_receipt,
@@ -136,6 +136,7 @@ class _ChangeSignal:
 
 STREAM_CHANGES = _ChangeSignal()
 TRACKER.subscribe(STREAM_CHANGES.notify)
+usage.subscribe(STREAM_CHANGES.notify)
 
 
 def _ordered_cycles(state: dict) -> list[dict]:
@@ -208,6 +209,7 @@ def snapshot(cfg: Config) -> dict:
         "pipeline": overview.pipeline(cfg, audits),
         "findings": overview.findings_by_severity(audits),
         "top_rules": overview.top_rules(audits),
+        "usage": usage.summary(cfg),
         "escalations": overview.escalations(cfg),
         "disputes": overview.disputes(cfg),
         "routing": routing_history(cfg.root / cfg.ledger_dir / "routing.jsonl", 40),

@@ -1,10 +1,10 @@
-# CrossAudit 4.2.0
+# CrossAudit 4.3.0
 
-[![Version 4.2.0](https://img.shields.io/badge/version-4.2.0-6d5dfc)](https://github.com/dongzhaohe321418-lab/crossaudit_v4/releases/tag/v4.2.0)
+[![Version 4.3.0](https://img.shields.io/badge/version-4.3.0-6d5dfc)](https://github.com/dongzhaohe321418-lab/crossaudit_v4/releases/tag/v4.3.0)
 [![macOS 13+](https://img.shields.io/badge/macOS-13%2B-111111)](https://github.com/dongzhaohe321418-lab/crossaudit_v4#install)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776ab)](https://github.com/dongzhaohe321418-lab/crossaudit_v4#command-line-installation)
 
-**Latest release: [CrossAudit 4.2.0](https://github.com/dongzhaohe321418-lab/crossaudit_v4/releases/tag/v4.2.0).**
+**Latest release: [CrossAudit 4.3.0](https://github.com/dongzhaohe321418-lab/crossaudit_v4/releases/tag/v4.3.0).**
 
 CrossAudit is a local, cross-vendor AI work loop. One model creates files, a
 model from a different provider audits the committed result, and every task,
@@ -65,6 +65,9 @@ structured content.
   model output.
 - Independent background workers per project and immediate event-driven UI
   updates through Server-Sent Events.
+- Local token metering for every Generator and Auditor call, with a live Usage
+  view, cache-aware counts, role/model breakdowns, and clearly labelled public
+  API-value estimates.
 - A command-line interface for automation and development.
 - OpenAI, Anthropic, Google, DeepSeek, and custom OpenAI-compatible endpoints.
 - Current OpenAI GPT-5.6 and Anthropic Claude model choices, plus manual model
@@ -92,12 +95,12 @@ official OpenAI Codex runtime.
 
 ### macOS application
 
-1. Download `CrossAudit-4.2.0-arm64.dmg` and its checksum from the
-   [V4.2.0 release](https://github.com/dongzhaohe321418-lab/crossaudit_v4/releases/tag/v4.2.0).
+1. Download `CrossAudit-4.3.0-arm64.dmg` and its checksum from the
+   [V4.3.0 release](https://github.com/dongzhaohe321418-lab/crossaudit_v4/releases/tag/v4.3.0).
 2. Optionally verify it in Terminal:
 
    ```bash
-   shasum -a 256 -c CrossAudit-4.2.0-arm64.dmg.sha256
+   shasum -a 256 -c CrossAudit-4.3.0-arm64.dmg.sha256
    ```
 
 3. Open the DMG and drag **CrossAudit** to **Applications**.
@@ -127,7 +130,7 @@ crossaudit --version
 Expected version output:
 
 ```text
-crossaudit 4.2.0 (receipt schema 2)
+crossaudit 4.3.0 (receipt schema 2)
 ```
 
 Use a virtual environment instead when developing CrossAudit, testing source
@@ -264,6 +267,39 @@ or explicitly addressed, so an `@` mention cannot become an invisible bypass.
 Updates are pushed through Server-Sent Events. There is no fixed polling delay.
 If the connection drops, the browser reconnects and refreshes from the durable
 state.
+
+#### Understand token usage and API-value estimates
+
+Select **Usage** inside a project to see token consumption as soon as each
+model completion finishes. The view includes today and month totals, a seven-day
+trend, Generator/Auditor allocation, model-level input/output/cache counts, and
+recent calls. It records setup drafting, task generation, conversation control,
+and formal audits, so the total reflects the whole supervised workflow rather
+than only the final answer.
+
+The provider response is the primary source. OpenAI API and Anthropic API usage,
+and token-usage notifications emitted by the official Codex subscription
+runtime, are marked **Reported**. Any completion that does not expose usage is
+marked **Estimated**; an unknown or custom model is marked **Unpriced** instead
+of borrowing another model's price. CrossAudit normalizes usage into four
+mutually exclusive buckets: non-cached input, output, cache write, and cache
+read.
+
+Dollar figures are always labelled **API-value estimate**. They use a dated
+snapshot of public [OpenAI API pricing](https://openai.com/api/pricing/) and
+[Anthropic API pricing](https://platform.claude.com/docs/en/about-claude/pricing).
+They are not an invoice, do not include negotiated discounts or tax, and do not
+claim to measure what a ChatGPT subscription costs. Subscription calls can have
+exact runtime token counts while their displayed dollar value remains only the
+equivalent public API value.
+
+Usage data stays in the project's gitignored `.crossaudit/usage.jsonl` file with
+mode 600. Each line contains counts, time, role, phase, provider, and model only;
+prompts, generated text, provider request IDs, API keys, and OAuth material are
+never written. The aggregation and charts run locally and send no telemetry.
+The local-first event normalization and explicit `≈ API value` presentation are
+informed by the MIT-licensed [Agent Island](https://github.com/tristan666666/agent-island)
+project; CrossAudit maintains its own provider adapters and price snapshot.
 
 #### Create and switch projects in the browser
 
@@ -661,13 +697,13 @@ Exit codes are stable so scripts do not need to parse prose:
 
 V4 sends `max_completion_tokens` to the built-in OpenAI endpoint and retries
 once when a compatible endpoint explicitly asks for that field. Confirm that
-`crossaudit --version` reports 4.2.0 and reinstall if an older package is still
+`crossaudit --version` reports 4.3.0 and reinstall if an older package is still
 on your PATH. Restart a background console after upgrading because an existing
 daemon keeps the Python code that was loaded when it started.
 
 ### The macOS app is blocked on first launch
 
-V4.2.0 is structurally signed with the hardened runtime but is not notarized.
+V4.3.0 is structurally signed with the hardened runtime but is not notarized.
 Control-click **CrossAudit.app**, choose **Open**, and confirm only after you
 have verified the published SHA-256 checksum. An Apple Developer ID signed and
 notarized build is required before broad organizational deployment.

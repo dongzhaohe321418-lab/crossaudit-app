@@ -1,14 +1,14 @@
-# CrossAudit 4.2.0 enterprise release assessment
+# CrossAudit 4.3.0 enterprise release assessment
 
 Date: 2026-08-03
 
 Target: Apple Silicon macOS 13 or later
 
-Release candidate: 4.2.0
+Release candidate: 4.3.0
 
 ## Executive result
 
-CrossAudit 4.2.0 is suitable for local evaluation and controlled pilot use. It
+CrossAudit 4.3.0 is suitable for local evaluation and controlled pilot use. It
 preserves the V3.2 audited protocol while adding a native AppKit/WebKit shell,
 Keychain credentials, UI-first project creation, independent background
 projects, GitHub connection, chunked file transfer, final-artifact downloads,
@@ -34,6 +34,7 @@ Policy rather than hidden behind an installation workaround.
 | Credential boundary | Keychain write/read/delete; no secret in argv or response | Automated and local smoke |
 | Subscription boundary | Official ChatGPT browser flow; allowlisted state; text-only fail-closed turns | Automated and live smoke |
 | Live state | Same-process event latency below 250 ms; external fallback at 100 ms | Automated |
+| Usage metering | Provider/runtime counts, cache normalization, local-only ledger, unknown-price refusal | Automated and local smoke |
 | Project isolation | Separate worker, token, lock, ledger, and progress state | Automated |
 | GitHub setup | Auth states, idempotent adoption, partial-failure retry, origin refusal | Automated |
 | Transfers | Arbitrary type/count, chunk offsets, traversal, one-shot staging, zero-byte file | Automated |
@@ -43,17 +44,18 @@ The final command outputs and artifact hashes are recorded in the GitHub release
 and CI logs. Tests that spend provider credits remain explicitly opt-in and use
 repository secrets in CI.
 
-## V4.2.0 release-candidate evidence
+## V4.3.0 release-candidate evidence
 
-- Automated suite: **379 passed, 2 skipped**. The skipped cases are the
+- Automated suite: **389 passed, 2 skipped**. The skipped cases are the
   intentionally opt-in paid-provider tests.
-- The paid-provider smoke tests were not repeated for this transfer-only patch;
-  provider adapters were unchanged. The last V4.1.0 release gate passed both
-  real OpenAI and Anthropic API calls.
-- Local browser smoke: the **+** action opened a real multiple-file chooser;
-  two selected files rendered with type, size, removal controls, aggregate
-  count/size, and no browser console error. Selection alone wrote no upload.
-- Installed frozen core: reported 4.2.0, `frozen-app` identity, listened only on
+- Paid-provider smoke: **2 passed**, covering real OpenAI and Anthropic API
+  completions and requiring provider-reported token usage for both vendors.
+- Local browser smoke: the Usage view rendered at 1280 x 720 and 390 x 844 in
+  both themes without horizontal overflow or console errors. Provider-reported,
+  estimated, and unpriced states were distinct; an externally appended usage
+  event appeared over the live stream within 250 ms without a refresh.
+- Installed frozen core: reported 4.3.0 through its authenticated state API,
+  exposed the complete usage schema, used `frozen-app` identity, listened only on
   loopback, and returned 403 for both missing-token and foreign-Host requests.
 - Distribution: arm64 shell and Codex runtime, strict deep codesign validation,
   valid Info.plist, valid DMG CRC, and a separately published SHA-256 checksum.
@@ -120,6 +122,16 @@ repository secrets in CI.
     contradicted the UI's no-quota contract. Those CrossAudit limits are gone;
     provider context, response capacity, disk and filesystem limits remain
     visible as real external constraints.
+19. Token consumption was invisible even though Generator, Auditor, routing,
+    and Constitution drafting can each spend provider capacity. V4.3 records
+    provider/runtime counts in a local append-only ledger, normalizes cache
+    reads and writes without double counting, and exposes a live role/model/day
+    view. Missing usage is clearly estimated, and unknown models are left
+    unpriced instead of receiving an invented cost.
+20. Subscription usage could only be approximated from generated text. V4.3
+    consumes the official Codex runtime's token-usage notifications, so ChatGPT
+    subscription turns show reported counts while still labelling money as
+    comparable API value rather than a subscription invoice.
 
 ## Residual risks and recommendations
 

@@ -267,6 +267,9 @@ def test_console_has_one_primary_command_composer():
     assert "Tasks is direct user input/output, never a raw audit log" in PAGE
     assert 'data-view="artifacts"' in PAGE
     assert 'data-view="audits"' in PAGE
+    assert 'data-view="usage"' in PAGE
+    assert "Token usage" in PAGE and "API-value estimate" in PAGE
+    assert "counts only · no prompt content" in PAGE
     assert PAGE.count('id="sidebar-toggle"') == 1
     assert PAGE.count('id="scrim"') == 1
     assert 'aria-controls="sidebar-panel"' in PAGE

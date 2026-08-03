@@ -388,6 +388,8 @@ def test_the_two_windows_are_reconstructed_from_the_ledger(console):
     from crossaudit import __version__
     assert data["version"] == __version__
     assert data["check_contracts"]["parseable"]
+    assert data["usage"]["local_only"] is True
+    assert data["usage"]["cost_label"] == "API-value estimate"
     assert ":" in data["generator"] and ":" in data["auditor"]
 
 

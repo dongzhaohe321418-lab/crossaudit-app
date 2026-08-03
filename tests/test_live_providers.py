@@ -6,6 +6,7 @@ import os
 import pytest
 
 from crossaudit.providers import anthropic, openai_compat
+from crossaudit.usage import normalise_usage
 
 
 pytestmark = pytest.mark.skipif(
@@ -20,6 +21,7 @@ def test_openai_completion_contract_is_live():
         prompt="Reply with the single word READY.",
         key_env="CROSSAUDIT_AUDITOR_KEY", max_tokens=32)
     assert reply.text.strip() and len(reply.request_sha256) == 64
+    assert normalise_usage(reply.raw)["method"] == "reported"
 
 
 def test_anthropic_completion_contract_is_live():
@@ -30,3 +32,4 @@ def test_anthropic_completion_contract_is_live():
         prompt="Reply with the single word READY.",
         key_env="CROSSAUDIT_GENERATOR_KEY", max_tokens=32)
     assert reply.text.strip() and len(reply.request_sha256) == 64
+    assert normalise_usage(reply.raw)["method"] == "reported"

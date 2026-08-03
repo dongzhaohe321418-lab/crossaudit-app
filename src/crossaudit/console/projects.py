@@ -581,7 +581,8 @@ def create_project(base: Path, payload: dict, progress) -> dict:
         try:
             draft = wizard._distil(
                 description, auditor_provider, auditor_model or default_model, "",
-                key_env=auditor_key_env)
+                key_env=auditor_key_env, usage_root=target,
+                vendor=auditor_vendor)
             const_path.write_text(draft.render(name), encoding="utf-8", newline="\n")
             drafted = True
         except Denial as exc:

@@ -146,6 +146,45 @@ button{cursor:pointer}
   letter-spacing:-.025em}.view-heading p{margin:5px 0 0;color:var(--muted)}
 .artifact-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .artifact-grid .output-file{margin:0;min-width:0}
+.usage-note{display:flex;align-items:flex-start;gap:9px;margin:-10px 0 18px;padding:10px 11px;
+  border:1px solid var(--line);border-radius:9px;background:var(--panel);color:var(--muted);font-size:10.5px}
+.usage-note b{color:var(--text);font-weight:650}.usage-note span:first-child{color:var(--blue)}
+.usage-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:24px}
+.usage-card{border:1px solid var(--line);border-radius:11px;padding:13px;background:var(--panel);min-width:0}
+.usage-card-label{font-size:9.5px;color:var(--faint);text-transform:uppercase;letter-spacing:.07em;font-weight:680}
+.usage-card-value{font-size:21px;font-weight:680;letter-spacing:-.04em;margin-top:6px;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}.usage-card-detail{font-size:9.5px;color:var(--muted);margin-top:3px}
+.usage-section{margin:0 0 26px}.usage-section-head{display:flex;align-items:baseline;gap:8px;margin-bottom:10px}
+.usage-section-head h3{font-size:12.5px;margin:0}.usage-section-head span{color:var(--faint);font-size:9.5px}
+.usage-bars{height:122px;display:grid;grid-template-columns:repeat(7,1fr);gap:8px;align-items:end;
+  padding:12px 12px 8px;border:1px solid var(--line);border-radius:11px;background:var(--panel)}
+.usage-day{height:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:5px;min-width:0}
+.usage-day-value{font-size:8.5px;color:var(--faint);white-space:nowrap}.usage-bar-track{height:75px;width:100%;
+  max-width:28px;display:flex;align-items:flex-end;border-radius:5px;background:var(--surface-2);overflow:hidden}
+.usage-bar{width:100%;min-height:2px;border-radius:5px;background:var(--blue)}
+.usage-day-label{font-size:8.5px;color:var(--muted)}
+.usage-roles{display:grid;grid-template-columns:1fr 1fr;gap:8px}.usage-role{border:1px solid var(--line);
+  border-radius:10px;padding:11px 12px;background:var(--panel)}.usage-role-top{display:flex;align-items:center;gap:7px}
+.usage-role-top b{font-size:11.5px;text-transform:capitalize}.usage-role-top span{margin-left:auto;color:var(--muted);
+  font-size:10.5px}.usage-role-meter{height:4px;background:var(--surface-2);border-radius:9px;overflow:hidden;margin:9px 0 5px}
+.usage-role-meter i{height:100%;display:block;background:var(--blue);border-radius:inherit}.usage-role.auditor i{background:var(--violet)}
+.usage-role small{color:var(--faint);font-size:9.5px}
+.usage-table{border:1px solid var(--line);border-radius:11px;overflow:hidden;background:var(--surface)}
+.usage-row{display:grid;grid-template-columns:minmax(160px,1fr) 86px 84px 84px 78px;gap:10px;
+  align-items:center;padding:10px 12px;border-bottom:1px solid var(--line);font-size:10.5px}
+.usage-row:last-child{border-bottom:0}.usage-row.head{background:var(--panel);color:var(--faint);font-size:9px;
+  text-transform:uppercase;letter-spacing:.05em;font-weight:650}.usage-model{min-width:0}.usage-model b{display:block;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font:10.5px ui-monospace,SFMono-Regular,Menlo,monospace}
+.usage-model small{color:var(--faint);text-transform:capitalize}.usage-quality{display:inline-flex;width:max-content;
+  padding:3px 5px;border-radius:5px;background:var(--green-bg);color:var(--green);font-size:8.5px;font-weight:700}
+.usage-quality.estimated{background:var(--amber-bg);color:var(--amber)}.usage-quality.unpriced{background:var(--surface-2);color:var(--muted)}
+.usage-recent{display:grid;gap:3px}.usage-call{display:grid;grid-template-columns:24px minmax(0,1fr) auto;
+  gap:9px;align-items:center;padding:8px;border-radius:8px}.usage-call:hover{background:var(--panel)}
+.usage-call-mark{width:23px;height:23px;border-radius:7px;display:grid;place-items:center;background:var(--blue-bg);
+  color:var(--blue);font-size:8px;font-weight:750}.usage-call-mark.auditor{background:var(--violet-bg);color:var(--violet)}
+.usage-call-main{min-width:0}.usage-call-main b{display:block;font-size:10.5px;white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis}.usage-call-main span{font-size:9.5px;color:var(--faint)}.usage-call-value{text-align:right}
+.usage-call-value b{display:block;font-size:10.5px}.usage-call-value span{display:block;color:var(--faint);font-size:9px}
 .delivery-status{margin:2px 0 24px;border:1px solid var(--line);border-radius:10px;padding:10px 12px;
   background:var(--panel);display:flex;align-items:center;gap:9px;color:var(--muted);font-size:11.5px}
 .delivery-status .delivery-dot{width:7px;height:7px;border-radius:50%;background:var(--blue);flex:none}
@@ -221,6 +260,7 @@ button{cursor:pointer}
 
 .composer-wrap{position:absolute;left:var(--sidebar);right:var(--inspector);bottom:0;
   padding:28px 22px 16px;background:linear-gradient(transparent,var(--surface) 30%);z-index:4}
+.composer-wrap.view-hidden{display:none}
 .composer{width:min(760px,100%);margin:0 auto;border:1px solid var(--line-strong);
   border-radius:14px;background:var(--surface);box-shadow:0 8px 28px rgba(32,32,30,.10);
   padding:8px}.composer.drag{border-color:var(--blue);box-shadow:0 0 0 3px var(--blue-bg),var(--shadow)}
@@ -322,6 +362,8 @@ textarea::placeholder{color:var(--faint)}.compose-button{border:0;background:tra
   .top-project{margin-left:2px;padding-left:10px}.thread-inner{width:calc(100% - 28px)}
   .thread-head{padding:0 14px}.composer-wrap{left:0;padding:24px 12px 10px}.loop-detail{display:none}
   .artifact-grid{grid-template-columns:1fr}
+  .usage-cards{grid-template-columns:1fr 1fr}.usage-row{grid-template-columns:minmax(120px,1fr) 76px 72px}
+  .usage-row>*:nth-child(3),.usage-row>*:nth-child(4){display:none}
 }
 @media(max-width:560px){
   .topbar{padding:0 8px;gap:6px}.top-project{display:none}.live-pill{width:27px;padding:0;justify-content:center}
@@ -340,6 +382,8 @@ textarea::placeholder{color:var(--faint)}.compose-button{border:0;background:tra
   .loop-focus{margin:0 12px 12px;grid-template-columns:1fr;gap:3px}.activity{padding:11px 12px 13px}
   .audit-event{grid-template-columns:24px minmax(0,1fr)}.event-time{grid-column:2;margin-top:-2px}
   .choice-group{grid-template-columns:1fr}.choice-label{padding-top:0}.choice-note{margin-left:0}
+  .usage-roles{grid-template-columns:1fr}.usage-cards{grid-template-columns:1fr 1fr}.usage-card-value{font-size:18px}
+  .usage-bars{gap:4px;padding-left:6px;padding-right:6px}.usage-day-value{display:none}
 }
 @media(max-width:380px){
   .version{display:none}.brand{gap:7px}.thread-title p{display:none}.status{padding:4px 6px}
@@ -457,7 +501,7 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
 <body>
 <section class="project-hub" id="project-hub" aria-label="Projects">
   <header class="hub-bar"><button class="brand-button" id="hub-brand"><span class="brand-mark">◇</span>
-    CrossAudit <span class="version" id="hub-version">V4.2.0</span></button><span class="spacer"></span>
+    CrossAudit <span class="version" id="hub-version">V4.3.0</span></button><span class="spacer"></span>
     <button class="icon-button" id="hub-settings" aria-label="Settings" title="Settings">⚙</button>
     <button class="icon-button" id="hub-theme" aria-label="Switch theme">◐</button>
     <button class="primary" id="create-project">＋ New project</button></header>
@@ -548,7 +592,7 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
       aria-controls="sidebar-panel" aria-expanded="false">☰</button>
     <button class="icon-button" id="back-projects" aria-label="Back to projects" title="Back to projects">←</button>
     <button class="brand-button" id="projects-home"><span class="brand-mark">◇</span>CrossAudit
-      <span class="version" id="version-badge">V4.2.0</span></button>
+      <span class="version" id="version-badge">V4.3.0</span></button>
     <button class="top-project" id="project-switcher"><b id="proj">…</b> <span id="branch-label">/ supervised workspace</span>⌄</button>
     <span class="spacer"></span>
     <div class="live-pill"><span class="live-dot" id="livedot"></span><span id="conn-text">connecting</span></div>
@@ -565,7 +609,8 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
     <nav class="nav" aria-label="Workspace views">
       <button type="button" class="nav-item active" data-view="tasks" aria-pressed="true"><span class="nav-icon">◫</span>Tasks</button>
       <button type="button" class="nav-item" data-view="artifacts" aria-pressed="false"><span class="nav-icon">▱</span>Artifacts</button>
-      <button type="button" class="nav-item" data-view="audits" aria-pressed="false"><span class="nav-icon">◇</span>Audits</button></nav>
+      <button type="button" class="nav-item" data-view="audits" aria-pressed="false"><span class="nav-icon">◇</span>Audits</button>
+      <button type="button" class="nav-item" data-view="usage" aria-pressed="false"><span class="nav-icon">◒</span>Usage</button></nav>
     <div class="side-label">Recent</div><div class="task-list" id="task-list"></div>
     <div class="sidebar-foot"><b id="side-project">…</b><span id="tier-label">local controller</span></div>
   </aside>
@@ -1155,6 +1200,62 @@ function auditsView(d){
       + audits.length + ' report' + (audits.length===1?'':'s') + '</span></div>'
       + audits.map(m=>turn(m,d)).join('') : '<div class="empty">No audit evidence yet.</div>');
 }
+function formatTokens(value){
+  const n=Number(value||0);if(n>=1000000)return (n/1000000).toFixed(n>=10000000?0:1)+'M';
+  if(n>=1000)return (n/1000).toFixed(n>=10000?0:1)+'K';return Math.round(n).toLocaleString();
+}
+function formatUsd(value){
+  if(value===null||value===undefined)return '—';const n=Number(value||0);
+  if(n===0)return '$0.00';if(n<0.01)return '$'+n.toFixed(4);return '$'+n.toFixed(2);
+}
+function usageQuality(row){
+  if(row.unpriced_calls)return ['Unpriced','unpriced'];
+  if(row.estimated_calls)return ['Estimated','estimated'];return ['Reported',''];
+}
+function usageView(d){
+  const u=d.usage||{};const today=u.today||{};const month=u.month||{};
+  const days=u.days||[];const peak=Math.max(1,...days.map(day=>Number(day.tokens||0)));
+  const dayBars=days.map(day=>{const date=new Date(day.date+'T00:00:00');
+    return '<div class="usage-day"><span class="usage-day-value">'+formatTokens(day.tokens)+'</span>'
+      +'<span class="usage-bar-track"><i class="usage-bar" style="height:'
+      +Math.max(day.tokens?4:0,Math.round(Number(day.tokens||0)*100*Math.pow(peak,-1)))+'%"></i></span>'
+      +'<span class="usage-day-label">'+esc(date.toLocaleDateString([],{weekday:'short'}))+'</span></div>';}).join('');
+  const roles=u.roles||[];const roleMax=Math.max(1,...roles.map(row=>Number(row.tokens||0)));
+  const roleRows=roles.map(row=>'<div class="usage-role '+esc(row.role)+'"><div class="usage-role-top"><b>'
+    +esc(row.role)+'</b><span>'+formatTokens(row.tokens)+' tokens</span></div><div class="usage-role-meter"><i style="width:'
+    +Math.round(Number(row.tokens||0)*100*Math.pow(roleMax,-1))+'%"></i></div><small>'+row.calls+' call'+(row.calls===1?'':'s')
+    +' · '+formatUsd(row.api_value_usd)+' API value</small></div>').join('');
+  const models=(u.models||[]).map(row=>{const q=usageQuality(row);return '<div class="usage-row"><div class="usage-model"><b>'
+    +esc(row.model)+'</b><small>'+esc(row.role)+' · '+esc(row.provider)+'</small></div><span>'+formatTokens(row.tokens)
+    +'</span><span>'+formatTokens(Number(row.cache_read||0)+Number(row.cache_write||0))+'</span><span>'
+    +formatUsd(row.api_value_usd)+'</span><span class="usage-quality '+q[1]+'">'+q[0]+'</span></div>';}).join('');
+  const recent=(u.recent||[]).map(row=>'<div class="usage-call"><span class="usage-call-mark '+esc(row.role)+'">'
+    +(row.role==='auditor'?'A':'G')+'</span><div class="usage-call-main"><b>'+esc(row.model)+'</b><span>'
+    +esc(row.role)+' · '+esc(row.phase)+' · '+formatTokens(row.input)+' in / '+formatTokens(row.output)+' out</span></div>'
+    +'<div class="usage-call-value"><b>'+formatTokens(row.tokens)+'</b><span>'
+    +(row.api_value_usd===null?'unpriced':formatUsd(row.api_value_usd))+' · '
+    +esc(new Date(row.t).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}))+'</span></div></div>').join('');
+  return '<div class="view-heading"><h2>Token usage</h2><p>Project-level model consumption, updated with every completion.</p></div>'
+    +'<div class="usage-note"><span>ⓘ</span><div><b>Local metering · '+esc(u.cost_label||'API-value estimate')+'</b><br>'
+    +'Token counts come from the provider runtime when available. Costs use the '+esc(u.price_snapshot||'current')
+    +' public API price snapshot and are not a provider invoice or subscription charge.</div></div>'
+    +'<div class="usage-cards"><div class="usage-card"><div class="usage-card-label">Today</div><div class="usage-card-value">'
+    +formatTokens(today.tokens)+'</div><div class="usage-card-detail">'+formatUsd(today.api_value_usd)+' API value</div></div>'
+    +'<div class="usage-card"><div class="usage-card-label">This month</div><div class="usage-card-value">'
+    +formatTokens(month.tokens)+'</div><div class="usage-card-detail">'+formatUsd(month.api_value_usd)+' API value</div></div>'
+    +'<div class="usage-card"><div class="usage-card-label">Model calls</div><div class="usage-card-value">'
+    +(month.calls||0)+'</div><div class="usage-card-detail">'+(month.reported_calls||0)+' provider-reported</div></div>'
+    +'<div class="usage-card"><div class="usage-card-label">Cached tokens</div><div class="usage-card-value">'
+    +formatTokens(Number(month.cache_read||0)+Number(month.cache_write||0))+'</div><div class="usage-card-detail">read + write this month</div></div></div>'
+    +'<section class="usage-section"><div class="usage-section-head"><h3>Last 7 days</h3><span>all roles</span></div><div class="usage-bars">'
+    +dayBars+'</div></section><section class="usage-section"><div class="usage-section-head"><h3>By role</h3><span>this month</span></div>'
+    +(roleRows?'<div class="usage-roles">'+roleRows+'</div>':'<div class="empty">No model calls this month.</div>')+'</section>'
+    +'<section class="usage-section"><div class="usage-section-head"><h3>Models</h3><span>this month</span></div>'
+    +(models?'<div class="usage-table"><div class="usage-row head"><span>Model</span><span>Tokens</span><span>Cached</span><span>≈ value</span><span>Source</span></div>'
+      +models+'</div>':'<div class="empty">Usage will appear after the first model completion.</div>')+'</section>'
+    +'<section class="usage-section"><div class="usage-section-head"><h3>Recent calls</h3><span>counts only · no prompt content</span></div>'
+    +(recent?'<div class="usage-recent">'+recent+'</div>':'<div class="empty">No calls recorded yet.</div>')+'</section>';
+}
 function renderConversation(d){
   const thread = document.getElementById('thread');
   const previousTop = thread.scrollTop;
@@ -1164,6 +1265,7 @@ function renderConversation(d){
   if(newTaskMode) html = welcome();
   else if(activeView === 'artifacts') html = artifactsView(d);
   else if(activeView === 'audits') html = auditsView(d);
+  else if(activeView === 'usage') html = usageView(d);
   else{
     const messages = allMessages(d);
     html = (messages.length ? messages.map(m=>turn(m,d)).join('') : welcome()) + deliveryStatus(d);
@@ -1203,6 +1305,7 @@ function renderInspector(d){
 }
 function render(d){
   lastState = d;
+  document.querySelector('.composer-wrap').classList.toggle('view-hidden',activeView==='usage');
   const preview=document.getElementById('contract-preview');preview.className='contract-preview';preview.innerHTML='';
   document.getElementById('version-badge').textContent = 'V' + d.version;
   document.getElementById('hub-version').textContent = 'V' + d.version;
@@ -1212,15 +1315,16 @@ function render(d){
   const files = artifactRows(d);
   const auditRows = d.auditor_stream.filter(m => m.kind === 'auditor');
   const heading = newTaskMode ? 'New task' : activeView === 'artifacts' ? 'Artifacts'
-    : activeView === 'audits' ? 'Audits' : titleOf(d);
+    : activeView === 'audits' ? 'Audits' : activeView === 'usage' ? 'Usage' : titleOf(d);
   const subtitle = newTaskMode ? 'Independent generation and audit'
     : activeView === 'artifacts' ? files.length + ' audited deliverables'
     : activeView === 'audits' ? auditRows.length + ' independent audit reports'
+    : activeView === 'usage' ? formatTokens((d.usage&&d.usage.month&&d.usage.month.tokens)||0) + ' tokens this month'
     : d.generator + ' → ' + d.auditor;
   document.getElementById('thread-title').textContent = heading;
   document.getElementById('thread-subtitle').textContent = subtitle;
   const state = activeView === 'audits' && auditRows.length ? auditRows[auditRows.length-1].verdict
-    : activeView === 'artifacts' ? 'ledger' : newTaskMode ? 'ready' : statusOf(d);
+    : activeView === 'artifacts' ? 'ledger' : activeView === 'usage' ? 'local' : newTaskMode ? 'ready' : statusOf(d);
   const badge = document.getElementById('thread-status');
   badge.textContent = state;badge.className = 'status ' + state;
   document.getElementById('model-summary').textContent = d.generator + ' → ' + d.auditor;
@@ -1232,7 +1336,7 @@ function render(d){
   }else iv.className = 'interrupted';
 }
 function selectView(view){
-  activeView = ['tasks','artifacts','audits'].includes(view) ? view : 'tasks';
+  activeView = ['tasks','artifacts','audits','usage'].includes(view) ? view : 'tasks';
   newTaskMode = false;
   document.querySelectorAll('.nav-item').forEach(button => {
     const selected = button.getAttribute('data-view') === activeView;

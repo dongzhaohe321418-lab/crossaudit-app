@@ -254,17 +254,25 @@ def commit_setup(target: Path, paths: list[str]) -> str:
 
 
 def _distil(description: str, provider: str, model: str, base_url: str, *,
-            key_env: str = "CROSSAUDIT_AUDITOR_KEY"):
+            key_env: str = "CROSSAUDIT_AUDITOR_KEY", usage_root: Path | None = None,
+            vendor: str = "unknown"):
     """Draft rules on the auditor-side model, before any config file exists."""
     from .. import constitution as const_mod
     from ..providers import get_provider
+    from ..usage import record_completion
 
     fn = get_provider(provider)
 
     def complete(*, system: str, prompt: str):
-        return fn(model=model, system=system, prompt=prompt,
-                  key_env=key_env, base_url=base_url or None,
-                  allow_custom=bool(os.environ.get("CROSSAUDIT_ALLOW_CUSTOM_ENDPOINT")))
+        reply = fn(model=model, system=system, prompt=prompt,
+                   key_env=key_env, base_url=base_url or None,
+                   allow_custom=bool(os.environ.get("CROSSAUDIT_ALLOW_CUSTOM_ENDPOINT")))
+        if usage_root is not None:
+            record_completion(root=usage_root, state_dir=".crossaudit", role="auditor",
+                              phase="setup", vendor=vendor, provider=provider,
+                              model=model, reply=reply, system=system, prompt=prompt,
+                              base_url=base_url or None)
+        return reply
 
     return const_mod.distil(description, complete=complete)
 
@@ -378,7 +386,8 @@ def run(target: Path, *, mode: str, force: bool = False,
     drafted = False
     if description.strip():
         try:
-            draft = _distil(description, provider, model or default_model, base_url)
+            draft = _distil(description, provider, model or default_model, base_url,
+                            usage_root=target, vendor=auditor_vendor or "unknown")
             rows = [draft.project_summary, tui.dim(f"domain: {draft.domain}"), ""]
             for r in draft.rules:
                 mark = (tui.red("BLOCKER") if r.severity == "BLOCKER"

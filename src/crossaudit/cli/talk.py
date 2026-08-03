@@ -19,6 +19,7 @@ from ..controller import StateStore
 from ..errors import ConfigDenial, Denial
 from ..gitio import git, is_repo
 from ..providers import get_provider
+from ..usage import record_completion
 
 ROUTING_LOG = "routing.jsonl"
 
@@ -34,9 +35,15 @@ def _auditor_complete(cfg: Config):
     fn = get_provider(cfg.auditor.provider)
 
     def complete(*, system: str, prompt: str):
-        return fn(model=cfg.auditor.model, system=system, prompt=prompt,
-                  key_env=cfg.auditor.key_env, base_url=cfg.auditor.base_url,
-                  allow_custom=bool(os.environ.get("CROSSAUDIT_ALLOW_CUSTOM_ENDPOINT")))
+        reply = fn(model=cfg.auditor.model, system=system, prompt=prompt,
+                   key_env=cfg.auditor.key_env, base_url=cfg.auditor.base_url,
+                   allow_custom=bool(os.environ.get("CROSSAUDIT_ALLOW_CUSTOM_ENDPOINT")))
+        record_completion(root=cfg.root, state_dir=cfg.state_dir, role="auditor",
+                          phase="control", vendor=cfg.auditor.vendor,
+                          provider=cfg.auditor.provider, model=cfg.auditor.model,
+                          reply=reply, system=system, prompt=prompt,
+                          base_url=cfg.auditor.base_url)
+        return reply
 
     return complete
 

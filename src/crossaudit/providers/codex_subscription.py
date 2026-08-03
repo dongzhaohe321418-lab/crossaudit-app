@@ -26,7 +26,7 @@ from urllib.parse import urlparse
 from ..errors import ConfigDenial, ProviderDenial
 from .base import Reply
 
-CLIENT = {"name": "crossaudit", "title": "CrossAudit", "version": "4.2.0"}
+CLIENT = {"name": "crossaudit", "title": "CrossAudit", "version": "4.3.0"}
 DEFAULT_TIMEOUT_S = 300.0
 FORBIDDEN_ITEM_TYPES = {
     "commandExecution", "fileChange", "mcpToolCall", "dynamicToolCall",
@@ -53,6 +53,7 @@ class _Collector:
     status: str | None = None
     error: str = ""
     turn_id: str = ""
+    usage: dict = field(default_factory=dict)
     done: threading.Event = field(default_factory=threading.Event)
 
     def accept(self, message: dict) -> None:
@@ -67,6 +68,11 @@ class _Collector:
             kind = str(item.get("type", ""))
             if kind in FORBIDDEN_ITEM_TYPES:
                 self.forbidden.append(kind)
+        elif method == "thread/tokenUsage/updated":
+            token_usage = params.get("tokenUsage") or {}
+            last = token_usage.get("last") if isinstance(token_usage, dict) else None
+            if isinstance(last, dict):
+                self.usage = dict(last)
         elif method == "turn/completed":
             turn = params.get("turn") or {}
             self.turn_id = str(turn.get("id", ""))
@@ -342,7 +348,8 @@ class CodexAppServer:
             text=text, request_id=collector.turn_id or thread_id,
             request_sha256=hashlib.sha256(request_bytes).hexdigest(),
             response_sha256=hashlib.sha256(text.encode()).hexdigest(),
-            raw={"transport": "codex-app-server", "thread": thread_id})
+            raw={"transport": "codex-app-server", "thread": thread_id,
+                 "usage": collector.usage})
 
     def close(self) -> None:
         with self._state_lock:
