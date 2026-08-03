@@ -457,6 +457,35 @@ def make_handler(cfg: Config, token: str, touch) -> type:
     class Handler(BaseHTTPRequestHandler):
         server_version = "crossaudit-console"
 
+        def _drain_rejected_body(self) -> None:
+            """Consume a small rejected POST body before closing the socket.
+
+            Windows can convert a close with unread inbound bytes into TCP RST,
+            discarding the already-written 403.  The bounded, short-timeout
+            drain makes denial observable without allowing an unauthenticated
+            client to hold a worker indefinitely or allocate from its claimed
+            Content-Length.
+            """
+            try:
+                length = int(self.headers.get("content-length", 0))
+            except (TypeError, ValueError):
+                return
+            if not 0 < length <= 64 * 1024:
+                return
+            previous = self.connection.gettimeout()
+            try:
+                self.connection.settimeout(0.25)
+                remaining = length
+                while remaining:
+                    block = self.rfile.read(min(remaining, 16 * 1024))
+                    if not block:
+                        break
+                    remaining -= len(block)
+            except (OSError, TimeoutError):
+                pass
+            finally:
+                self.connection.settimeout(previous)
+
         def _deny(self, code: int, why: str | Denial) -> None:
             structured = isinstance(why, Denial)
             body = (json.dumps(why.as_dict()).encode() if structured
@@ -465,8 +494,12 @@ def make_handler(cfg: Config, token: str, touch) -> type:
             self.send_header("content-type", ("application/json" if structured
                                                 else "text/plain; charset=utf-8"))
             self.send_header("content-length", str(len(body)))
+            self.send_header("connection", "close")
+            self.send_header("cache-control", "no-store")
             self.end_headers()
             self.wfile.write(body)
+            self.wfile.flush()
+            self.close_connection = True
 
         def _send(self, body: bytes, ctype: str) -> None:
             self.send_response(200)
@@ -698,6 +731,7 @@ def make_handler(cfg: Config, token: str, touch) -> type:
         def do_POST(self) -> None:                                  # noqa: N802
             parsed = urlparse(self.path)
             if not self._authorised(parse_qs(parsed.query)):
+                self._drain_rejected_body()
                 self._deny(403, "forbidden")
                 return
             if parsed.path not in {"/api/say", "/api/upload", "/api/projects/create",

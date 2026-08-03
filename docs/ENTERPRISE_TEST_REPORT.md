@@ -50,7 +50,7 @@ repository secrets in CI.
 
 ## V4.10.0 release-candidate evidence
 
-- Automated suite: **461 passed, 2 skipped** in 47.52 seconds. The skipped
+- Automated suite: **461 passed, 2 skipped** in 46.00 seconds. The skipped
   cases remain only explicitly opt-in paid-provider checks. Python bytecode
   compilation and the native arm64 macOS 13 Swift typecheck also passed.
 - Remote-control tests cover safe alias/path/resource validation, OpenSSH-config
@@ -79,7 +79,7 @@ repository secrets in CI.
   a fresh virtual environment, reported 4.10.0, and passed `pip check`.
 - Distribution: the arm64 DMG passed APFS verification, deep strict code-sign
   verification, architecture and 4.10.0 Info.plist checks. Its SHA-256 is
-  `19945227623705f3e94ea14302fc12e4e1760971638573781d11b732804e0ee9`.
+  `4d07ca43d357d0b68f39eb9b30b0f04b4535de68d66aa8f7db3a0cdab7b06eb4`.
 
 ## V4.8.0 release-candidate evidence
 
@@ -316,6 +316,15 @@ repository secrets in CI.
     escalated but incorrectly described the cause as spending the full round
     budget. It now records that the Generator produced no new auditable revision
     in the exact round where progress stopped.
+29. Remote work had no durable application boundary. V4.10 delegates identity
+    and host trust to OpenSSH, persists only safe control-plane identifiers,
+    detaches work to Slurm or a remote process group, and reattaches monitoring
+    after local shutdown or network loss.
+30. Windows can reset a TCP connection when a server closes with unread POST
+    bytes, causing a valid token-denial response to disappear. The loopback
+    handler now performs a bounded, short-timeout drain for rejected small
+    bodies, flushes an explicit no-store 403, and closes deterministically. The
+    security test passed 30 consecutive local repetitions before the matrix rerun.
 
 ## Residual risks and recommendations
 

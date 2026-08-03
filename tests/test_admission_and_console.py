@@ -467,6 +467,8 @@ def test_app_settings_write_is_tokened_app_only_and_never_echoes_secret(
     with pytest.raises(urllib.error.HTTPError) as error:
         urllib.request.urlopen(req, timeout=5)
     assert error.value.code == 403
+    assert error.value.headers["connection"] == "close"
+    assert error.value.read() == b"forbidden"
 
 
 def test_admit_endpoint_is_tokened_and_returns_only_receipt_identity(
