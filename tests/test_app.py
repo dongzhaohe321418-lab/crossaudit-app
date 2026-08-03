@@ -135,6 +135,21 @@ def test_native_shell_exposes_only_the_local_workspace_picker_bridge():
     assert "[SIGINT, SIGTERM]" in source
 
 
+def test_native_shell_keeps_projects_running_after_the_window_closes():
+    source = (Path(__file__).parents[1] / "packaging" / "macos" /
+              "CrossAuditApp.swift").read_text()
+    assert "applicationShouldTerminateAfterLastWindowClosed" in source
+    assert "func windowShouldClose" in source
+    assert "sender.orderOut(nil)" in source
+    assert "return false" in source
+    assert "NSStatusBar.system.statusItem" in source
+    assert 'title: "Open CrossAudit"' in source
+    assert 'title: "Running in background"' in source
+    assert 'title: "Quit CrossAudit"' in source
+    assert "if !flag { showMainWindow() }" in source
+    assert "guard let self, !self.isTerminating" in source
+
+
 def test_app_project_creation_requires_both_selected_provider_keys(
         tmp_path, monkeypatch):
     monkeypatch.setenv("CROSSAUDIT_APP_MODE", "1")

@@ -8,6 +8,9 @@
 - [ ] Start the copied frozen core with isolated support/workspace directories.
 - [ ] Test project creation, independent worker attachment, token refusals, and
       final-artifact download.
+- [ ] Close the native window during an active controller session, verify the
+      shell/core remain alive, restore from Dock/menu bar, then verify explicit
+      Quit stops the controller.
 - [ ] Create two Chats in one Project, switch their isolated views, pin one Chat
       and the Project, reload, and verify Git-trailer recovery.
 - [ ] Test a native folder choice, two editable repository names, name
@@ -17,6 +20,6 @@
       unpriced handling, local-ledger privacy, and immediate Usage SSE refresh.
 - [ ] Confirm no key, tokenized localhost URL, build directory, or app support
       data is tracked by Git.
-- [ ] Confirm `main` is clean, version is 4.7.0, and README links target V4.
-- [ ] Push `main`, create the `v4.7.0` release, upload DMG and checksum, and
+- [ ] Confirm `main` is clean, version is 4.8.0, and README links target V4.
+- [ ] Push `main`, create the `v4.8.0` release, upload DMG and checksum, and
       verify the repository default branch is `main`.

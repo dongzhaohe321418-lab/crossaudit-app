@@ -12,10 +12,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
     private var loadedURL = false
     private var logHandle: FileHandle?
     private var terminationSignals: [DispatchSourceSignal] = []
+    private var statusItem: NSStatusItem?
+    private var backgroundStatusItem: NSMenuItem?
+    private var isTerminating = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         installTerminationHandlers()
         buildMenus()
+        buildStatusMenu()
         buildWindow()
         launchCore()
     }
@@ -23,11 +27,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        if !flag { window.makeKeyAndOrderFront(nil) }
+        if !flag { showMainWindow() }
         return true
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        isTerminating = true
         if let process = core, process.isRunning {
             process.terminate()
             process.waitUntilExit()
@@ -63,11 +68,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
         window.minSize = NSSize(width: 760, height: 560)
         window.contentView = webView
         window.delegate = self
+        window.isReleasedWhenClosed = false
         window.setFrameAutosaveName("CrossAuditMainWindow")
         window.center()
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         showLoading("Starting the supervised workspace…")
+    }
+
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        // Closing the workspace is deliberately different from quitting the
+        // application. The local core and every detached Project worker remain
+        // alive; the Dock icon or menu-bar item restores the same WebView.
+        sender.orderOut(nil)
+        backgroundStatusItem?.title = "Running in background"
+        return false
     }
 
     private func buildMenus() {
@@ -109,6 +124,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
         reload.target = self
         viewMenu.addItem(reload)
         viewMenu.addItem(withTitle: "Enter Full Screen", action: #selector(NSWindow.toggleFullScreen(_:)), keyEquivalent: "f")
+    }
+
+    private func buildStatusMenu() {
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        if let button = item.button {
+            let image = NSImage(systemSymbolName: "diamond", accessibilityDescription: "CrossAudit")
+            image?.isTemplate = true
+            button.image = image
+            button.toolTip = "CrossAudit is running"
+        }
+
+        let menu = NSMenu(title: "CrossAudit")
+        let open = NSMenuItem(title: "Open CrossAudit", action: #selector(showMainWindow(_:)), keyEquivalent: "")
+        open.target = self
+        menu.addItem(open)
+        let projects = NSMenuItem(title: "Show Projects", action: #selector(showProjects(_:)), keyEquivalent: "")
+        projects.target = self
+        menu.addItem(projects)
+        menu.addItem(.separator())
+        let state = NSMenuItem(title: "Running in background", action: nil, keyEquivalent: "")
+        state.isEnabled = false
+        menu.addItem(state)
+        backgroundStatusItem = state
+        menu.addItem(.separator())
+        let quit = NSMenuItem(title: "Quit CrossAudit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        quit.target = NSApp
+        menu.addItem(quit)
+        item.menu = menu
+        statusItem = item
     }
 
     private func launchCore() {
@@ -154,8 +198,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
         }
         process.terminationHandler = { [weak self] process in
             DispatchQueue.main.async {
-                guard let self, !self.loadedURL else { return }
-                self.showFailure("CrossAudit could not start (core exit \(process.terminationStatus)). See ~/Library/Application Support/CrossAudit/CrossAudit.log.")
+                guard let self, !self.isTerminating else { return }
+                self.loadedURL = false
+                self.backgroundStatusItem?.title = "Background core stopped"
+                self.statusItem?.button?.toolTip = "CrossAudit needs attention"
+                self.showFailure("CrossAudit core stopped unexpectedly (exit \(process.terminationStatus)). See ~/Library/Application Support/CrossAudit/CrossAudit.log.")
+                self.showMainWindow()
+                NSApp.requestUserAttention(.criticalRequest)
             }
         }
         do {
@@ -208,9 +257,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
     }
 
     private func runJavaScript(_ script: String) { webView.evaluateJavaScript(script, completionHandler: nil) }
-    @objc private func openSettings(_ sender: Any?) { runJavaScript("document.getElementById('settings-open')?.click()") }
-    @objc private func openNewTask(_ sender: Any?) { runJavaScript("document.getElementById('new-task')?.click()") }
-    @objc private func showProjects(_ sender: Any?) { runJavaScript("document.getElementById('projects-home')?.click()") }
+    private func showMainWindow() {
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        backgroundStatusItem?.title = core?.isRunning == true ? "Running in background" : "Background core stopped"
+    }
+    @objc private func showMainWindow(_ sender: Any?) { showMainWindow() }
+    @objc private func openSettings(_ sender: Any?) { showMainWindow(); runJavaScript("document.getElementById('settings-open')?.click()") }
+    @objc private func openNewTask(_ sender: Any?) { showMainWindow(); runJavaScript("document.getElementById('new-task')?.click()") }
+    @objc private func showProjects(_ sender: Any?) { showMainWindow(); runJavaScript("document.getElementById('projects-home')?.click()") }
     @objc private func reload(_ sender: Any?) { webView.reload() }
 
     func userContentController(_ userContentController: WKUserContentController,

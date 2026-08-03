@@ -1,14 +1,14 @@
-# CrossAudit 4.7.0 enterprise release assessment
+# CrossAudit 4.8.0 enterprise release assessment
 
 Date: 2026-08-04
 
 Target: Apple Silicon macOS 13 or later
 
-Release candidate: 4.7.0
+Release candidate: 4.8.0
 
 ## Executive result
 
-CrossAudit 4.7.0 is suitable for local evaluation and controlled pilot use. It
+CrossAudit 4.8.0 is suitable for local evaluation and controlled pilot use. It
 preserves the V3.2 audited protocol while adding a native AppKit/WebKit shell,
 Keychain credentials, UI-first project creation, independent background
 projects, GitHub connection, chunked file transfer, final-artifact downloads,
@@ -45,6 +45,26 @@ Policy rather than hidden behind an installation workaround.
 The final command outputs and artifact hashes are recorded in the GitHub release
 and CI logs. Tests that spend provider credits remain explicitly opt-in and use
 repository secrets in CI.
+
+## V4.8.0 release-candidate evidence
+
+- Automated suite: **438 passed, 2 skipped** in 45.47 seconds; the skipped
+  cases remain only explicitly opt-in paid-provider checks. The native Swift
+  shell also passed an arm64 macOS 13 typecheck.
+- Native background lifecycle: closing the main window orders it out without
+  terminating the application, local core, or detached Project workers. The
+  Dock icon and permanent menu-bar diamond restore the same WebView; only the
+  explicit Quit command tears down the local controller.
+- Health visibility: the menu bar reports the background state. An unexpected
+  core exit changes that state, restores the main window, shows the failure,
+  and requests user attention instead of failing silently while hidden.
+- Installed-app lifecycle: the 4.8.0 shell, core, and bundled Codex child all
+  stopped after an explicit native termination signal. Relaunch produced one
+  shell and one core, with no duplicate controller or orphaned child process.
+- Distribution: the arm64 DMG passed its published SHA-256 check
+  (`38326f7001e0534be4d5f7fb2280d6b4d4fe9b92a742163642344a0bc5aff09a`),
+  the installed app reported 4.8.0, and deep strict code-sign verification
+  passed for the installed bundle.
 
 ## V4.7.0 release-candidate evidence
 

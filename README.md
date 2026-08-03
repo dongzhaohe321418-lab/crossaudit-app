@@ -1,10 +1,10 @@
-# CrossAudit 4.7.0
+# CrossAudit 4.8.0
 
-[![Version 4.7.0](https://img.shields.io/badge/version-4.7.0-6d5dfc)](https://github.com/dongzhaohe321418-lab/crossaudit_v4/releases/tag/v4.7.0)
+[![Version 4.8.0](https://img.shields.io/badge/version-4.8.0-6d5dfc)](https://github.com/dongzhaohe321418-lab/crossaudit_v4/releases/tag/v4.8.0)
 [![macOS 13+](https://img.shields.io/badge/macOS-13%2B-111111)](https://github.com/dongzhaohe321418-lab/crossaudit_v4#install)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776ab)](https://github.com/dongzhaohe321418-lab/crossaudit_v4#command-line-installation)
 
-**Latest release: [CrossAudit 4.7.0](https://github.com/dongzhaohe321418-lab/crossaudit_v4/releases/tag/v4.7.0).**
+**Latest release: [CrossAudit 4.8.0](https://github.com/dongzhaohe321418-lab/crossaudit_v4/releases/tag/v4.8.0).**
 
 CrossAudit is a local, cross-vendor AI work loop. One model creates files, a
 model from a different provider audits the committed result, and every task,
@@ -54,6 +54,8 @@ structured content.
 
 - A native Apple Silicon macOS application: no terminal or separate browser is
   required for normal use.
+- Real background operation: closing the main window keeps the local core and
+  Project workers alive, with a menu-bar entry to restore or explicitly quit.
 - A complete Projects screen, guided project creation, provider settings,
   GitHub connection, task conversation, file transfer, audit-loop progress,
   human escalation, and result download in one UI.
@@ -103,12 +105,12 @@ official OpenAI Codex runtime.
 
 ### macOS application
 
-1. Download `CrossAudit-4.7.0-arm64.dmg` and its checksum from the
-   [V4.7.0 release](https://github.com/dongzhaohe321418-lab/crossaudit_v4/releases/tag/v4.7.0).
+1. Download `CrossAudit-4.8.0-arm64.dmg` and its checksum from the
+   [V4.8.0 release](https://github.com/dongzhaohe321418-lab/crossaudit_v4/releases/tag/v4.8.0).
 2. Optionally verify it in Terminal:
 
    ```bash
-   shasum -a 256 -c CrossAudit-4.7.0-arm64.dmg.sha256
+   shasum -a 256 -c CrossAudit-4.8.0-arm64.dmg.sha256
    ```
 
 3. Open the DMG and drag **CrossAudit** to **Applications**.
@@ -138,7 +140,7 @@ crossaudit --version
 Expected version output:
 
 ```text
-crossaudit 4.7.0 (receipt schema 2)
+crossaudit 4.8.0 (receipt schema 2)
 ```
 
 Use a virtual environment instead when developing CrossAudit, testing source
@@ -186,6 +188,13 @@ auditor Constitution. The sidebar separates pinned and recent Chats; the star
 in the top bar pins the whole Project in the Projects list. Chat message,
 deliverable, audit, and live-loop views are filtered to the selected Chat.
 Existing pre-4.7 evidence appears automatically as **Project history**.
+
+Closing the main CrossAudit window does **not** stop the application or an
+active loop. CrossAudit remains visible as a diamond in the macOS menu bar;
+choose **Open CrossAudit**, click its Dock icon, or open the application again
+to restore the same live workspace. Choose **Quit CrossAudit** from the app or
+menu-bar menu only when you intend to stop the local controller. Project work
+already committed to Git remains durable across a later restart.
 
 The **Automatic revision limit** in New Project is a cost and termination
 guardrail, not an audit score. It controls how many generator → auditor
@@ -659,7 +668,7 @@ Built-in OpenAI requests use `max_completion_tokens`. Custom OpenAI-compatible
 providers retain family-based compatibility with endpoints that still expect
 `max_tokens`.
 
-Reasoning effort is request-level, not a permanent account setting. V4.7 exposes
+Reasoning effort is request-level, not a permanent account setting. V4.8 exposes
 only values that the selected model/provider combination documents or, for a
 ChatGPT connection, values advertised live by the bundled official runtime.
 Current built-in mappings cover OpenAI GPT-5 reasoning families, supported
@@ -767,13 +776,13 @@ Exit codes are stable so scripts do not need to parse prose:
 
 V4 sends `max_completion_tokens` to the built-in OpenAI endpoint and retries
 once when a compatible endpoint explicitly asks for that field. Confirm that
-`crossaudit --version` reports 4.7.0 and reinstall if an older package is still
+`crossaudit --version` reports 4.8.0 and reinstall if an older package is still
 on your PATH. Restart a background console after upgrading because an existing
 daemon keeps the Python code that was loaded when it started.
 
 ### The macOS app is blocked on first launch
 
-V4.7.0 is structurally signed with the hardened runtime but is not notarized.
+V4.8.0 is structurally signed with the hardened runtime but is not notarized.
 Control-click **CrossAudit.app**, choose **Open**, and confirm only after you
 have verified the published SHA-256 checksum. An Apple Developer ID signed and
 notarized build is required before broad organizational deployment.

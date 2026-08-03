@@ -10,7 +10,7 @@ mitigation. Do not include real API keys or user data.
 
 ## Supported version
 
-Security fixes are made against the latest `main` release. CrossAudit 4.7.0 is
+Security fixes are made against the latest `main` release. CrossAudit 4.8.0 is
 the current native-app release.
 
 ## Desktop trust boundary
@@ -35,8 +35,14 @@ pin and title metadata stays local in a mode-600, gitignored state file.
 Provider output is data, not a shell program: CrossAudit does not execute
 generated commands automatically.
 
+Closing the main window orders it out without terminating the native shell or
+local core. The menu-bar item exposes the background state and an explicit Quit
+command. On an unexpected core exit, the shell restores the window, reports the
+failure, and requests user attention instead of silently pretending the
+background service is healthy.
+
 ## Distribution status
 
-The 4.7.0 community DMG is ad-hoc signed and is not Apple-notarized. Verify the
+The 4.8.0 community DMG is ad-hoc signed and is not Apple-notarized. Verify the
 published SHA-256 checksum before first launch. Organization-wide distribution
 should wait for a Developer ID signed, notarized, and stapled artifact.
