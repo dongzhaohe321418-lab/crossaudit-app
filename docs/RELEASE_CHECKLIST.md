@@ -21,8 +21,12 @@
       recovery against an isolated test project.
 - [ ] Verify provider-reported API and subscription token events, custom-model
       unpriced handling, local-ledger privacy, and immediate Usage SSE refresh.
+- [ ] Register an SSH-config host, exercise unknown/changed-key and offline
+      guidance, submit both Slurm and detached workstation jobs, restart the
+      local controller, and verify reattachment, live status/logs, cancellation,
+      input streaming, and portable remote-output download.
 - [ ] Confirm no key, tokenized localhost URL, build directory, or app support
       data is tracked by Git.
-- [ ] Confirm `main` is clean, version is 4.9.0, and README links target V4.
-- [ ] Push `main`, create the `v4.9.0` release, upload DMG and checksum, and
+- [ ] Confirm `main` is clean, version is 4.10.0, and README links target V4.
+- [ ] Push `main`, create the `v4.10.0` release, upload DMG and checksum, and
       verify the repository default branch is `main`.

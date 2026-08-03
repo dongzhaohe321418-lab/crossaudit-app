@@ -1,18 +1,18 @@
-# CrossAudit 4.9.0 enterprise release assessment
+# CrossAudit 4.10.0 enterprise release assessment
 
 Date: 2026-08-04
 
 Target: Apple Silicon macOS 13 or later
 
-Release candidate: 4.9.0
+Release candidate: 4.10.0
 
 ## Executive result
 
-CrossAudit 4.9.0 is suitable for local evaluation and controlled pilot use. It
+CrossAudit 4.10.0 is suitable for local evaluation and controlled pilot use. It
 preserves the V3.2 audited protocol while adding a native AppKit/WebKit shell,
 Keychain credentials, UI-first project creation, independent background
 projects, GitHub connection, chunked file transfer, final-artifact downloads,
-and live audit progress.
+live audit progress, and remote-owned SSH/Slurm compute.
 
 The release is not yet suitable for silent enterprise deployment because no
 Apple Developer ID certificate is available. The produced application is
@@ -42,38 +42,44 @@ Policy rather than hidden behind an installation workaround.
 | Receipts | Binding verification, recorded cycle state, one-time admission | Automated |
 | Runtime models | Atomic model/effort switch, busy refusal, SSE refresh, provider-specific payload | Automated and live |
 | Environment Doctor | Missing/outdated tools, startup degradation, safe repair allowlist, update check, responsive UI | Automated and browser smoke |
+| Remote compute | SSH-config discovery, strict host keys, read-only probe, Slurm/workstation detach, restart reattachment, 2-second status/logs, cancel, input/output streaming | Automated, real SSH failure smoke, and browser smoke |
 
 The final command outputs and artifact hashes are recorded in the GitHub release
 and CI logs. Tests that spend provider credits remain explicitly opt-in and use
 repository secrets in CI.
 
-## V4.9.0 release-candidate evidence
+## V4.10.0 release-candidate evidence
 
-- Automated suite: **445 passed, 2 skipped** in 44.43 seconds. The skipped
+- Automated suite: **461 passed, 2 skipped** in 47.52 seconds. The skipped
   cases remain only explicitly opt-in paid-provider checks. Python bytecode
   compilation and the native arm64 macOS 13 Swift typecheck also passed.
-- Real-machine scan: the in-app Doctor identified Python 3.13.5, macOS 26.5,
-  Git 2.50.1, GitHub CLI 2.96.0, Codex 0.146.0, 121 trusted certificate
-  authorities, workspace access, project configuration, ledger state, and the
-  public latest-release result without returning credentials.
-- Failure simulation: an isolated first launch with a Git 2.20.1 shim and no
-  GitHub/Codex binaries reached the UI, reported installed and minimum versions,
-  separated optional bundled features and the dependent ledger wait state from
-  the root Git blocker, and prevented
-  New Project from bypassing the repair guidance.
-- Repair smoke: the UI initiated a live rescan, accepted validated Git author
-  fields, saved them only in the isolated project repository, refreshed through
-  SSE, and changed the environment result to ready without a page reload.
-- Security boundary: Doctor POST actions are app-mode-only, token protected,
-  and mapped to a fixed server-side allowlist. Unknown actions and invalid email
-  values are refused; the browser cannot submit an executable or command line.
-- Frozen runtime: the core copied from the installed 4.9.0 application started
-  against isolated support/workspace folders, rendered the packaged Doctor,
-  reported Git/GitHub/Codex checks, and completed a live rescan. The installed
-  native shell and core remained one parent/child pair after the smoke test.
+- Remote-control tests cover safe alias/path/resource validation, OpenSSH-config
+  includes, no private-key persistence, first-key trust, changed-key refusal,
+  binary input streaming, Slurm `sbatch/squeue/sacct/scancel`, detached
+  workstation `setsid`, concurrency, connection loss, controller restart,
+  logs, portable output discovery/download, and process-group cancellation.
+- Real-machine SSH smoke used the system OpenSSH 10.2 client and an existing SSH
+  alias. The strict, non-interactive read-only probe reached the genuine network
+  failure path without trusting a key, creating a remote directory, or starting
+  a job. Successful Slurm and workstation paths were exercised through a
+  deterministic transport simulator; no successful real-cluster run is claimed.
+- Browser acceptance rendered V4.10.0 and the Compute workspace at 1280 px with
+  no horizontal overflow or console errors. It exercised the add-host dialog,
+  inline validation, resource/script approval, live-state schema, input list,
+  logs, outputs, cancel controls, and 2-second monitoring behavior.
+- Frozen runtime: a copy mounted from the final DMG started against isolated
+  support/workspace folders, reported V4.10.0 with the complete compute schema,
+  and returned HTTP 403 for a missing token, wrong token, and foreign Host.
+- Installed upgrade: the running 4.9.0 app quit cleanly, its bundle was retained
+  in the Trash, and the verified DMG installed 4.10.0 in `/Applications`. Launch
+  produced exactly one native shell and one local core; transient GitHub checks
+  exited normally and the persistent official Codex runtime remained a child of
+  that core.
+- Package smoke built both wheel and source distribution, installed the wheel in
+  a fresh virtual environment, reported 4.10.0, and passed `pip check`.
 - Distribution: the arm64 DMG passed APFS verification, deep strict code-sign
-  verification, architecture and 4.9.0 Info.plist checks. Its SHA-256 is
-  `0dc5d476614db3a9a8a89d40b93d056535f70a3954c0cd95f672fe1f0e7df74f`.
+  verification, architecture and 4.10.0 Info.plist checks. Its SHA-256 is
+  `19945227623705f3e94ea14302fc12e4e1760971638573781d11b732804e0ee9`.
 
 ## V4.8.0 release-candidate evidence
 

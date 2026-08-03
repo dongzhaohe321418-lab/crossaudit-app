@@ -32,6 +32,7 @@ LATEST_RELEASE_URL = (
     "https://github.com/dongzhaohe321418-lab/crossaudit_v4/releases/latest"
 )
 MINIMUM_GIT = (2, 30, 0)  # ``git init -b`` is part of project creation.
+MINIMUM_OPENSSH = (8, 1, 0)  # accept-new and modern host-key algorithms.
 MINIMUM_GH = (2, 45, 0)
 MINIMUM_CODEX = (0, 146, 0)
 VERSION = re.compile(r"(?<!\d)(\d+)\.(\d+)(?:\.(\d+))?")
@@ -161,6 +162,13 @@ def collect(cfg: Config, *, online: bool = True) -> dict:
         "git", "Git", git_path, ("--version",), MINIMUM_GIT,
         required=True, repair=git_repair))
     checks.append(git_check)
+
+    ssh_path = shutil.which("ssh")
+    checks.append(_software(
+        "ssh", "Remote compute client", ssh_path, ("-V",),
+        MINIMUM_OPENSSH, required=False,
+        repair={"action": "open_url", "label": "Open SSH setup guide",
+                "url": "https://support.apple.com/guide/terminal/connect-to-servers-apdbb83aa795/mac"}))
 
     gh_path = (os.environ.get("CROSSAUDIT_BUNDLED_GH", "").strip()
                or shutil.which("gh"))

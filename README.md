@@ -1,10 +1,10 @@
-# CrossAudit 4.9.0
+# CrossAudit 4.10.0
 
-[![Version 4.9.0](https://img.shields.io/badge/version-4.9.0-6d5dfc)](https://github.com/dongzhaohe321418-lab/crossaudit_v4/releases/tag/v4.9.0)
+[![Version 4.10.0](https://img.shields.io/badge/version-4.10.0-6d5dfc)](https://github.com/dongzhaohe321418-lab/crossaudit_v4/releases/tag/v4.10.0)
 [![macOS 13+](https://img.shields.io/badge/macOS-13%2B-111111)](https://github.com/dongzhaohe321418-lab/crossaudit_v4#install)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776ab)](https://github.com/dongzhaohe321418-lab/crossaudit_v4#command-line-installation)
 
-**Latest release: [CrossAudit 4.9.0](https://github.com/dongzhaohe321418-lab/crossaudit_v4/releases/tag/v4.9.0).**
+**Latest release: [CrossAudit 4.10.0](https://github.com/dongzhaohe321418-lab/crossaudit_v4/releases/tag/v4.10.0).**
 
 CrossAudit is a local, cross-vendor AI work loop. One model creates files, a
 model from a different provider audits the committed result, and every task,
@@ -72,6 +72,10 @@ structured content.
   model output.
 - Independent background workers per project and immediate event-driven UI
   updates through Server-Sent Events.
+- Claude Science-style remote compute: register existing OpenSSH hosts, probe
+  workstations or Slurm login nodes, submit detached jobs, follow scheduler
+  state and logs in real time, cancel explicitly, and stream remote outputs
+  back without making the Mac the job owner.
 - Local token metering for every Generator and Auditor call, with a live Usage
   view, cache-aware counts, role/model breakdowns, and clearly labelled public
   API-value estimates.
@@ -99,6 +103,7 @@ structured content.
   an API key. Every other built-in provider currently uses its official
   developer API credential in CrossAudit.
 - A GitHub account only when you choose the optional two-repository workflow
+- OpenSSH 8.1 or later only when you use the optional remote Compute workspace
 
 Python 3.10 or newer is required only for the optional command-line/source
 installation. The `.dmg` bundles its own Python core, GitHub CLI, and the pinned
@@ -108,12 +113,12 @@ official OpenAI Codex runtime.
 
 ### macOS application
 
-1. Download `CrossAudit-4.9.0-arm64.dmg` and its checksum from the
-   [V4.9.0 release](https://github.com/dongzhaohe321418-lab/crossaudit_v4/releases/tag/v4.9.0).
+1. Download `CrossAudit-4.10.0-arm64.dmg` and its checksum from the
+   [V4.10.0 release](https://github.com/dongzhaohe321418-lab/crossaudit_v4/releases/tag/v4.10.0).
 2. Optionally verify it in Terminal:
 
    ```bash
-   shasum -a 256 -c CrossAudit-4.9.0-arm64.dmg.sha256
+   shasum -a 256 -c CrossAudit-4.10.0-arm64.dmg.sha256
    ```
 
 3. Open the DMG and drag **CrossAudit** to **Applications**.
@@ -143,7 +148,7 @@ crossaudit --version
 Expected version output:
 
 ```text
-crossaudit 4.9.0 (receipt schema 2)
+crossaudit 4.10.0 (receipt schema 2)
 ```
 
 Use a virtual environment instead when developing CrossAudit, testing source
@@ -257,6 +262,57 @@ Apple's Command Line Tools installer, initialize a missing local Git ledger,
 save a project-local Git identity, choose a writable workspace, or take the
 user to the verified CrossAudit update. It never runs arbitrary commands from
 the web view.
+
+#### Connect an SSH workstation or HPC cluster
+
+Select **Compute** inside a Project, then choose **Add SSH host**. CrossAudit
+follows the same public remote-compute model documented for
+[Claude Science](https://claude.com/docs/claude-science/remote-compute-clusters):
+
+1. Enter a host alias from your existing `~/.ssh/config`. OpenSSH resolves its
+   user, port, key, `ProxyJump`, `ProxyCommand`, agent, VPN, and corporate
+   network behavior. CrossAudit never reads or copies the private key.
+2. Choose an absolute scratch directory. On Slurm, it must be shared between
+   the login and compute nodes.
+3. Optionally record the account code, module loads, approved partitions, and
+   other cluster policy in Host instructions.
+4. Run the read-only probe. It checks CPU, memory, GPU, Slurm, partitions,
+   modules, conda, and Apptainer and installs nothing remotely.
+
+New host keys are refused by default. If the cluster administrator confirms a
+new hostname, **Trust a new host key once** asks OpenSSH to use standard
+trust-on-first-use. A changed saved key is always refused and cannot be replaced
+from the CrossAudit UI.
+
+**Submit job** shows explicit fields for partition, account, QoS, nodes, CPUs,
+GPUs, memory, wall time, input files, and the complete shell script. Submission
+requires a separate remote-execution confirmation. Selected input files are
+uploaded to the local private inbox in bounded chunks and then streamed to the
+job's remote `inputs/` directory; CrossAudit does not impose a file-count or
+file-size quota.
+
+When the probe finds `sbatch`, CrossAudit submits to Slurm and monitors `squeue`
+and `sacct`. Otherwise it starts a detached `nohup` workstation process. Both
+forms are owned by the remote scheduler or operating system, not by the local
+app. Closing CrossAudit, sleeping the Mac, losing Wi-Fi, or disconnecting the
+VPN therefore does not terminate the job. The private local job ledger retains
+the host alias, scheduler ID, resource request, input digests, and remote job
+directory so the next app process can reattach.
+
+Job cards update through the existing authenticated SSE stream and provide:
+
+- queued/running/final scheduler state and elapsed time;
+- a reconnect-safe warning when only monitoring is offline;
+- rolling stdout and stderr tails while the job runs;
+- explicit cancellation through `scancel` or the detached process ID;
+- a validated remote output list and constant-memory download streaming.
+
+Remote scripts run outside the CrossAudit local sandbox as the configured SSH
+user. They can access everything that account can access. Use a dedicated HPC
+account, least-privilege filesystem permissions, scheduler limits, and the
+cluster's normal review policy. CrossAudit never opens an interactive shell to
+the WebView and never accepts a browser-supplied SSH command other than the
+reviewed job script.
 
 #### 3. Give CrossAudit a real task
 
@@ -788,13 +844,13 @@ Exit codes are stable so scripts do not need to parse prose:
 
 V4 sends `max_completion_tokens` to the built-in OpenAI endpoint and retries
 once when a compatible endpoint explicitly asks for that field. Confirm that
-`crossaudit --version` reports 4.9.0 and reinstall if an older package is still
+`crossaudit --version` reports 4.10.0 and reinstall if an older package is still
 on your PATH. Restart a background console after upgrading because an existing
 daemon keeps the Python code that was loaded when it started.
 
 ### The macOS app is blocked on first launch
 
-V4.9.0 is structurally signed with the hardened runtime but is not notarized.
+V4.10.0 is structurally signed with the hardened runtime but is not notarized.
 Control-click **CrossAudit.app**, choose **Open**, and confirm only after you
 have verified the published SHA-256 checksum. An Apple Developer ID signed and
 notarized build is required before broad organizational deployment.
@@ -894,6 +950,9 @@ into a mathematical proof.
 - Desktop provider credentials live in the macOS login Keychain. They are
   injected only into the local core process and are never written to a project.
 - The generator writes files but does not execute arbitrary generated commands.
+- Remote Compute runs only scripts the user explicitly reviews and approves.
+  Jobs execute with the user's remote account permissions, outside the local
+  sandbox, and remain subject to cluster policy and scheduler limits.
 - The default checks assume structured result artefacts; other domains should
   add appropriate rules and check packs.
 - A receipt proves what CrossAudit processed and which verifier created it. It

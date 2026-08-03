@@ -10,7 +10,7 @@ mitigation. Do not include real API keys or user data.
 
 ## Supported version
 
-Security fixes are made against the latest `main` release. CrossAudit 4.9.0 is
+Security fixes are made against the latest `main` release. CrossAudit 4.10.0 is
 the current native-app release.
 
 ## Desktop trust boundary
@@ -48,8 +48,26 @@ command. On an unexpected core exit, the shell restores the window, reports the
 failure, and requests user attention instead of silently pretending the
 background service is healthy.
 
+## Remote compute boundary
+
+CrossAudit delegates authentication and host-key storage to the operating
+system OpenSSH client. It does not read private keys or store passphrases.
+Connections are non-interactive, disable local commands and forwarding, and
+require a saved host key unless the user explicitly approves first-use trust.
+A changed key is never replaced in the application.
+
+Remote job scripts execute as the SSH user outside CrossAudit's local sandbox.
+Every submission therefore requires explicit UI approval after the script and
+resource request are visible. Host aliases, scheduler IDs, resource requests,
+input hashes, and remote paths are kept in the project-private state directory;
+credentials and file contents are not placed in the job ledger. Slurm and
+detached workstation jobs remain remote-owned during local shutdown or network
+loss. Cancellation validates scheduler/process IDs. Remote output downloads
+validate both the project job identifier and a safe relative path before
+streaming through the token-protected loopback endpoint.
+
 ## Distribution status
 
-The 4.9.0 community DMG is ad-hoc signed and is not Apple-notarized. Verify the
+The 4.10.0 community DMG is ad-hoc signed and is not Apple-notarized. Verify the
 published SHA-256 checksum before first launch. Organization-wide distribution
 should wait for a Developer ID signed, notarized, and stapled artifact.

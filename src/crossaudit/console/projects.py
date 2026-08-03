@@ -243,8 +243,10 @@ _RUNTIME_CACHE: dict[str, tuple[float, tuple, dict | None]] = {}
 def _runtime(cfg: Config, current: Config) -> dict | None:
     """The small live-progress projection used by the workspace menu."""
     if cfg.root == current.root:
+        from .. import hpc
         from .progress import TRACKER
-        state = {"progress": TRACKER.snapshot()}
+        state = {"progress": TRACKER.snapshot(),
+                 "compute": hpc.MANAGER.snapshot(cfg)}
     else:
         info = daemon.read_run(cfg)
         if not info:
@@ -260,16 +262,28 @@ def _runtime(cfg: Config, current: Config) -> dict | None:
         if not state:
             return None
     progress = state.get("progress")
-    if not isinstance(progress, dict) or progress.get("finished"):
-        return None
-    steps = progress.get("steps") if isinstance(progress.get("steps"), list) else []
-    latest = steps[-1] if steps and isinstance(steps[-1], dict) else {}
-    return {
-        "task": str(progress.get("task", ""))[:160],
-        "elapsed": max(0, int(progress.get("elapsed", 0) or 0)),
-        "actor": str(latest.get("actor", "starting"))[:30],
-        "step": str(latest.get("text", "starting"))[:120],
-    }
+    if isinstance(progress, dict) and not progress.get("finished"):
+        steps = progress.get("steps") if isinstance(progress.get("steps"), list) else []
+        latest = steps[-1] if steps and isinstance(steps[-1], dict) else {}
+        return {
+            "task": str(progress.get("task", ""))[:160],
+            "elapsed": max(0, int(progress.get("elapsed", 0) or 0)),
+            "actor": str(latest.get("actor", "starting"))[:30],
+            "step": str(latest.get("text", "starting"))[:120],
+        }
+    compute = state.get("compute") if isinstance(state, dict) else None
+    jobs = compute.get("jobs", []) if isinstance(compute, dict) else []
+    active = next((row for row in jobs if isinstance(row, dict) and
+                   row.get("status") not in {"completed", "failed", "cancelled",
+                                              "timeout", "out_of_memory"}), None)
+    if active:
+        return {
+            "task": str(active.get("name", "Remote compute"))[:160],
+            "elapsed": max(0, int(time.time() - float(active.get("submitted", time.time())))),
+            "actor": f"HPC · {str(active.get('host', 'remote'))[:22]}",
+            "step": f"{str(active.get('name', 'job'))[:80]} · {active.get('status', 'running')}",
+        }
+    return None
 
 
 def _invalidate_runtime(root: Path) -> None:

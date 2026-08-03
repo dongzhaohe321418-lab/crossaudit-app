@@ -356,6 +356,12 @@ def stage_attachments(cfg: Config,
     # Upload references are one-shot capabilities. Once the durable inbox copy
     # exists, retire transport blobs and metadata so a replay cannot silently
     # reuse them and completed transfers do not consume disk space twice.
+    retire_uploads(cfg, attachments)
+    return result
+
+
+def retire_uploads(cfg: Config, attachments: list[PreparedAttachment]) -> None:
+    """Retire one-shot browser transport blobs after their final consumer."""
     upload_root = _upload_root(cfg).resolve()
     for attachment in attachments:
         source = attachment.source
@@ -368,7 +374,6 @@ def stage_attachments(cfg: Config,
                 resolved.with_suffix(".json").unlink(missing_ok=True)
         except OSError:
             pass
-    return result
 
 
 def prompt_section(attachments: list[dict]) -> str:

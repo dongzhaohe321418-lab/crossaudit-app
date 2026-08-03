@@ -28,13 +28,14 @@ import json
 import os
 import secrets
 import shutil
+import subprocess
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, quote, urlparse
 
 from ..config import Config, load
-from .. import app_doctor, app_keys, connections, usage
+from .. import app_doctor, app_keys, connections, hpc, usage
 from ..controller import StateStore
 from ..errors import ConfigDenial, Denial
 from ..receipt.verify import (admit as admit_receipt, load as load_receipt,
@@ -46,7 +47,8 @@ from .progress import TRACKER
 from .streams import bundle
 from .transfers import (MAX_REQUEST_BYTES, TransferError, decode_attachments,
                         prompt_section, receive_upload_chunk, resolve_artifact,
-                        resolve_upload_batch, resolve_uploads, stage_attachments)
+                        resolve_upload_batch, resolve_uploads, retire_uploads,
+                        stage_attachments)
 
 IDLE_TIMEOUT_S = 900.0
 STREAM_POLL_S = 0.1          # fallback for changes made by another local process
@@ -258,6 +260,9 @@ def snapshot(cfg: Config) -> dict:
         "findings": overview.findings_by_severity(audits),
         "top_rules": overview.top_rules(audits),
         "usage": usage.summary(cfg),
+        # Remote jobs are scheduler-owned or detached on the SSH host.  This
+        # snapshot only reattaches the live UI to their persistent identifiers.
+        "compute": hpc.MANAGER.snapshot(cfg, STREAM_CHANGES.notify),
         "escalations": overview.escalations(cfg),
         "disputes": overview.disputes(cfg),
         "routing": routing_history(cfg.root / cfg.ledger_dir / "routing.jsonl", 40),
@@ -491,6 +496,28 @@ def make_handler(cfg: Config, token: str, touch) -> type:
             except (BrokenPipeError, ConnectionResetError):
                 return
 
+        def _send_remote_download(self, process, filename: str, size: int) -> None:
+            """Stream one validated remote output without staging it locally."""
+            self.send_response(200)
+            self.send_header("content-type", "application/octet-stream")
+            self.send_header("content-length", str(size))
+            self.send_header("content-disposition",
+                             "attachment; filename*=UTF-8''" + quote(filename))
+            self.send_header("cache-control", "no-store")
+            self.send_header("x-content-type-options", "nosniff")
+            self.end_headers()
+            try:
+                assert process.stdout is not None
+                for block in iter(lambda: process.stdout.read(1024 * 1024), b""):
+                    self.wfile.write(block)
+            except (BrokenPipeError, ConnectionResetError, OSError):
+                process.terminate()
+            finally:
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+
         def _authorised(self, query: dict) -> bool:
             host = (self.headers.get("Host") or "").rsplit(":", 1)[0]
             if host not in ALLOWED_HOSTS:
@@ -534,6 +561,16 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                     self._deny(exc.status, exc.reason)
                     return
                 self._send_download(path, filename, size)
+            elif parsed.path == "/api/hpc/file":
+                query = parse_qs(parsed.query)
+                try:
+                    process, filename, size = hpc.MANAGER.open_output(
+                        self._config(), (query.get("job") or [""])[0],
+                        (query.get("path") or [""])[0])
+                except Denial as exc:
+                    self._deny(400, exc)
+                    return
+                self._send_remote_download(process, filename, size)
             else:
                 self._deny(404, "no such page")
 
@@ -671,7 +708,7 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                                    "/api/workspace/select", "/api/models/refresh",
                                    "/api/runtime/options", "/api/runtime",
                                    "/api/settings", "/api/providers/connect",
-                                   "/api/doctor", "/api/admit"}:
+                                   "/api/doctor", "/api/hpc", "/api/admit"}:
                 self._deny(404, "no such action")
                 return
             touch()
@@ -793,6 +830,39 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                     else:
                         result = app_doctor.JOBS.fix(
                             self._config(), action, payload, STREAM_CHANGES.notify)
+                    self._send(json.dumps(result).encode(), "application/json")
+                    return
+                if parsed.path == "/api/hpc":
+                    action = str(payload.get("action", ""))
+                    current = self._config()
+                    if action == "register":
+                        result = hpc.MANAGER.register(current, payload)
+                    elif action == "probe":
+                        result = hpc.MANAGER.probe(current, str(payload.get("host_id", "")))
+                    elif action == "remove":
+                        result = hpc.MANAGER.remove(current, str(payload.get("host_id", "")))
+                    elif action == "submit":
+                        attachments = (resolve_upload_batch(
+                            current, payload.get("upload_batch"))
+                            if payload.get("upload_batch") else [])
+                        try:
+                            result = hpc.MANAGER.submit(
+                                current, payload, attachments=attachments)
+                        finally:
+                            retire_uploads(current, attachments)
+                    elif action == "refresh":
+                        result = {"changed": hpc.MANAGER.refresh(current)}
+                    elif action == "logs":
+                        result = hpc.MANAGER.logs(current, str(payload.get("job_id", "")))
+                    elif action == "outputs":
+                        result = {"job_id": str(payload.get("job_id", "")),
+                                  "outputs": hpc.MANAGER.outputs(
+                                      current, str(payload.get("job_id", "")))}
+                    elif action == "cancel":
+                        result = hpc.MANAGER.cancel(current, str(payload.get("job_id", "")))
+                    else:
+                        raise ConfigDenial("unsupported HPC action")
+                    STREAM_CHANGES.notify()
                     self._send(json.dumps(result).encode(), "application/json")
                     return
                 if parsed.path == "/api/providers/connect":

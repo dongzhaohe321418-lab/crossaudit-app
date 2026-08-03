@@ -549,6 +549,41 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
 #provider-credentials .credential-card{margin:0;min-width:0}
 #provider-credentials .provider-note{min-height:58px}
 .top-project{cursor:pointer;border-top:0;border-right:0;border-bottom:0;background:transparent;text-align:left}
+.compute-toolbar{display:flex;align-items:center;gap:8px;margin-bottom:16px}.compute-toolbar .spacer{flex:1}
+.compute-note{display:flex;gap:9px;padding:11px 12px;border:1px solid var(--line);border-radius:10px;
+  background:var(--panel);color:var(--muted);font-size:10.5px;line-height:1.5;margin-bottom:16px}
+.compute-message{display:none;margin:-8px 0 16px;padding:9px 11px;border-radius:8px;background:var(--red-bg);
+  color:var(--red);font-size:10.5px}.compute-message.on{display:block}
+.compute-note b{color:var(--text)}.compute-grid{display:grid;grid-template-columns:minmax(230px,.8fr) minmax(0,1.6fr);
+  gap:14px;align-items:start}.compute-section{border:1px solid var(--line);border-radius:11px;background:var(--panel);overflow:hidden}
+.compute-section-head{display:flex;align-items:center;gap:8px;padding:11px 12px;border-bottom:1px solid var(--line)}
+.compute-section-head b{font-size:11.5px}.compute-section-head span{margin-left:auto;color:var(--faint);font-size:10px}
+.compute-empty{padding:24px 14px;text-align:center;color:var(--faint);font-size:11px}.host-row{padding:11px 12px;border-bottom:1px solid var(--line)}
+.host-row:last-child{border-bottom:0}.host-top{display:flex;align-items:center;gap:7px}.host-top b{font-size:11.5px}
+.host-dot{width:7px;height:7px;border-radius:50%;background:var(--green)}.host-kind{margin-left:auto;color:var(--violet);
+  background:var(--violet-bg);padding:3px 5px;border-radius:5px;font-size:9px;text-transform:uppercase}
+.host-detail{margin-top:5px;color:var(--muted);font-size:9.5px;line-height:1.45;overflow-wrap:anywhere}.host-resources{display:flex;
+  flex-wrap:wrap;gap:4px;margin-top:7px}.host-resource{border:1px solid var(--line);border-radius:5px;padding:2px 5px;
+  color:var(--faint);font-size:8.5px}.host-actions{display:flex;gap:6px;margin-top:8px}.host-actions button{height:26px;font-size:9px}
+.hpc-job{padding:12px;border-bottom:1px solid var(--line)}.hpc-job:last-child{border-bottom:0}.hpc-job-top{display:flex;
+  align-items:center;gap:8px}.hpc-job-top b{font-size:11.5px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hpc-job-top .status{margin-left:auto}.hpc-job-meta{display:flex;flex-wrap:wrap;gap:9px;color:var(--faint);font-size:9px;margin-top:5px}
+.hpc-job-detail{color:var(--muted);font-size:10px;margin-top:6px}.hpc-connection-error{color:var(--amber);font-size:9.5px;
+  margin-top:5px}.hpc-job-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}.hpc-job-actions button,.hpc-job-actions a{
+  height:26px;font-size:9px}.hpc-console{display:none;margin-top:9px;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.hpc-console.on{display:block}.hpc-console-tabs{display:flex;align-items:center;gap:4px;padding:6px 7px;background:var(--surface-2);
+  border-bottom:1px solid var(--line);font-size:9px;color:var(--faint)}.hpc-console pre{margin:0;padding:9px;max-height:240px;
+  overflow:auto;background:#111;color:#d8d8d8;font:9.5px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap}
+.hpc-output-list{display:grid;gap:5px;padding:8px}.hpc-output{display:flex;align-items:center;gap:8px;border:1px solid var(--line);
+  border-radius:7px;padding:7px 8px;color:var(--text);text-decoration:none;font-size:9.5px}.hpc-output span:last-child{margin-left:auto;color:var(--faint)}
+.hpc-confirm{display:flex;align-items:flex-start;gap:9px;padding:10px;border:1px solid var(--amber);border-radius:8px;
+  background:var(--amber-bg);font-size:10px;color:var(--muted)}.hpc-confirm input{margin-top:2px}.hpc-confirm b{display:block;color:var(--amber)}
+.hpc-input-list{display:flex;gap:5px;flex-wrap:wrap;margin-top:7px}.hpc-input{display:inline-flex;align-items:center;gap:5px;
+  max-width:100%;border:1px solid var(--line);border-radius:7px;padding:4px 6px;color:var(--muted);font-size:9.5px}
+.hpc-input b{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)}
+.hpc-input button{border:0;background:transparent;color:var(--faint);cursor:pointer;padding:0 2px;font-size:12px}
+.hpc-script{min-height:180px!important;font:10.5px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace!important}
+@media(max-width:840px){.compute-grid{grid-template-columns:1fr}.compute-toolbar{flex-wrap:wrap}}
 @media(max-width:760px){.hub-bar{padding:0 14px}.hub-main{width:calc(100% - 24px);padding-top:26px}
   .hub-heading{align-items:flex-start;flex-direction:column}.hub-summary{margin-left:0}.project-row{grid-template-columns:minmax(0,1fr) 58px 62px 28px 16px;gap:8px}
   .project-models,.project-tier{display:none}.form-grid{grid-template-columns:1fr}
@@ -563,7 +598,7 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
 <body>
 <section class="project-hub" id="project-hub" aria-label="Projects">
   <header class="hub-bar"><button class="brand-button" id="hub-brand"><span class="brand-mark">◇</span>
-    CrossAudit <span class="version" id="hub-version">V4.9.0</span></button><span class="spacer"></span>
+    CrossAudit <span class="version" id="hub-version">V4.10.0</span></button><span class="spacer"></span>
     <button class="icon-button" id="hub-settings" aria-label="Settings" title="Settings">⚙</button>
     <button class="icon-button" id="hub-theme" aria-label="Switch theme">◐</button>
     <button class="primary" id="create-project">＋ New project</button></header>
@@ -686,6 +721,49 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
   </form>
 </div>
 
+<div class="project-modal" id="compute-host-modal" role="dialog" aria-modal="true" aria-labelledby="compute-host-title">
+  <form class="wizard" id="compute-host-form"><div class="wizard-head"><div><h2 id="compute-host-title">Add SSH compute host</h2>
+    <p>CrossAudit uses your existing OpenSSH config, keys, ssh-agent and ProxyJump. Nothing is installed remotely.</p></div>
+    <span class="spacer"></span><button type="button" class="icon-button" id="close-compute-host" aria-label="Close">×</button></div>
+    <div class="wizard-body"><div class="form-grid">
+      <label class="field"><span>SSH alias</span><input name="alias" id="compute-alias" list="compute-aliases" maxlength="128" required placeholder="hpc-login"><datalist id="compute-aliases"></datalist><small class="field-help">A Host alias from ~/.ssh/config, or a directly reachable hostname.</small></label>
+      <label class="field"><span>Shared scratch directory</span><input name="scratch" maxlength="500" required placeholder="/scratch/your-user/crossaudit"><small class="field-help">For Slurm this must be visible from login and compute nodes.</small></label>
+      <label class="field"><span>Concurrent job limit</span><input name="concurrency" type="number" min="1" max="100" value="4" required></label>
+      <label class="field full"><span>Host instructions</span><textarea name="details" maxlength="4000" placeholder="Account code, approved partitions, module loads, environment activation, and local cluster policy."></textarea></label>
+      <label class="hpc-confirm field full"><input name="trust_first_key" type="checkbox"><span><b>Trust a new host key once</b>Use only after verifying the hostname with your cluster administrator. Existing or changed keys are never replaced.</span></label>
+    </div><div class="wizard-error" id="compute-host-error"></div></div>
+    <div class="wizard-foot"><span>Registration runs a read-only probe for CPU, memory, GPU, Slurm, modules, conda and Apptainer.</span>
+      <button type="button" class="secondary" id="cancel-compute-host">Cancel</button><button class="primary" id="save-compute-host">Probe & add</button></div>
+  </form>
+</div>
+
+<div class="project-modal" id="compute-job-modal" role="dialog" aria-modal="true" aria-labelledby="compute-job-title">
+  <form class="wizard" id="compute-job-form"><div class="wizard-head"><div><h2 id="compute-job-title">Submit remote job</h2>
+    <p>Review the exact script and requested resources. The job runs as your SSH user outside the local sandbox.</p></div>
+    <span class="spacer"></span><button type="button" class="icon-button" id="close-compute-job" aria-label="Close">×</button></div>
+    <div class="wizard-body"><div class="form-grid">
+      <label class="field"><span>Compute host</span><select name="host_id" id="compute-job-host" required></select></label>
+      <label class="field"><span>Job name</span><input name="name" maxlength="80" value="CrossAudit job" required></label>
+      <label class="field"><span>Partition</span><input name="partition" maxlength="128" placeholder="gpu"></label>
+      <label class="field"><span>Account</span><input name="account" maxlength="128" placeholder="lab-account"></label>
+      <label class="field"><span>Wall time</span><input name="walltime" value="00:30:00" required></label>
+      <label class="field"><span>Memory</span><input name="memory" placeholder="16G"></label>
+      <label class="field"><span>Nodes</span><input name="nodes" type="number" min="1" max="1024" value="1" required></label>
+      <label class="field"><span>CPUs per task</span><input name="cpus" type="number" min="1" max="4096" value="1" required></label>
+      <label class="field"><span>GPUs</span><input name="gpus" type="number" min="0" max="1024" value="0" required></label>
+      <label class="field"><span>QoS</span><input name="qos" maxlength="128"></label>
+      <label class="field full"><span>Job script</span><textarea class="hpc-script" name="script" required spellcheck="false" placeholder="module load python\npython analysis.py"></textarea></label>
+      <div class="field full"><span>Input files</span><input id="compute-input-files" type="file" multiple hidden>
+        <button type="button" class="secondary" id="add-compute-inputs">＋ Add files</button>
+        <div class="field-help" id="compute-input-summary">Optional. Files are streamed to inputs/ on the remote host with no CrossAudit size or count quota.</div>
+        <div class="hpc-input-list" id="compute-input-list"></div></div>
+      <label class="hpc-confirm field full"><input name="approved" type="checkbox" required><span><b>I approve this remote execution</b>The script can access anything my account can read or write on this host. Closing CrossAudit will not stop it.</span></label>
+    </div><div class="wizard-error" id="compute-job-error"></div></div>
+    <div class="wizard-foot"><span>Slurm jobs use sbatch; workstations use a detached nohup process. Both survive connection loss.</span>
+      <button type="button" class="secondary" id="cancel-compute-job">Cancel</button><button class="primary" id="submit-compute-job">Submit job</button></div>
+  </form>
+</div>
+
 <div class="drop-overlay" id="drop-overlay" aria-hidden="true"><div class="drop-target">
   <div class="drop-icon">＋</div><b>Drop files to add them</b>
   <span>No CrossAudit file-count or file-size quota. Available storage, filesystem limits and provider context still apply.</span>
@@ -697,7 +775,7 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
       aria-controls="sidebar-panel" aria-expanded="false">☰</button>
     <button class="icon-button" id="back-projects" aria-label="Back to projects" title="Back to projects">←</button>
     <button class="brand-button" id="projects-home"><span class="brand-mark">◇</span>CrossAudit
-      <span class="version" id="version-badge">V4.9.0</span></button>
+      <span class="version" id="version-badge">V4.10.0</span></button>
     <button class="top-project" id="project-switcher"><b id="proj">…</b> <span id="branch-label">/ project folder</span>⌄</button>
     <button class="icon-button" id="current-project-pin" aria-label="Pin project" title="Pin project">☆</button>
     <span class="spacer"></span>
@@ -716,7 +794,8 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
       <button type="button" class="nav-item active" data-view="tasks" aria-pressed="true"><span class="nav-icon">◫</span>Chat</button>
       <button type="button" class="nav-item" data-view="artifacts" aria-pressed="false"><span class="nav-icon">▱</span>Artifacts</button>
       <button type="button" class="nav-item" data-view="audits" aria-pressed="false"><span class="nav-icon">◇</span>Audits</button>
-      <button type="button" class="nav-item" data-view="usage" aria-pressed="false"><span class="nav-icon">◒</span>Usage</button></nav>
+      <button type="button" class="nav-item" data-view="usage" aria-pressed="false"><span class="nav-icon">◒</span>Usage</button>
+      <button type="button" class="nav-item" data-view="compute" aria-pressed="false"><span class="nav-icon">⌁</span>Compute</button></nav>
     <div class="task-list" id="task-list"></div>
     <div class="sidebar-foot"><b id="side-project">…</b><span id="tier-label">local controller</span></div>
   </aside>
@@ -1664,6 +1743,52 @@ function usageView(d){
     +'<section class="usage-section"><div class="usage-section-head"><h3>Recent calls</h3><span>counts only · no prompt content</span></div>'
     +(recent?'<div class="usage-recent">'+recent+'</div>':'<div class="empty">No calls recorded yet.</div>')+'</section>';
 }
+const computePanels=new Map();
+function computeFileUrl(job,path){return '/api/hpc/file?t='+encodeURIComponent(T)+'&job='
+  +encodeURIComponent(job)+'&path='+encodeURIComponent(path);}
+function computeView(d){
+  const c=d.compute||{hosts:[],jobs:[],aliases:[],active:0,ssh_available:false};
+  const hosts=(c.hosts||[]).map(host=>{const probe=host.probe||{};const resources=[];
+    if(probe.cpus)resources.push(probe.cpus+' CPU');if(probe.memory_kb)resources.push(formatBytes(probe.memory_kb*1000));
+    if((probe.gpus||[]).length)resources.push(probe.gpus.length+' GPU');if((probe.partitions||[]).length)resources.push(probe.partitions.join(', '));
+    return '<div class="host-row"><div class="host-top"><span class="host-dot"></span><b>'+esc(host.alias)+'</b>'
+      +'<span class="host-kind">'+esc(probe.scheduler||'workstation')+'</span></div><div class="host-detail">'
+      +esc((host.user?host.user+'@':'')+host.hostname+':'+host.port+(host.proxy_jump?' · ProxyJump':'')+' · '+host.scratch)
+      +'</div><div class="host-resources">'+resources.map(v=>'<span class="host-resource">'+esc(v)+'</span>').join('')
+      +'</div><div class="host-actions"><button type="button" class="secondary" data-hpc-probe="'+esc(host.id)+'">Probe</button>'
+      +'<button type="button" class="secondary" data-hpc-run="'+esc(host.id)+'">Run job</button>'
+      +'<button type="button" class="secondary" data-hpc-remove="'+esc(host.id)+'">Remove</button></div></div>';}).join('');
+  const jobs=(c.jobs||[]).map(job=>{const cache=computePanels.get(job.id)||{};const open=Boolean(cache.open);
+    const outputs=(cache.outputs||[]).map(file=>'<a class="hpc-output" href="'+computeFileUrl(job.id,file.path)+'" download>'
+      +'<span>↓</span><b>'+esc(file.path)+'</b><span>'+formatBytes(file.bytes)+'</span></a>').join('');
+    const consoleBody=cache.mode==='outputs'
+      ?'<div class="hpc-output-list">'+(outputs||'<div class="compute-empty">No remote output files found.</div>')+'</div>'
+      :'<pre>'+esc(((cache.logs||{}).stdout||'')+(((cache.logs||{}).stderr)?'\n[stderr]\n'+cache.logs.stderr:''))+'</pre>';
+    const terminal=['completed','failed','cancelled','timeout','out_of_memory'].includes(job.status);
+    return '<div class="hpc-job"><div class="hpc-job-top"><b>'+esc(job.name)+'</b><span class="status '+esc(job.status)+'">'
+      +esc(job.status)+'</span></div><div class="hpc-job-meta"><span>'+esc(job.host)+'</span><span>'+esc(job.scheduler)+' #'
+      +esc(job.remote_id)+'</span><span>'+esc(job.elapsed||'')+'</span><span>'+new Date(job.submitted*1000).toLocaleString()+'</span></div>'
+      +'<div class="hpc-job-detail">'+esc(job.detail||'')+'</div>'+(job.connection_error?'<div class="hpc-connection-error">Offline view · '
+      +esc(job.connection_error)+' · the remote job continues independently</div>':'')+'<div class="hpc-job-actions">'
+      +'<button type="button" class="secondary" data-hpc-logs="'+esc(job.id)+'">Live logs</button>'
+      +'<button type="button" class="secondary" data-hpc-outputs="'+esc(job.id)+'">Outputs</button>'
+      +(!terminal?'<button type="button" class="secondary" data-hpc-cancel="'+esc(job.id)+'">Cancel job</button>':'')
+      +'</div><div class="hpc-console'+(open?' on':'')+'"><div class="hpc-console-tabs">'
+      +(cache.mode==='outputs'?'Remote outputs':'Last 64 KB · stdout + stderr')+'<span class="spacer"></span>'
+      +(cache.loading?'Updating…':cache.error?'<span style="color:var(--red)">'+esc(cache.error)+'</span>':'')
+      +'</div>'+consoleBody+'</div></div>';}).join('');
+  return '<div class="view-heading"><h2>Remote compute</h2><p>SSH workstations and Slurm clusters, detached from this Mac.</p></div>'
+    +'<div class="compute-note"><span>ⓘ</span><div><b>Remote-owned execution.</b> CrossAudit stores only host aliases and job identifiers. '
+    +'Keys remain with OpenSSH; remote work continues if the app closes, the Mac sleeps, or the network drops.</div></div>'
+    +'<div class="compute-message" id="compute-message" role="alert"></div>'
+    +'<div class="compute-toolbar"><button type="button" class="primary" data-hpc-add>＋ Add SSH host</button>'
+    +'<button type="button" class="secondary" data-hpc-run="">Submit job</button><span class="spacer"></span>'
+    +'<button type="button" class="secondary" data-hpc-refresh>Refresh now</button></div>'
+    +'<div class="compute-grid"><section class="compute-section"><div class="compute-section-head"><b>Compute hosts</b><span>'
+    +(c.hosts||[]).length+' connected</span></div>'+(hosts||'<div class="compute-empty">No SSH compute hosts yet.</div>')+'</section>'
+    +'<section class="compute-section"><div class="compute-section-head"><b>Remote jobs</b><span>'+c.active+' active</span></div>'
+    +(jobs||'<div class="compute-empty">No jobs submitted from this project.</div>')+'</section></div>';
+}
 function renderConversation(d){
   const thread = document.getElementById('thread');
   const previousTop = thread.scrollTop;
@@ -1674,6 +1799,7 @@ function renderConversation(d){
   else if(activeView === 'artifacts') html = artifactsView(d);
   else if(activeView === 'audits') html = auditsView(d);
   else if(activeView === 'usage') html = usageView(d);
+  else if(activeView === 'compute') html = computeView(d);
   else{
     const messages = allMessages(d);
     html = (messages.length ? messages.map(m=>turn(m,d)).join('') : welcome()) + deliveryStatus(d);
@@ -1723,7 +1849,7 @@ function render(d){
   if(activeChatId&&!chatRows.some(row=>row.id===activeChatId))activeChatId='';
   if(!activeChatId&&chatRows.length&&!newTaskMode)activeChatId=chatRows[0].id;
   if(runtimeModal.classList.contains('on'))syncRuntimeBusy(d);
-  document.querySelector('.composer-wrap').classList.toggle('view-hidden',activeView==='usage');
+  document.querySelector('.composer-wrap').classList.toggle('view-hidden',['usage','compute'].includes(activeView));
   const preview=document.getElementById('contract-preview');preview.className='contract-preview';preview.innerHTML='';
   document.getElementById('version-badge').textContent = 'V' + d.version;
   document.getElementById('hub-version').textContent = 'V' + d.version;
@@ -1733,16 +1859,17 @@ function render(d){
   const files = artifactRows(d);
   const auditRows = d.auditor_stream.filter(m => m.kind === 'auditor'&&(m.chat_id||'history')===activeChatId);
   const heading = newTaskMode ? 'New chat' : activeView === 'artifacts' ? 'Artifacts'
-    : activeView === 'audits' ? 'Audits' : activeView === 'usage' ? 'Usage' : titleOf(d);
+    : activeView === 'audits' ? 'Audits' : activeView === 'usage' ? 'Usage' : activeView === 'compute' ? 'Compute' : titleOf(d);
   const subtitle = newTaskMode ? 'Independent generation and audit'
     : activeView === 'artifacts' ? files.length + ' audited deliverables'
     : activeView === 'audits' ? auditRows.length + ' independent audit reports'
     : activeView === 'usage' ? formatTokens((d.usage&&d.usage.month&&d.usage.month.tokens)||0) + ' tokens this month'
+    : activeView === 'compute' ? ((d.compute&&d.compute.active)||0)+' remote jobs active'
     : d.generator + ' → ' + d.auditor;
   document.getElementById('thread-title').textContent = heading;
   document.getElementById('thread-subtitle').textContent = subtitle;
   const state = activeView === 'audits' && auditRows.length ? auditRows[auditRows.length-1].verdict
-    : activeView === 'artifacts' ? 'ledger' : activeView === 'usage' ? 'local' : newTaskMode ? 'ready' : statusOf(d);
+    : activeView === 'artifacts' ? 'ledger' : activeView === 'usage' ? 'local' : activeView === 'compute' ? 'remote' : newTaskMode ? 'ready' : statusOf(d);
   const badge = document.getElementById('thread-status');
   badge.textContent = state;badge.className = 'status ' + state;
   document.getElementById('model-summary').textContent = d.generator + ' → ' + d.auditor;
@@ -1757,7 +1884,8 @@ function render(d){
   }else iv.className = 'interrupted';
 }
 function selectView(view){
-  activeView = ['tasks','artifacts','audits','usage'].includes(view) ? view : 'tasks';
+  activeView = ['tasks','artifacts','audits','usage','compute'].includes(view) ? view : 'tasks';
+  if(activeView!=='compute')stopComputeTimers();
   newTaskMode = false;
   document.querySelectorAll('.nav-item').forEach(button => {
     const selected = button.getAttribute('data-view') === activeView;
@@ -1880,10 +2008,89 @@ function taskChoicePayload(){return taskChoiceMode==='prompt'?{mode:'prompt'}:{m
 document.getElementById('close-task-choices').onclick=()=>{taskChoices.className='task-choices';say.focus();};
 document.getElementById('use-prompt-as-written').onclick=()=>{taskChoiceMode='prompt';taskChoices.className='task-choices';form.requestSubmit();};
 document.getElementById('run-with-choices').onclick=()=>{taskChoiceMode='selected';taskChoices.className='task-choices';form.requestSubmit();};
+const computeHostModal=document.getElementById('compute-host-modal');
+const computeHostForm=document.getElementById('compute-host-form');
+const computeJobModal=document.getElementById('compute-job-modal');
+const computeJobForm=document.getElementById('compute-job-form');
+const computeLogTimers=new Map();
+let computeInputFiles=[];
+function computeError(id,error){showInlineError(id,error);}
+function computeSurfaceError(error){const box=document.getElementById('compute-message');if(!box)return;
+  box.textContent=error&&error.message?error.message:String(error);box.className='compute-message on';}
+function closeComputeHost(){computeHostModal.className='project-modal';computeHostForm.reset();}
+function openComputeHost(){computeHostForm.reset();document.getElementById('compute-host-error').className='wizard-error';
+  const aliases=(lastState&&lastState.compute&&lastState.compute.aliases)||[];
+  document.getElementById('compute-aliases').innerHTML=aliases.map(value=>'<option value="'+esc(value)+'"></option>').join('');
+  computeHostModal.className='project-modal on';setTimeout(()=>document.getElementById('compute-alias').focus(),0);}
+function closeComputeJob(){computeJobModal.className='project-modal';computeJobForm.reset();}
+function openComputeJob(hostId){const hosts=(lastState&&lastState.compute&&lastState.compute.hosts)||[];
+  if(!hosts.length){openComputeHost();return;}computeJobForm.reset();computeInputFiles=[];renderComputeInputs();document.getElementById('compute-job-error').className='wizard-error';
+  const select=document.getElementById('compute-job-host');select.innerHTML=hosts.map(host=>'<option value="'+esc(host.id)+'">'
+    +esc(host.alias+' · '+((host.probe||{}).scheduler||'workstation'))+'</option>').join('');
+  if(hostId&&hosts.some(host=>host.id===hostId))select.value=hostId;
+  computeJobModal.className='project-modal on';}
+function renderComputeInputs(){const total=computeInputFiles.reduce((sum,row)=>sum+row.file.size,0);
+  document.getElementById('compute-input-summary').textContent=computeInputFiles.length
+    ?computeInputFiles.length+' file'+(computeInputFiles.length===1?'':'s')+' · '+formatBytes(total)+' · copied to remote inputs/'
+    :'Optional. Files are streamed to inputs/ on the remote host with no CrossAudit size or count quota.';
+  document.getElementById('compute-input-list').innerHTML=computeInputFiles.map((row,index)=>'<span class="hpc-input"><b>'
+    +esc(row.name)+'</b><span>'+formatBytes(row.file.size)+'</span><button type="button" data-compute-input="'+index+'" aria-label="Remove '
+    +esc(row.name)+'">×</button></span>').join('');}
+document.getElementById('add-compute-inputs').onclick=()=>document.getElementById('compute-input-files').click();
+document.getElementById('compute-input-list').onclick=ev=>{const button=ev.target.closest('[data-compute-input]');if(!button)return;
+  computeInputFiles.splice(Number(button.getAttribute('data-compute-input')),1);renderComputeInputs();};
+document.getElementById('compute-input-files').onchange=ev=>{for(const file of Array.from(ev.target.files||[])){
+  const used=new Set(computeInputFiles.map(row=>row.name.toLowerCase()));let name=file.name||'untitled';
+  if(used.has(name.toLowerCase())){const dot=name.lastIndexOf('.'),base=dot>0?name.slice(0,dot):name,ext=dot>0?name.slice(dot):'';
+    let n=2;while(used.has((base+' ('+n+')'+ext).toLowerCase()))n++;name=base+' ('+n+')'+ext;}
+  computeInputFiles.push({file,name});}ev.target.value='';renderComputeInputs();};
+document.getElementById('close-compute-host').onclick=closeComputeHost;
+document.getElementById('cancel-compute-host').onclick=closeComputeHost;
+document.getElementById('close-compute-job').onclick=closeComputeJob;
+document.getElementById('cancel-compute-job').onclick=closeComputeJob;
+computeHostModal.addEventListener('click',ev=>{if(ev.target===computeHostModal)closeComputeHost();});
+computeJobModal.addEventListener('click',ev=>{if(ev.target===computeJobModal)closeComputeJob();});
+computeHostForm.onsubmit=async ev=>{ev.preventDefault();const button=document.getElementById('save-compute-host');
+  button.disabled=true;button.textContent='Connecting…';document.getElementById('compute-host-error').className='wizard-error';
+  const fd=new FormData(computeHostForm);const payload=Object.fromEntries(fd.entries());payload.action='register';
+  payload.concurrency=Number(payload.concurrency);payload.trust_first_key=fd.has('trust_first_key');
+  try{await api('/api/hpc',payload);closeComputeHost();if(lastState)lastState.compute=await api('/api/state').then(s=>s.compute);render(lastState);}
+  catch(e){computeError('compute-host-error',e);}finally{button.disabled=false;button.textContent='Probe & add';}};
+computeJobForm.onsubmit=async ev=>{ev.preventDefault();const button=document.getElementById('submit-compute-job');
+  button.disabled=true;button.textContent='Submitting…';document.getElementById('compute-job-error').className='wizard-error';
+  const fd=new FormData(computeJobForm);const payload=Object.fromEntries(fd.entries());payload.action='submit';
+  for(const key of ['nodes','cpus','gpus'])payload[key]=Number(payload[key]);
+  try{if(computeInputFiles.length){button.textContent='Uploading inputs…';payload.upload_batch=await uploadFiles(computeInputFiles);button.textContent='Submitting…';}
+    await api('/api/hpc',payload);closeComputeJob();}
+  catch(e){computeError('compute-job-error',e);}finally{button.disabled=false;button.textContent='Submit job';}};
+function stopComputeTimers(except=''){for(const [id,timer] of computeLogTimers){if(id!==except){clearInterval(timer);computeLogTimers.delete(id);}}}
+async function loadComputePanel(jobId,mode){const current=computePanels.get(jobId)||{};computePanels.set(jobId,{...current,open:true,mode,loading:true,error:''});
+  if(lastState)render(lastState);try{const result=await api('/api/hpc',{action:mode==='outputs'?'outputs':'logs',job_id:jobId});
+    const row=computePanels.get(jobId)||{};computePanels.set(jobId,{...row,open:true,mode,loading:false,
+      ...(mode==='outputs'?{outputs:result.outputs||[]}:{logs:result})});}
+  catch(e){const row=computePanels.get(jobId)||{};computePanels.set(jobId,{...row,open:true,mode,loading:false,error:e.message});}
+  if(lastState)render(lastState);}
+function followComputeLogs(jobId){stopComputeTimers(jobId);if(!computeLogTimers.has(jobId))computeLogTimers.set(jobId,setInterval(()=>{
+  if(activeView==='compute'&&(computePanels.get(jobId)||{}).open)loadComputePanel(jobId,'logs');},2000));}
 document.querySelectorAll('.nav-item').forEach(button => button.onclick=()=>selectView(button.getAttribute('data-view')));
 document.getElementById('conversation').onclick=ev=>{
   if(ev.target.closest('[data-open-artifacts]'))selectView('artifacts');
   if(ev.target.closest('[data-open-audits]'))selectView('audits');
+  if(ev.target.closest('[data-hpc-add]'))openComputeHost();
+  const run=ev.target.closest('[data-hpc-run]');if(run)openComputeJob(run.getAttribute('data-hpc-run'));
+  const probe=ev.target.closest('[data-hpc-probe]');if(probe){probe.disabled=true;probe.textContent='Probing…';
+    api('/api/hpc',{action:'probe',host_id:probe.getAttribute('data-hpc-probe')}).catch(computeSurfaceError)
+      .finally(()=>{probe.disabled=false;probe.textContent='Probe';});}
+  const remove=ev.target.closest('[data-hpc-remove]');if(remove&&confirm('Remove this compute host from this project?')){
+    remove.disabled=true;api('/api/hpc',{action:'remove',host_id:remove.getAttribute('data-hpc-remove')})
+      .catch(computeSurfaceError).finally(()=>{remove.disabled=false;});}
+  const refresh=ev.target.closest('[data-hpc-refresh]');if(refresh){refresh.disabled=true;refresh.textContent='Refreshing…';
+    api('/api/hpc',{action:'refresh'}).catch(computeSurfaceError).finally(()=>{refresh.disabled=false;refresh.textContent='Refresh now';});}
+  const logs=ev.target.closest('[data-hpc-logs]');if(logs){const id=logs.getAttribute('data-hpc-logs');loadComputePanel(id,'logs');followComputeLogs(id);}
+  const outputs=ev.target.closest('[data-hpc-outputs]');if(outputs){const id=outputs.getAttribute('data-hpc-outputs');stopComputeTimers();loadComputePanel(id,'outputs');}
+  const cancel=ev.target.closest('[data-hpc-cancel]');if(cancel&&confirm('Cancel this remote job? This cannot be undone.')){
+    cancel.disabled=true;cancel.textContent='Cancelling…';api('/api/hpc',{action:'cancel',job_id:cancel.getAttribute('data-hpc-cancel')})
+      .catch(computeSurfaceError).finally(()=>{cancel.disabled=false;cancel.textContent='Cancel job';});}
   const admit=ev.target.closest('[data-admit]');if(admit){admit.disabled=true;admit.textContent='Verifying…';
     api('/api/admit',{cycle_id:admit.getAttribute('data-admit-cycle')}).catch(e=>{route.className='route on';route.innerHTML='<b>Not admitted</b> — '+esc(e.message);});}
 };
