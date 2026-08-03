@@ -156,6 +156,26 @@ PROGRESS_CHANGES = _ChangeSignal()
 MODEL_SWITCH_LOCK = threading.Lock()
 
 
+class _ConsoleHTTPServer(ThreadingHTTPServer):
+    """HTTP server whose idle watcher has the same lifetime as the socket."""
+
+    def __init__(self, *args, **kwargs) -> None:
+        self.stop_event = threading.Event()
+        self.idle_thread: threading.Thread | None = None
+        super().__init__(*args, **kwargs)
+
+    def shutdown(self) -> None:
+        self.stop_event.set()
+        super().shutdown()
+
+    def server_close(self) -> None:
+        self.stop_event.set()
+        super().server_close()
+        watcher = self.idle_thread
+        if watcher and watcher is not threading.current_thread():
+            watcher.join(timeout=2)
+
+
 def _notify_progress() -> None:
     """Wake the main stream and identify the cheap in-memory-only change."""
     PROGRESS_CHANGES.notify()
@@ -185,7 +205,8 @@ def _ordered_cycles(state: dict, commit_chats: dict[str, str] | None = None) -> 
     chat_map = commit_chats or {}
     return [{"id": cid, "status": cycle["status"], "round": cycle["round"],
              "sha": cycle["active_sha"], "updated": updated.get(cid, 0),
-             "chat_id": chat_map.get(cycle["active_sha"], chats.LEGACY_CHAT_ID)}
+             "chat_id": (cycle.get("chat_id") or
+                         chat_map.get(cycle["active_sha"], chats.LEGACY_CHAT_ID))}
             for cid, cycle in ordered]
 
 
@@ -741,8 +762,10 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                                    "/api/github/connect", "/api/github/check",
                                    "/api/workspace/select", "/api/models/refresh",
                                    "/api/runtime/options", "/api/runtime",
+                                   "/api/skills",
                                    "/api/settings", "/api/providers/connect",
-                                   "/api/doctor", "/api/hpc", "/api/admit"}:
+                                   "/api/doctor", "/api/hpc", "/api/admit",
+                                   "/api/escalation"}:
                 self._deny(404, "no such action")
                 return
             touch()
@@ -845,6 +868,19 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                     STREAM_CHANGES.notify()
                     self._send(json.dumps(result).encode(), "application/json")
                     return
+                if parsed.path == "/api/skills":
+                    if TRACKER.running:
+                        raise ConfigDenial(
+                            "A loop is running. Project guidance is captured at the start of "
+                            "a provider call, so wait for this task to finish and save again.",
+                            issue="runtime_busy", action="wait")
+                    with MODEL_SWITCH_LOCK:
+                        if TRACKER.running:
+                            raise ConfigDenial("A loop started while guidance was being saved. Retry when it finishes.")
+                        result = projects.update_skill(self._config(), payload)
+                    STREAM_CHANGES.notify()
+                    self._send(json.dumps(result).encode(), "application/json")
+                    return
                 if parsed.path == "/api/settings":
                     if os.environ.get("CROSSAUDIT_APP_MODE") != "1":
                         raise ConfigDenial("Keychain settings are available in the macOS app")
@@ -913,6 +949,21 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                     STREAM_CHANGES.notify()
                     self._send(json.dumps(result).encode(), "application/json")
                     return
+                if parsed.path == "/api/escalation":
+                    current = self._config()
+                    result = StateStore(
+                        current.root / current.state_dir / "state.json"
+                    ).resolve_escalation(
+                        str(payload.get("cycle_id", "")),
+                        str(payload.get("action", "")),
+                        str(payload.get("reason", "")))
+                    STREAM_CHANGES.notify()
+                    self._send(json.dumps({
+                        "cycle_id": str(payload.get("cycle_id", "")),
+                        "status": result["status"],
+                        "round": result["round"],
+                    }).encode(), "application/json")
+                    return
                 text = str(payload.get("text", "")).strip()
                 if len(text.encode()) > MAX_UTTERANCE:
                     self._deny(413, "that instruction is longer than this input allows")
@@ -978,11 +1029,10 @@ def serve(cfg: Config, port: int = 0, *,
     def touch() -> None:
         last[0] = time.monotonic()
 
-    httpd = ThreadingHTTPServer(("127.0.0.1", port), make_handler(cfg, token, touch))
+    httpd = _ConsoleHTTPServer(("127.0.0.1", port), make_handler(cfg, token, touch))
 
     def idle_watch() -> None:
-        while True:
-            time.sleep(5)
+        while not httpd.stop_event.wait(5):
             # A closed window must never end a running build: idleness is only
             # grounds for shutting down when there is nothing in flight.
             if TRACKER.running:
@@ -992,7 +1042,8 @@ def serve(cfg: Config, port: int = 0, *,
                 httpd.shutdown()
                 return
 
-    threading.Thread(target=idle_watch, daemon=True).start()
+    httpd.idle_thread = threading.Thread(target=idle_watch, daemon=True)
+    httpd.idle_thread.start()
     port_in_use = httpd.server_address[1]
     if register:
         # So a later invocation can find this console rather than start a rival.

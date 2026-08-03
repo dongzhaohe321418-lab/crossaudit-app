@@ -1,14 +1,14 @@
-# CrossAudit 4.10.0 enterprise release assessment
+# CrossAudit 4.11.0 enterprise release assessment
 
 Date: 2026-08-04
 
 Target: Apple Silicon macOS 13 or later
 
-Release candidate: 4.10.0
+Release candidate: 4.11.0
 
 ## Executive result
 
-CrossAudit 4.10.0 is suitable for local evaluation and controlled pilot use. It
+CrossAudit 4.11.0 is suitable for local evaluation and controlled pilot use. It
 preserves the V3.2 audited protocol while adding a native AppKit/WebKit shell,
 Keychain credentials, UI-first project creation, independent background
 projects, GitHub connection, chunked file transfer, final-artifact downloads,
@@ -24,12 +24,12 @@ Policy rather than hidden behind an installation workaround.
 
 | Area | Release gate | Result |
 |---|---|---|
-| Python regression | Complete automated suite | Required before tag |
-| Provider compatibility | Real OpenAI and Anthropic calls, opt-in | Required before tag |
-| Native packaging | Swift typecheck, PyInstaller analysis, arm64 binaries | Required before tag |
-| App structure | `plutil` and deep strict `codesign` validation | Required before tag |
-| Disk image | Create, verify, mount, inspect, copy, and checksum | Required before tag |
-| Frozen runtime | Isolated first-launch bootstrap and API smoke test | Required before tag |
+| Python regression | Complete automated suite | Passed: 472, with 2 paid checks skipped |
+| Provider compatibility | Protocol mocks plus opt-in live checks | Passed; paid API checks remain opt-in |
+| Native packaging | Swift typecheck, PyInstaller analysis, arm64 binaries | Passed |
+| App structure | `plutil` and deep strict `codesign` validation | Passed |
+| Disk image | Create, verify, mount, inspect, copy, and checksum | Passed |
+| Frozen runtime | Isolated first-launch bootstrap and API smoke test | Passed |
 | UI security | Missing token, wrong token, foreign Host, path traversal | Automated |
 | Credential boundary | Keychain write/read/delete; no secret in argv or response | Automated and local smoke |
 | Subscription boundary | Official ChatGPT browser flow; allowlisted state; text-only fail-closed turns | Automated and live smoke |
@@ -47,6 +47,49 @@ Policy rather than hidden behind an installation workaround.
 The final command outputs and artifact hashes are recorded in the GitHub release
 and CI logs. Tests that spend provider credits remain explicitly opt-in and use
 repository secrets in CI.
+
+## V4.11.0 release-candidate evidence
+
+- Automated suite: **472 passed, 2 skipped** under both normal and strict-warning
+  runs. A four-process run passed before the final UI guidance additions, and the
+  final coverage run reports **81%** statement coverage. The two skipped cases are
+  only explicitly opt-in paid-provider checks.
+- Static and dependency gates: critical Ruff rules passed; Bandit reported
+  **0 high and 0 medium** findings; `pip-audit` found no known dependency
+  vulnerability. Python bytecode compilation and the generated page's JavaScript
+  syntax check passed.
+- Failure and longevity testing found and fixed two release-blocking defects: a
+  provider HTTP-error socket leak and an idle-watcher thread retained after every
+  console shutdown. A 100-start/stop stress run ended with one thread, matching
+  its starting count.
+- A generator refusal before its first commit now creates a durable, Chat-bound
+  escalation. Non-retryable authentication and request errors stop after one
+  provider attempt. The live UI presents **Review decision**, records the human
+  reason, and offers another round or a final stop without exposing a cycle ID.
+- Project controls now cover models, provider-supported reasoning effort, the
+  automatic revision limit, and committed generator guidance. Browser acceptance
+  created guidance with a path scope, saved it through the token-protected UI,
+  and observed the committed value immediately through SSE.
+- Browser acceptance also covered project creation, provider selection, local
+  workspace creation, project navigation, file add/remove, every workspace view,
+  light/dark mode, escalation resolution, and a 390 x 844 responsive layout with
+  no horizontal overflow. The browser console contained no warning or error.
+- Frozen runtime testing used isolated support and workspace folders, reported
+  V4.11.0, exposed the Project guidance UI state, and returned HTTP 403 for a
+  missing token, wrong token, and foreign Host. Wheel and source distributions
+  were built; the wheel installed into a fresh environment, passed `pip check`,
+  and reported V4.11.0.
+- Installed upgrade: the running V4.10.0 app quit cleanly, was retained in the
+  Trash, and V4.11.0 was copied from the verified DMG to `/Applications`.
+  Launch produced exactly one native shell and one frozen core, which remained
+  stable during the post-install observation. The macOS UI session was locked,
+  so an accessibility-driven click-through of the installed native window could
+  not be repeated; equivalent WebView flows were exercised in the real browser,
+  while lifecycle behavior remains covered by automated native tests.
+- Distribution: the APFS DMG passed repeat verification, mount/copy inspection,
+  deep strict code-sign verification, arm64 and macOS 13 Info.plist checks. Its
+  SHA-256 is
+  `e83a4a678f43094865f2edfec0b1ac1093d836de5a032f56eda0f72b80a514d5`.
 
 ## V4.10.0 release-candidate evidence
 

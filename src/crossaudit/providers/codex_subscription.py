@@ -17,6 +17,7 @@ import os
 import queue
 import shutil
 import subprocess
+import tempfile
 import threading
 import time
 from dataclasses import dataclass, field
@@ -26,7 +27,7 @@ from urllib.parse import urlparse
 from ..errors import ConfigDenial, ProviderDenial
 from .base import Reply
 
-CLIENT = {"name": "crossaudit", "title": "CrossAudit", "version": "4.10.0"}
+CLIENT = {"name": "crossaudit", "title": "CrossAudit", "version": "4.11.0"}
 DEFAULT_TIMEOUT_S = 300.0
 FORBIDDEN_ITEM_TYPES = {
     "commandExecution", "fileChange", "mcpToolCall", "dynamicToolCall",
@@ -109,8 +110,8 @@ class CodexAppServer:
                 if (self._proc and self._proc.poll() is None and
                         self._initialized):
                     return
-                if self._proc and self._proc.poll() is None:
-                    self._proc.terminate()
+                if self._proc:
+                    self._stop_process(self._proc)
                 path = self.path or executable()
                 try:
                     proc = subprocess.Popen(
@@ -295,9 +296,22 @@ class CodexAppServer:
         # Empty, non-project cwd plus disabled network for the model's sandbox:
         # the role receives only the exact prompt CrossAudit constructed.
         cwd = os.environ.get("CROSSAUDIT_CODEX_CWD", "").strip()
-        if not cwd:
-            cwd = str(Path(os.environ.get("TMPDIR", "/tmp")) / "crossaudit-codex-empty")
-        Path(cwd).mkdir(parents=True, exist_ok=True)
+        if cwd:
+            Path(cwd).mkdir(parents=True, exist_ok=True)
+            return self._complete_in_workspace(
+                cwd=cwd, model=model, system=system, prompt=prompt,
+                reasoning_effort=reasoning_effort, timeout=timeout)
+        # A fresh mode-0700 directory avoids a predictable TMPDIR path that
+        # another local process could replace with a symlink before the sandbox
+        # starts. It is removed after every completion.
+        with tempfile.TemporaryDirectory(prefix="crossaudit-codex-") as temporary:
+            return self._complete_in_workspace(
+                cwd=temporary, model=model, system=system, prompt=prompt,
+                reasoning_effort=reasoning_effort, timeout=timeout)
+
+    def _complete_in_workspace(self, *, cwd: str, model: str, system: str,
+                               prompt: str, reasoning_effort: str | None,
+                               timeout: float) -> Reply:
         thread = self.call("thread/start", {
             "model": model, "cwd": cwd, "developerInstructions": system,
             "approvalPolicy": "never", "sandbox": "read-only",
@@ -361,16 +375,25 @@ class CodexAppServer:
             raw={"transport": "codex-app-server", "thread": thread_id,
                  "usage": collector.usage})
 
-    def close(self) -> None:
-        with self._state_lock:
-            proc, self._proc = self._proc, None
-            self._initialized = False
-        if proc and proc.poll() is None:
+    @staticmethod
+    def _stop_process(proc: subprocess.Popen) -> None:
+        if proc.poll() is None:
             proc.terminate()
             try:
                 proc.wait(timeout=2)
             except subprocess.TimeoutExpired:
                 proc.kill()
+                proc.wait(timeout=2)
+        for stream in (proc.stdin, proc.stdout, proc.stderr):
+            if stream is not None and not stream.closed:
+                stream.close()
+
+    def close(self) -> None:
+        with self._state_lock:
+            proc, self._proc = self._proc, None
+            self._initialized = False
+        if proc:
+            self._stop_process(proc)
 
 
 SERVER = CodexAppServer()

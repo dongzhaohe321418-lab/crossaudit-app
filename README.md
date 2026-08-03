@@ -1,10 +1,10 @@
-# CrossAudit 4.10.0
+# CrossAudit 4.11.0
 
-[![Version 4.10.0](https://img.shields.io/badge/version-4.10.0-6d5dfc)](https://github.com/dongzhaohe321418-lab/crossaudit_v4/releases/tag/v4.10.0)
+[![Version 4.11.0](https://img.shields.io/badge/version-4.11.0-6d5dfc)](https://github.com/dongzhaohe321418-lab/crossaudit_v4/releases/tag/v4.11.0)
 [![macOS 13+](https://img.shields.io/badge/macOS-13%2B-111111)](https://github.com/dongzhaohe321418-lab/crossaudit_v4#install)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776ab)](https://github.com/dongzhaohe321418-lab/crossaudit_v4#command-line-installation)
 
-**Latest release: [CrossAudit 4.10.0](https://github.com/dongzhaohe321418-lab/crossaudit_v4/releases/tag/v4.10.0).**
+**Latest release: [CrossAudit 4.11.0](https://github.com/dongzhaohe321418-lab/crossaudit_v4/releases/tag/v4.11.0).**
 
 CrossAudit is a local, cross-vendor AI work loop. One model creates files, a
 model from a different provider audits the committed result, and every task,
@@ -88,6 +88,11 @@ structured content.
 - Live Generator and Auditor model switching, with model-specific reasoning
   effort controls. A saved change is committed atomically and applies to the
   next provider call without restarting the project.
+- UI-managed generator guidance for house style, output shape, path-specific
+  conventions, and reusable checklists. Guidance is committed with the Project,
+  remains invisible to the independent auditor, and cannot relax the Constitution.
+- Explicit escalation decisions in the conversation: **Review decision** opens
+  the durable human ruling flow without exposing receipt IDs or requiring a CLI.
 - Correct OpenAI `max_completion_tokens` handling.
 - Deterministic schema, units, convergence, and provenance checks.
 - Git-backed reports and receipt verification.
@@ -113,12 +118,12 @@ official OpenAI Codex runtime.
 
 ### macOS application
 
-1. Download `CrossAudit-4.10.0-arm64.dmg` and its checksum from the
-   [V4.10.0 release](https://github.com/dongzhaohe321418-lab/crossaudit_v4/releases/tag/v4.10.0).
+1. Download `CrossAudit-4.11.0-arm64.dmg` and its checksum from the
+   [V4.11.0 release](https://github.com/dongzhaohe321418-lab/crossaudit_v4/releases/tag/v4.11.0).
 2. Optionally verify it in Terminal:
 
    ```bash
-   shasum -a 256 -c CrossAudit-4.10.0-arm64.dmg.sha256
+   shasum -a 256 -c CrossAudit-4.11.0-arm64.dmg.sha256
    ```
 
 3. Open the DMG and drag **CrossAudit** to **Applications**.
@@ -148,7 +153,7 @@ crossaudit --version
 Expected version output:
 
 ```text
-crossaudit 4.10.0 (receipt schema 2)
+crossaudit 4.11.0 (receipt schema 2)
 ```
 
 Use a virtual environment instead when developing CrossAudit, testing source
@@ -844,13 +849,13 @@ Exit codes are stable so scripts do not need to parse prose:
 
 V4 sends `max_completion_tokens` to the built-in OpenAI endpoint and retries
 once when a compatible endpoint explicitly asks for that field. Confirm that
-`crossaudit --version` reports 4.10.0 and reinstall if an older package is still
+`crossaudit --version` reports 4.11.0 and reinstall if an older package is still
 on your PATH. Restart a background console after upgrading because an existing
 daemon keeps the Python code that was loaded when it started.
 
 ### The macOS app is blocked on first launch
 
-V4.10.0 is structurally signed with the hardened runtime but is not notarized.
+V4.11.0 is structurally signed with the hardened runtime but is not notarized.
 Control-click **CrossAudit.app**, choose **Open**, and confirm only after you
 have verified the published SHA-256 checksum. An Apple Developer ID signed and
 notarized build is required before broad organizational deployment.

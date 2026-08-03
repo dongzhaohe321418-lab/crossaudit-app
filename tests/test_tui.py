@@ -925,7 +925,8 @@ def test_a_real_400_reaches_the_caller_intact():
             pass
 
     server = http.server.HTTPServer(("127.0.0.1", 0), Handler)
-    threading.Thread(target=server.serve_forever, daemon=True).start()
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
     try:
         url = f"http://127.0.0.1:{server.server_port}/v1/messages"
         with pytest.raises(ProviderDenial) as caught:
@@ -934,6 +935,8 @@ def test_a_real_400_reaches_the_caller_intact():
         assert "the model id, not your key" in caught.value.reason
     finally:
         server.shutdown()
+        thread.join(timeout=5)
+        server.server_close()
 
 
 def test_the_browser_keeps_the_lines_of_a_multi_line_refusal():

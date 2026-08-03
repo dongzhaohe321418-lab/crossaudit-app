@@ -142,8 +142,12 @@ def request_json(url: str, payload: dict, headers: dict, *, timeout: float = CON
             rid = resp.headers.get("request-id") or resp.headers.get("x-request-id")
             return json.loads(data.decode("utf-8")), rid
     except urllib.error.HTTPError as exc:
-        body = exc.read(4096).decode("utf-8", "replace")
-        raise _http_denial(exc.code, body, url) from exc
+        try:
+            body = exc.read(4096).decode("utf-8", "replace")
+            denial = _http_denial(exc.code, body, url)
+        finally:
+            exc.close()
+        raise denial from exc
     except (urllib.error.URLError, socket.timeout, TimeoutError) as exc:
         _reraise_transport(exc)
     except json.JSONDecodeError as exc:
@@ -166,8 +170,12 @@ def get_json(url: str, headers: dict, *, timeout: float = CONNECT_TIMEOUT_S
             rid = resp.headers.get("request-id") or resp.headers.get("x-request-id")
             return json.loads(data.decode("utf-8")), rid
     except urllib.error.HTTPError as exc:
-        body = exc.read(4096).decode("utf-8", "replace")
-        raise _http_denial(exc.code, body, url) from exc
+        try:
+            body = exc.read(4096).decode("utf-8", "replace")
+            denial = _http_denial(exc.code, body, url)
+        finally:
+            exc.close()
+        raise denial from exc
     except (urllib.error.URLError, socket.timeout, TimeoutError) as exc:
         _reraise_transport(exc)
     except json.JSONDecodeError as exc:

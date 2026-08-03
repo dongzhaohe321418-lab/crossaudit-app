@@ -199,10 +199,15 @@ def console(cfg):
     from crossaudit.console import daemon, serve
 
     url, httpd = serve(cfg, port=0)
-    threading.Thread(target=httpd.serve_forever, daemon=True).start()
-    yield cfg, url
-    httpd.shutdown()
-    daemon.clear_run(cfg)
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield cfg, url
+    finally:
+        httpd.shutdown()
+        thread.join(timeout=5)
+        httpd.server_close()
+        daemon.clear_run(cfg)
 
 
 def test_the_stream_pushes_a_first_frame_immediately(console):
@@ -235,6 +240,9 @@ def test_the_stream_needs_the_token_like_every_other_route(console):
     import urllib.error
 
     cfg, url = console
-    with pytest.raises(urllib.error.HTTPError) as e:
+    with pytest.raises(urllib.error.HTTPError) as caught:
         urllib.request.urlopen(url.split("?")[0] + "api/stream", timeout=5)
-    assert e.value.code == 403
+    try:
+        assert caught.value.code == 403
+    finally:
+        caught.value.close()

@@ -40,10 +40,15 @@ def cfg(tmp_path: Path):
 @pytest.fixture()
 def running(cfg):
     url, httpd = serve(cfg, port=0, register=True)
-    threading.Thread(target=httpd.serve_forever, daemon=True).start()
-    yield cfg, url
-    httpd.shutdown()
-    daemon.clear_run(cfg)
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield cfg, url
+    finally:
+        httpd.shutdown()
+        thread.join(timeout=5)
+        httpd.server_close()
+        daemon.clear_run(cfg)
 
 
 # ------------------------------------------------------------- finding it again
@@ -145,7 +150,8 @@ def test_a_running_build_keeps_the_console_alive(cfg, monkeypatch):
     monkeypatch.setattr(server_mod, "TRACKER", tracker)
 
     url, httpd = serve(cfg, port=0, idle_timeout=0.05)
-    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
     try:
         import time
         import urllib.request
@@ -155,7 +161,22 @@ def test_a_running_build_keeps_the_console_alive(cfg, monkeypatch):
             assert r.status == 200               # still up, because work is running
     finally:
         httpd.shutdown()
+        thread.join(timeout=5)
+        httpd.server_close()
         daemon.clear_run(cfg)
+
+
+def test_closing_a_console_reclaims_its_idle_watcher(cfg):
+    _url, httpd = serve(cfg, port=0, idle_timeout=float("inf"))
+    serving = threading.Thread(target=httpd.serve_forever)
+    serving.start()
+
+    httpd.shutdown()
+    serving.join(timeout=5)
+    httpd.server_close()
+
+    assert not serving.is_alive()
+    assert httpd.idle_thread is not None and not httpd.idle_thread.is_alive()
 
 
 # ------------------------------------------- stopping a background console

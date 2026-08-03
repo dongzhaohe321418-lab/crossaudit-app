@@ -212,6 +212,38 @@ class StateStore:
                       round=c["round"])
             return dict(c, cycle_id=cycle_id)
 
+    def record_build_escalation(self, repo: str, sha: str, reason: str,
+                                round_: int, chat_id: str = "") -> dict:
+        """Persist a build that stopped before any auditable revision existed.
+
+        Provider refusals can consume the whole generator budget before there is
+        a generated commit for ``cmd_run`` to open.  That still requires a
+        durable, human-resolvable cycle; otherwise the UI says it needs a human
+        while exposing no decision object.  The current task/routing commit is
+        the immutable anchor and ``chat_id`` keeps the ruling in its UI thread.
+        """
+        if round_ < 1:
+            raise IntegrityDenial("an escalated build must have attempted a round")
+        cid = cycle_id_for(repo, sha)
+        with self._locked() as state:
+            cycles = state["cycles"]
+            existing = cycles.get(cid)
+            if existing and existing.get("active_sha") != sha:
+                raise IntegrityDenial("build escalation cycle has a conflicting sha",
+                                      cycle_id=cid)
+            c = existing or {
+                "repo": repo, "root_sha": sha, "active_sha": sha,
+                "parent_receipt": "", "consumed": [],
+            }
+            c.update(round=round_, status=ESCALATED, awaiting_verdict=False,
+                     escalation_reason=reason)
+            if chat_id:
+                c["chat_id"] = chat_id
+            cycles[cid] = c
+            self._log(state, "build_escalated_before_revision", cycle=cid,
+                      sha=sha, reason=reason, round=round_, chat_id=chat_id)
+            return dict(c, cycle_id=cid)
+
     def record_verdict(self, cycle_id: str, sha: str, verdict: str,
                        receipt_hash: str, max_rounds: int) -> str:
         with self._locked() as state:

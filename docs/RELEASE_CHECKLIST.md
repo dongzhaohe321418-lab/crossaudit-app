@@ -27,6 +27,6 @@
       input streaming, and portable remote-output download.
 - [ ] Confirm no key, tokenized localhost URL, build directory, or app support
       data is tracked by Git.
-- [ ] Confirm `main` is clean, version is 4.10.0, and README links target V4.
-- [ ] Push `main`, create the `v4.10.0` release, upload DMG and checksum, and
+- [ ] Confirm `main` is clean, version is 4.11.0, and README links target V4.
+- [ ] Push `main`, create the `v4.11.0` release, upload DMG and checksum, and
       verify the repository default branch is `main`.

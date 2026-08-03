@@ -145,9 +145,14 @@ def console(tmp_path: Path):
     url, httpd = serve(cfg, port=0)
     import threading
 
-    threading.Thread(target=httpd.serve_forever, daemon=True).start()
-    yield url
-    httpd.shutdown()
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield url
+    finally:
+        httpd.shutdown()
+        thread.join(timeout=5)
+        httpd.server_close()
 
 
 def fetch(url: str, **headers):
@@ -167,6 +172,18 @@ def post_json_to(console: str, path: str, payload: dict):
 
 def post_json(console: str, payload: dict):
     return post_json_to(console, "/api/say", payload)
+
+
+def rejected(call):
+    """Run an HTTP call expected to fail and close its response deterministically."""
+    try:
+        call()
+    except urllib.error.HTTPError as error:
+        try:
+            return error.code, error.read(), dict(error.headers)
+        finally:
+            error.close()
+    raise AssertionError("HTTP request unexpectedly succeeded")
 
 
 def attachment(name: str, data: bytes) -> dict:
@@ -230,41 +247,40 @@ def test_console_can_pin_the_current_project_folder(console):
 
 def test_without_the_token_everything_is_refused(console):
     bare = console.split("?")[0]
-    with pytest.raises(urllib.error.HTTPError) as e:
-        fetch(bare)
-    assert e.value.code == 403
+    code, _body, _headers = rejected(lambda: fetch(bare))
+    assert code == 403
 
 
 def test_a_wrong_token_is_refused(console):
-    with pytest.raises(urllib.error.HTTPError) as e:
-        fetch(console.split("?")[0] + "?t=guess")
-    assert e.value.code == 403
+    code, _body, _headers = rejected(
+        lambda: fetch(console.split("?")[0] + "?t=guess"))
+    assert code == 403
 
 
 def test_a_foreign_host_header_is_refused_even_with_the_token(console):
     """The DNS-rebinding defence: the attacker's name resolves to 127.0.0.1, but
     the request still carries their Host."""
-    with pytest.raises(urllib.error.HTTPError) as e:
-        fetch(console, Host="evil.example.com")
-    assert e.value.code == 403
+    code, _body, _headers = rejected(
+        lambda: fetch(console, Host="evil.example.com"))
+    assert code == 403
 
 
 def test_the_only_write_path_is_the_one_input(console):
     """The console gained exactly one write path — the sentence box — and it is
     narrow on purpose: everything it can cause, the CLI could already do."""
     req = urllib.request.Request(console, data=b"{}", method="POST")
-    with pytest.raises(urllib.error.HTTPError) as e:
-        urllib.request.urlopen(req, timeout=5)
-    assert e.value.code == 404                      # POST anywhere else: no route
+    code, _body, _headers = rejected(
+        lambda: urllib.request.urlopen(req, timeout=5))
+    assert code == 404                              # POST anywhere else: no route
 
 
 def test_the_input_needs_the_token_like_everything_else(console):
     bare = console.split("?")[0] + "api/say"
     req = urllib.request.Request(bare, data=b'{"text":"hello"}', method="POST",
                                  headers={"content-type": "application/json"})
-    with pytest.raises(urllib.error.HTTPError) as e:
-        urllib.request.urlopen(req, timeout=5)
-    assert e.value.code == 403
+    code, _body, _headers = rejected(
+        lambda: urllib.request.urlopen(req, timeout=5))
+    assert code == 403
 
 
 def test_the_input_refuses_an_empty_or_oversized_sentence(console):
@@ -273,9 +289,9 @@ def test_the_input_refuses_an_empty_or_oversized_sentence(console):
                           (b'{"text":"' + b"x" * 5000 + b'"}', 413)):
         req = urllib.request.Request(url, data=payload, method="POST",
                                      headers={"content-type": "application/json"})
-        with pytest.raises(urllib.error.HTTPError) as e:
-            urllib.request.urlopen(req, timeout=5)
-        assert e.value.code == code
+        actual, _body, _headers = rejected(
+            lambda: urllib.request.urlopen(req, timeout=5))
+        assert actual == code
 
 
 def test_attachment_contents_need_a_second_explicit_consent(console):
@@ -286,10 +302,10 @@ def test_attachment_contents_need_a_second_explicit_consent(console):
     req = urllib.request.Request(
         url, data=json.dumps(payload).encode(), method="POST",
         headers={"content-type": "application/json"})
-    with pytest.raises(urllib.error.HTTPError) as error:
-        urllib.request.urlopen(req, timeout=5)
-    assert error.value.code == 400
-    assert "explicit consent" in error.value.read().decode()
+    code, body, _headers = rejected(
+        lambda: urllib.request.urlopen(req, timeout=5))
+    assert code == 400
+    assert "explicit consent" in body.decode()
 
 
 @pytest.mark.parametrize("item,code", [
@@ -301,9 +317,9 @@ def test_the_http_boundary_refuses_unsafe_attachments(console, item, code):
         url, data=json.dumps({"text": "Use it", "attachments": [item],
                               "attachment_consent": True}).encode(),
         method="POST", headers={"content-type": "application/json"})
-    with pytest.raises(urllib.error.HTTPError) as error:
-        urllib.request.urlopen(req, timeout=5)
-    assert error.value.code == code
+    actual, _body, _headers = rejected(
+        lambda: urllib.request.urlopen(req, timeout=5))
+    assert actual == code
 
 
 def test_validated_attachments_reach_say_only_after_consent(console, monkeypatch):
@@ -403,9 +419,8 @@ def test_artifact_download_is_tokened_streamed_and_forces_a_download(
     assert headers["content-disposition"].startswith("attachment;")
     assert headers["cache-control"] == "no-store"
     bare = url.split("&t=")[0]
-    with pytest.raises(urllib.error.HTTPError) as error:
-        fetch(bare)
-    assert error.value.code == 403
+    code, _body, _headers = rejected(lambda: fetch(bare))
+    assert code == 403
 
 
 def test_the_two_windows_are_reconstructed_from_the_ledger(console):
@@ -464,11 +479,11 @@ def test_app_settings_write_is_tokened_app_only_and_never_echoes_secret(
     req = urllib.request.Request(
         bare, data=json.dumps({"openai_key": secret}).encode(), method="POST",
         headers={"content-type": "application/json"})
-    with pytest.raises(urllib.error.HTTPError) as error:
-        urllib.request.urlopen(req, timeout=5)
-    assert error.value.code == 403
-    assert error.value.headers["connection"] == "close"
-    assert error.value.read() == b"forbidden"
+    code, body, headers = rejected(
+        lambda: urllib.request.urlopen(req, timeout=5))
+    assert code == 403
+    assert headers["connection"] == "close"
+    assert body == b"forbidden"
 
 
 def test_admit_endpoint_is_tokened_and_returns_only_receipt_identity(
@@ -491,9 +506,9 @@ def test_admit_endpoint_is_tokened_and_returns_only_receipt_identity(
     bare = console.split("?", 1)[0] + "api/admit"
     req = urllib.request.Request(bare, data=b"{}", method="POST",
                                  headers={"content-type": "application/json"})
-    with pytest.raises(urllib.error.HTTPError) as error:
-        urllib.request.urlopen(req, timeout=5)
-    assert error.value.code == 403
+    code, _body, _headers = rejected(
+        lambda: urllib.request.urlopen(req, timeout=5))
+    assert code == 403
 
 
 def test_runtime_switch_is_refused_while_a_loop_is_running(console):
@@ -502,21 +517,38 @@ def test_runtime_switch_is_refused_while_a_loop_is_running(console):
     TRACKER.clear()
     TRACKER.start("long audit")
     try:
-        with pytest.raises(urllib.error.HTTPError) as caught:
-            post_json_to(console, "/api/runtime", {
+        code, raw_body, _headers = rejected(lambda: post_json_to(
+            console, "/api/runtime", {
                 "generator_model": "gpt-5.6-luna",
                 "generator_reasoning_effort": "low",
                 "auditor_model": "claude-sonnet-4-6",
                 "auditor_reasoning_effort": "medium",
-            })
-        body = json.loads(caught.value.read())
+            }))
+        body = json.loads(raw_body)
     finally:
         TRACKER.finish("cancelled")
         TRACKER.clear()
 
-    assert caught.value.code == 400
+    assert code == 400
     assert body["issue"] == "runtime_busy"
     assert "wait for this task to finish" in body["reason"]
+
+
+def test_a_human_can_resolve_an_escalation_through_the_tokened_ui(console):
+    state_url = console.replace("/?t=", "/api/state?t=")
+    _status, body, _headers = fetch(state_url)
+    state = json.loads(body)
+    store = StateStore(Path(state["root"]) / ".crossaudit" / "state.json")
+    cycle = store.open_or_advance("t/p", "a" * 40, None)
+    store.escalate(cycle["cycle_id"], "round budget spent")
+
+    status, result, _headers = post_json_to(console, "/api/escalation", {
+        "cycle_id": cycle["cycle_id"], "action": "reopen",
+        "reason": "One focused correction is justified.",
+    })
+
+    assert status == 200 and result["status"] == "OPEN"
+    assert store.cycle(cycle["cycle_id"])["status"] == "OPEN"
 
 
 def test_latest_pass_admission_reverifies_recorded_receipt(tmp_path, monkeypatch):

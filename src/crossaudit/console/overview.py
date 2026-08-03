@@ -200,7 +200,8 @@ def escalations(cfg: Config) -> list[dict]:
                 elif c.findings:
                     why = c.findings[0]["observation"][:140]
                 break
-        out.append({"cycle_id": cid, "sha": s["active_sha"][:12],
+        out.append({"cycle_id": cid, "sha": s["active_sha"],
+                    "short_sha": s["active_sha"][:12],
                     "round": s["round"], "why": why})
     return out
 

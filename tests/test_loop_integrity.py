@@ -292,6 +292,34 @@ def test_build_loop_itself_passes_the_cycle_through_all_three_rounds(
     assert cycle["round"] == 3 and cycle["status"] == "ESCALATED"
 
 
+def test_generator_provider_refusals_still_create_a_resolvable_ui_cycle(
+        science, cfg, monkeypatch):
+    from dataclasses import replace
+
+    from crossaudit.cli import build as build_mod
+    from crossaudit.errors import EXIT_ESCALATED, ProviderDenial
+
+    def refuse(**_kwargs):
+        raise ProviderDenial(
+            "test provider rejected the key", status=401,
+            category="authentication", retryable=False)
+
+    monkeypatch.setattr(build_mod, "_generator_complete", lambda *_a, **_k: object())
+    monkeypatch.setattr(build_mod.gen_mod, "generate", refuse)
+    monkeypatch.chdir(science)
+
+    cfg = replace(cfg, scope_dirs=["experiments"])
+    code = build_mod.run_loop(
+        cfg, "produce the experiment", chat_id="1234567890abcdef")
+    cycles = StateStore(cfg.root / cfg.state_dir / "state.json").snapshot()["cycles"]
+
+    assert code == EXIT_ESCALATED and len(cycles) == 1
+    cycle = next(iter(cycles.values()))
+    assert cycle["status"] == "ESCALATED" and cycle["round"] == 1
+    assert cycle["chat_id"] == "1234567890abcdef"
+    assert "rejected the key" in cycle["escalation_reason"]
+
+
 def test_build_duplicate_revision_reports_the_actual_escalation_reason(
         science, cfg, transcripts, monkeypatch):
     from crossaudit import generator as generator_mod

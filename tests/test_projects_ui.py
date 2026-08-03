@@ -195,8 +195,13 @@ def test_project_page_contains_the_control_plane_contract():
                  "/api/projects/pin", "data-pin-chat", "data-pin-project",
                  "current-project-pin", "chat_id:activeChatId"):
         assert text in PAGE
-    for text in ("Models & reasoning", "/api/runtime/options", "/api/runtime",
-                 "Save for next call", "Reasoning effort", "Atomic between calls"):
+    for text in ("Models, reasoning & audit loop", "/api/runtime/options",
+                 "/api/runtime", "Save for next call", "Reasoning effort",
+                 "Automatic revision limit", "Committed project controls",
+                 "Generator guidance", "/api/skills", "Save guidance"):
+        assert text in PAGE
+    for text in ("Resolve audit escalation", "/api/escalation",
+                 "Allow another round", "Stop task", "Review decision"):
         assert text in PAGE
     assert "data-copy-recovery-github" in PAGE
     assert "This dialog updates automatically after approval." in PAGE
@@ -409,6 +414,7 @@ def test_runtime_model_and_effort_switch_is_committed_atomically(tmp_path, monke
         "generator_reasoning_effort": "xhigh",
         "auditor_model": "gpt-5.6-terra",
         "auditor_reasoning_effort": "max",
+        "max_rounds": 5,
     })
 
     updated = load(root / "crossaudit.yml")
@@ -417,11 +423,92 @@ def test_runtime_model_and_effort_switch_is_committed_atomically(tmp_path, monke
     assert updated.generator_reasoning_effort == "xhigh"
     assert updated.auditor.model == "gpt-5.6-terra"
     assert updated.auditor.reasoning_effort == "max"
+    assert updated.max_rounds == 5 and result["max_rounds"] == 5
     assert subprocess.run(["git", "status", "--porcelain"], cwd=root,
                           capture_output=True, text=True, check=True).stdout == ""
     assert subprocess.run(["git", "show", "--format=%s", "--no-patch", "HEAD"],
                           cwd=root, capture_output=True, text=True,
                           check=True).stdout.startswith("config:")
+
+
+def test_project_guidance_can_be_created_and_updated_entirely_from_ui_controls(
+        tmp_path, monkeypatch):
+    monkeypatch.delenv("CROSSAUDIT_AUDITOR_KEY", raising=False)
+    projects.create_project(tmp_path, payload(name="control"), lambda *_: None)
+    root = tmp_path / "control"
+    current = load(root / "crossaudit.yml")
+
+    created = projects.update_skill(current, {
+        "name": "review-style", "applies_to": ["work/reviews", "work/data"],
+        "body": "Lead with the decision. Keep evidence close to each claim.",
+    })
+    assert created["changed"] is True and len(created["commit"]) == 40
+    assert created["skills"] == [{
+        "name": "review-style", "path": "skills/review-style.md",
+        "applies_to": ["work/reviews", "work/data"],
+        "body": "Lead with the decision. Keep evidence close to each claim.",
+    }]
+    result = projects.update_skill(current, {
+        "name": "review-style", "applies_to": "work/reviews",
+        "body": "Write for the end user and return only the requested file.",
+    })
+    assert result["changed"] is True
+    assert result["skills"][0]["applies_to"] == ["work/reviews"]
+    assert "only the requested file" in result["skills"][0]["body"]
+    assert subprocess.run(["git", "status", "--porcelain"], cwd=root,
+                          capture_output=True, text=True, check=True).stdout == ""
+    assert subprocess.run(["git", "show", "--format=%s", "--no-patch", "HEAD"],
+                          cwd=root, capture_output=True, text=True,
+                          check=True).stdout.startswith("guidance:")
+
+
+@pytest.mark.parametrize("changes,why", [
+    ({"name": "../escape", "body": "x"}, "guidance names"),
+    ({"name": "safe", "body": ""}, "cannot be empty"),
+    ({"name": "safe", "body": "x", "applies_to": ["../outside"]},
+     "project-relative"),
+])
+def test_project_guidance_ui_refuses_unsafe_content_without_writing(
+        tmp_path, monkeypatch, changes, why):
+    monkeypatch.delenv("CROSSAUDIT_AUDITOR_KEY", raising=False)
+    projects.create_project(tmp_path, payload(name="control"), lambda *_: None)
+    root = tmp_path / "control"
+    with pytest.raises(ConfigDenial, match=why):
+        projects.update_skill(load(root / "crossaudit.yml"), changes)
+    assert not (root / "skills").exists()
+
+
+def test_invalid_manual_guidance_degrades_only_its_editor(tmp_path, monkeypatch):
+    monkeypatch.delenv("CROSSAUDIT_AUDITOR_KEY", raising=False)
+    projects.create_project(tmp_path, payload(name="control"), lambda *_: None)
+    root = tmp_path / "control"
+    (root / "skills").mkdir()
+    (root / "skills" / "too-large.md").write_bytes(
+        b"x" * (projects.skills_mod.MAX_SKILL_BYTES + 1))
+
+    options = projects.runtime_options(load(root / "crossaudit.yml"))
+    assert options["skills"] == []
+    assert "limit" in options["skills_error"]
+    assert options["roles"]["auditor"]["model"] == "gpt-5.6-sol"
+
+
+@pytest.mark.parametrize("value", [0, 11, "many"])
+def test_runtime_controls_refuse_an_invalid_round_limit(tmp_path, monkeypatch, value):
+    monkeypatch.delenv("CROSSAUDIT_AUDITOR_KEY", raising=False)
+    projects.create_project(tmp_path, payload(name="control"), lambda *_: None)
+    config = tmp_path / "control" / "crossaudit.yml"
+    current = load(config)
+    before = config.read_bytes()
+
+    with pytest.raises(ConfigDenial, match="rounds must be"):
+        projects.update_runtime(current, {
+            "generator_model": current.generator_model,
+            "generator_reasoning_effort": "",
+            "auditor_model": current.auditor.model,
+            "auditor_reasoning_effort": "",
+            "max_rounds": value,
+        })
+    assert config.read_bytes() == before
 
 
 def test_runtime_switch_refuses_unsupported_effort_and_preserves_config(

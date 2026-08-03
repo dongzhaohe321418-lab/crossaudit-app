@@ -351,6 +351,7 @@ textarea::placeholder{color:var(--faint)}.compose-button{border:0;background:tra
 .mini-value{font-size:17px;font-weight:650;letter-spacing:-.03em}.mini-label{font-size:9.5px;color:var(--faint)}
 .escalation{padding:8px 9px;background:var(--amber-bg);border-radius:8px;margin-bottom:6px}
 .escalation b{font-size:11px;color:var(--amber)}.escalation p{font-size:10.5px;color:var(--muted);margin:3px 0 0}
+.escalation-actions{display:flex;gap:5px;margin-top:8px}.escalation-actions button{height:25px;font-size:9px}
 .empty{color:var(--faint);font-style:italic;font-size:11.5px;padding:5px 0}
 .files{white-space:pre-wrap;word-break:break-word}.mobile-sidebar{display:none}.mobile-inspector{display:grid}
 #inspect-close{display:grid}.scrim{display:none;position:fixed;inset:48px 0 0;
@@ -598,7 +599,7 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
 <body>
 <section class="project-hub" id="project-hub" aria-label="Projects">
   <header class="hub-bar"><button class="brand-button" id="hub-brand"><span class="brand-mark">◇</span>
-    CrossAudit <span class="version" id="hub-version">V4.10.0</span></button><span class="spacer"></span>
+    CrossAudit <span class="version" id="hub-version">V4.11.0</span></button><span class="spacer"></span>
     <button class="icon-button" id="hub-settings" aria-label="Settings" title="Settings">⚙</button>
     <button class="icon-button" id="hub-theme" aria-label="Switch theme">◐</button>
     <button class="primary" id="create-project">＋ New project</button></header>
@@ -674,8 +675,8 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
 </div>
 
 <div class="project-modal" id="runtime-modal" role="dialog" aria-modal="true" aria-labelledby="runtime-title">
-  <form class="wizard" id="runtime-form"><div class="wizard-head"><div><h2 id="runtime-title">Models & reasoning</h2>
-    <p>Change either role for the next provider call without restarting this workspace.</p></div>
+  <form class="wizard" id="runtime-form"><div class="wizard-head"><div><h2 id="runtime-title">Models, reasoning & audit loop</h2>
+    <p>Change project controls for the next provider call without restarting this workspace.</p></div>
     <span class="spacer"></span><button type="button" class="icon-button" id="close-runtime" aria-label="Close">×</button></div>
     <div class="wizard-body"><div class="runtime-grid">
       <section class="role-card" id="runtime-generator-card"><div class="runtime-role-head"><b>Generator</b><span id="runtime-generator-vendor">…</span></div>
@@ -690,10 +691,30 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
         <label class="field"><span>Reasoning effort</span><select id="runtime-auditor-effort"></select><small class="effort-help" id="runtime-auditor-effort-help"></small></label>
         <div class="model-actions"><button type="button" class="secondary" data-runtime-refresh="auditor">Refresh models</button></div>
       </section>
-    </div><div class="runtime-note" id="runtime-note"><b>Atomic between calls.</b> Saving commits only crossaudit.yml. A running audit round keeps the model and effort it started with.</div>
+    </div><section class="form-section" style="margin-top:12px"><div class="form-title">Audit loop</div>
+      <label class="field"><span>Automatic revision limit</span><select id="runtime-max-rounds"><option value="1">1 — quick stop</option><option value="3">3 — recommended</option><option value="5">5 — persistent</option><option value="10">10 — maximum</option></select><small class="field-help">After this many generator → auditor rounds, the task pauses for your explicit decision. It never auto-passes.</small></label>
+    </section><section class="form-section" style="margin-top:12px"><div class="form-title">Generator guidance</div>
+      <div class="form-grid"><label class="field"><span>Edit guidance</span><select id="runtime-skill-select"><option value="__new__">Create new guidance…</option></select></label>
+        <label class="field"><span>Name</span><input id="runtime-skill-name" maxlength="60" placeholder="house-style"></label>
+        <label class="field full"><span>Applies to paths (optional)</span><input id="runtime-skill-scope" maxlength="500" placeholder="work/reports, work/data"><small class="field-help">Comma-separated project-relative prefixes. Leave blank to apply on every task.</small></label>
+        <label class="field full"><span>Instructions for the generator</span><textarea id="runtime-skill-body" maxlength="60000" placeholder="Describe the tone, output shape, conventions or checklist this project should follow."></textarea><small class="field-help">Guidance changes how the generator works. It never changes the Constitution or what the independent auditor enforces.</small></label></div>
+      <div class="model-actions"><button type="button" class="secondary" id="save-runtime-skill">Save guidance</button><span class="repo-check" id="runtime-skill-status"></span></div>
+    </section><div class="runtime-note" id="runtime-note"><b>Committed project controls.</b> Models and loop limits update crossaudit.yml; generator guidance is versioned in the project. A running audit keeps the controls it started with.</div>
       <div class="wizard-error" id="runtime-error"></div></div>
     <div class="wizard-foot"><span id="runtime-foot">Automatic means the provider chooses its documented default.</span>
       <button type="button" class="secondary" id="cancel-runtime">Cancel</button><button class="primary" id="save-runtime">Save for next call</button></div>
+  </form>
+</div>
+
+<div class="project-modal" id="resolution-modal" role="dialog" aria-modal="true" aria-labelledby="resolution-title">
+  <form class="wizard" id="resolution-form"><div class="wizard-head"><div><h2 id="resolution-title">Resolve audit escalation</h2>
+    <p id="resolution-summary">Record a human decision before the loop can continue.</p></div>
+    <span class="spacer"></span><button type="button" class="icon-button" id="close-resolution" aria-label="Close">×</button></div>
+    <div class="wizard-body"><input type="hidden" id="resolution-cycle"><input type="hidden" id="resolution-action">
+      <label class="field"><span>Reason for this decision</span><textarea id="resolution-reason" maxlength="400" required placeholder="Explain why this task should get another round, or why it should stop."></textarea><small class="field-help">This explanation becomes part of the durable audit ledger.</small></label>
+      <div class="wizard-error" id="resolution-error"></div></div>
+    <div class="wizard-foot"><span>The models cannot take this action. It requires this explicit human UI confirmation.</span>
+      <button type="button" class="secondary" id="cancel-resolution">Cancel</button><button class="primary" id="submit-resolution">Record decision</button></div>
   </form>
 </div>
 
@@ -775,7 +796,7 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
       aria-controls="sidebar-panel" aria-expanded="false">☰</button>
     <button class="icon-button" id="back-projects" aria-label="Back to projects" title="Back to projects">←</button>
     <button class="brand-button" id="projects-home"><span class="brand-mark">◇</span>CrossAudit
-      <span class="version" id="version-badge">V4.10.0</span></button>
+      <span class="version" id="version-badge">V4.11.0</span></button>
     <button class="top-project" id="project-switcher"><b id="proj">…</b> <span id="branch-label">/ project folder</span>⌄</button>
     <button class="icon-button" id="current-project-pin" aria-label="Pin project" title="Pin project">☆</button>
     <span class="spacer"></span>
@@ -805,7 +826,7 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
       <span class="participant" title="You">Y</span><span class="participant" title="Generator">G</span>
       <span class="participant auditor" title="Auditor">A</span></div><div class="thread-title"><h1 id="thread-title">New task</h1>
       <p id="thread-subtitle">Independent generation and audit</p></div><span class="spacer"></span>
-      <button type="button" class="runtime-button" id="runtime-open" title="Switch models and reasoning effort">Models & effort</button>
+      <button type="button" class="runtime-button" id="runtime-open" title="Switch models, reasoning effort and audit loop settings">Project controls</button>
       <span class="status" id="thread-status">ready</span></div>
     <div class="thread" id="thread"><div class="thread-inner">
       <div class="interrupted" id="interrupted"></div><div id="conversation"></div>
@@ -1086,7 +1107,7 @@ settingsForm.onsubmit=async ev=>{ev.preventDefault();const save=document.getElem
 
 const runtimeModal=document.getElementById('runtime-modal');
 const runtimeForm=document.getElementById('runtime-form');
-let runtimeRoles={};let runtimeCapabilityNonce={generator:0,auditor:0};
+let runtimeRoles={};let runtimeSkills=[];let runtimeCapabilityNonce={generator:0,auditor:0};
 function runtimeEl(role,name){return document.getElementById('runtime-'+role+'-'+name);}
 function runtimeModel(role){const select=runtimeEl(role,'model');return select.value==='__custom__'
   ?runtimeEl(role,'custom').value.trim():select.value;}
@@ -1111,7 +1132,7 @@ function renderRuntimeRole(role,row){runtimeRoles[role]=row;const card=runtimeEl
   runtimeEl(role,'custom-wrap').className='field custom-model'+(select.value==='__custom__'?'':' off');
   renderRuntimeEfforts(role,row);}
 function syncRuntimeBusy(d){const busy=Boolean(d&&d.progress&&!d.progress.finished);const save=document.getElementById('save-runtime');
-  save.disabled=busy;document.getElementById('runtime-foot').textContent=busy
+  save.disabled=busy;document.getElementById('save-runtime-skill').disabled=busy;document.getElementById('runtime-foot').textContent=busy
     ?'A loop is running. These controls unlock when its current model calls finish.'
     :'Automatic means the provider chooses its documented default.';}
 async function updateRuntimeCapabilities(role){const model=runtimeModel(role);if(!model)return;
@@ -1124,6 +1145,9 @@ async function updateRuntimeCapabilities(role){const model=runtimeModel(role);if
 function openRuntime(){const config=lastState&&lastState.runtime_config;if(!config)return;
   document.getElementById('runtime-error').className='wizard-error';
   for(const role of ['generator','auditor'])renderRuntimeRole(role,config.roles[role]);
+  document.getElementById('runtime-max-rounds').value=String(config.max_rounds||lastState.max_rounds||3);
+  renderRuntimeSkills(config.skills||[]);
+  if(config.skills_error)document.getElementById('runtime-skill-status').textContent=config.skills_error;
   syncRuntimeBusy(lastState);runtimeModal.className='project-modal on';}
 function closeRuntime(){runtimeModal.className='project-modal';runtimeForm.reset();}
 for(const role of ['generator','auditor']){
@@ -1144,16 +1168,63 @@ document.getElementById('runtime-open').onclick=openRuntime;
 document.getElementById('close-runtime').onclick=closeRuntime;
 document.getElementById('cancel-runtime').onclick=closeRuntime;
 runtimeModal.addEventListener('click',ev=>{if(ev.target===runtimeModal)closeRuntime();});
+function renderRuntimeSkills(rows){runtimeSkills=rows||[];const select=document.getElementById('runtime-skill-select');
+  select.innerHTML='<option value="__new__">Create new guidance…</option>'+runtimeSkills.map(row=>
+    '<option value="'+esc(row.name)+'">'+esc(row.name)+'</option>').join('');select.value='__new__';selectRuntimeSkill();}
+function selectRuntimeSkill(){const name=document.getElementById('runtime-skill-select').value;
+  const row=runtimeSkills.find(item=>item.name===name);document.getElementById('runtime-skill-name').value=row?row.name:'';
+  document.getElementById('runtime-skill-name').disabled=Boolean(row);
+  document.getElementById('runtime-skill-scope').value=row?(row.applies_to||[]).join(', '):'';
+  document.getElementById('runtime-skill-body').value=row?row.body:'';
+  document.getElementById('runtime-skill-status').textContent=row?'Editing committed guidance':'Create reusable project guidance';}
+document.getElementById('runtime-skill-select').onchange=selectRuntimeSkill;
+document.getElementById('save-runtime-skill').onclick=async()=>{const button=document.getElementById('save-runtime-skill');
+  const error=document.getElementById('runtime-error');error.className='wizard-error';button.disabled=true;
+  const payload={name:document.getElementById('runtime-skill-name').value.trim(),
+    applies_to:document.getElementById('runtime-skill-scope').value.split(',').map(x=>x.trim()).filter(Boolean),
+    body:document.getElementById('runtime-skill-body').value};
+  try{const result=await api('/api/skills',payload);renderRuntimeSkills(result.skills||[]);
+    document.getElementById('runtime-skill-select').value=payload.name;selectRuntimeSkill();
+    document.getElementById('runtime-skill-status').textContent=result.changed?'Saved and committed':'Already up to date';
+    if(lastState&&lastState.runtime_config)lastState.runtime_config.skills=result.skills||[];}
+  catch(e){showInlineError('runtime-error',e);}
+  finally{button.disabled=Boolean(lastState&&lastState.progress&&!lastState.progress.finished);}};
 runtimeForm.onsubmit=async ev=>{ev.preventDefault();const save=document.getElementById('save-runtime');
   const error=document.getElementById('runtime-error');error.className='wizard-error';save.disabled=true;
   const payload={generator_model:runtimeModel('generator'),auditor_model:runtimeModel('auditor'),
     generator_reasoning_effort:runtimeEl('generator','effort').value||'',
-    auditor_reasoning_effort:runtimeEl('auditor','effort').value||''};
+    auditor_reasoning_effort:runtimeEl('auditor','effort').value||'',
+    max_rounds:Number(document.getElementById('runtime-max-rounds').value)};
   try{const result=await api('/api/runtime',payload);if(lastState)lastState.runtime_config=result;
-    closeRuntime();route.className='route on';route.innerHTML='<b>Runtime updated</b> — the next provider call will use the saved models and effort.';}
+    if(lastState)lastState.max_rounds=result.max_rounds;
+    closeRuntime();route.className='route on';route.innerHTML='<b>Project controls updated</b> — the next provider call will use the saved models, effort and audit loop limit.';}
   catch(e){showInlineError('runtime-error',e);syncRuntimeBusy(lastState);}
   finally{if(!lastState||!lastState.progress||lastState.progress.finished)save.disabled=false;}
 };
+
+const resolutionModal=document.getElementById('resolution-modal');
+const resolutionForm=document.getElementById('resolution-form');
+function openResolution(cycle,action,sha){
+  document.getElementById('resolution-cycle').value=cycle;
+  document.getElementById('resolution-action').value=action;
+  document.getElementById('resolution-reason').value='';
+  document.getElementById('resolution-summary').textContent=action==='reopen'
+    ?'Return '+sha+' to the audit loop for another generator → auditor round.'
+    :'Stop '+sha+' without admitting its output.';
+  document.getElementById('submit-resolution').textContent=action==='reopen'?'Allow another round':'Stop without admission';
+  document.getElementById('resolution-error').className='wizard-error';
+  resolutionModal.className='project-modal on';setTimeout(()=>document.getElementById('resolution-reason').focus(),0);
+}
+function closeResolution(){resolutionModal.className='project-modal';resolutionForm.reset();}
+document.getElementById('close-resolution').onclick=closeResolution;
+document.getElementById('cancel-resolution').onclick=closeResolution;
+resolutionModal.addEventListener('click',ev=>{if(ev.target===resolutionModal)closeResolution();});
+resolutionForm.onsubmit=async ev=>{ev.preventDefault();const button=document.getElementById('submit-resolution');
+  button.disabled=true;document.getElementById('resolution-error').className='wizard-error';
+  try{await api('/api/escalation',{cycle_id:document.getElementById('resolution-cycle').value,
+      action:document.getElementById('resolution-action').value,reason:document.getElementById('resolution-reason').value.trim()});
+    closeResolution();route.className='route on';route.innerHTML='<b>Decision recorded.</b> The audit ledger and live status were updated.';}
+  catch(e){showInlineError('resolution-error',e);}finally{button.disabled=false;}};
 
 let projectState=null;
 let projectSource=null;
@@ -1661,6 +1732,7 @@ function deliveryStatus(d){
     :status==='escalated'?['Needs your input','CrossAudit needs a decision before it can continue.']
     :['Stopped','The task did not complete.'];
   const action=status==='passed'?'<button type="button" data-admit data-admit-cycle="'+esc(cycle.id)+'">Admit result</button>'
+    :status==='escalated'?'<button type="button" data-open-decisions>Review decision</button>'
     :'<button type="button" data-open-audits>View audit details</button>';
   return '<div class="delivery-status '+esc(status)+'"><span class="delivery-dot"></span><span><b>'
     +copy[0]+'</b> · '+copy[1]+'</span>'+action+'</div>';
@@ -1840,8 +1912,10 @@ function renderInspector(d){
     + esc(m.label) + '</div></div>').join('');
   const shas=new Set(cycles.map(c=>c.sha));const escalations=d.escalations.filter(e=>shas.has(e.sha));
   document.getElementById('escalations').innerHTML = escalations.length ? escalations.map(e =>
-    '<div class="escalation"><b>' + esc(e.sha) + ' · round ' + e.round + '</b><p>'
-    + esc(e.why) + '</p></div>').join('') : '<div class="empty">Nothing needs attention.</div>';
+    '<div class="escalation"><b>' + esc(e.short_sha||String(e.sha).slice(0,12)) + ' · round ' + e.round + '</b><p>'
+    + esc(e.why) + '</p><div class="escalation-actions"><button type="button" class="secondary" data-resolve="reopen" data-cycle="'
+    +esc(e.cycle_id)+'" data-sha="'+esc(e.short_sha||String(e.sha).slice(0,12))+'">Allow another round</button><button type="button" class="secondary" data-resolve="close" data-cycle="'
+    +esc(e.cycle_id)+'" data-sha="'+esc(e.short_sha||String(e.sha).slice(0,12))+'">Stop task</button></div></div>').join('') : '<div class="empty">Nothing needs attention.</div>';
 }
 function render(d){
   lastState = d;
@@ -1929,6 +2003,8 @@ function toggleSidebar(){const opening=!sidebar.classList.contains('open');close
 function toggleInspector(){const opening=!inspector.classList.contains('open');closePanels();
   if(opening){inspector.classList.add('open');document.getElementById('inspect-toggle').setAttribute('aria-expanded','true');}
   syncScrim();}
+function openInspector(){closePanels();inspector.classList.add('open');
+  document.getElementById('inspect-toggle').setAttribute('aria-expanded','true');syncScrim();}
 function drawFiles(){filesBox.className='attachments'+(pendingFiles.length?' on':'');
   const visible=pendingFiles.slice(0,100);const total=pendingFiles.reduce((sum,e)=>sum+e.file.size,0);
   filesBox.innerHTML=visible.map((entry,i)=>{const f=entry.file;const progress=uploadProgress.get(entry);
@@ -2076,6 +2152,7 @@ document.querySelectorAll('.nav-item').forEach(button => button.onclick=()=>sele
 document.getElementById('conversation').onclick=ev=>{
   if(ev.target.closest('[data-open-artifacts]'))selectView('artifacts');
   if(ev.target.closest('[data-open-audits]'))selectView('audits');
+  if(ev.target.closest('[data-open-decisions]'))openInspector();
   if(ev.target.closest('[data-hpc-add]'))openComputeHost();
   const run=ev.target.closest('[data-hpc-run]');if(run)openComputeJob(run.getAttribute('data-hpc-run'));
   const probe=ev.target.closest('[data-hpc-probe]');if(probe){probe.disabled=true;probe.textContent='Probing…';
@@ -2129,6 +2206,8 @@ document.getElementById('new-task').onclick=async()=>{
 document.getElementById('sidebar-toggle').onclick=toggleSidebar;
 document.getElementById('inspect-toggle').onclick=toggleInspector;
 document.getElementById('inspect-close').onclick=closePanels;
+document.getElementById('escalations').onclick=ev=>{const button=ev.target.closest('[data-resolve]');if(!button)return;
+  openResolution(button.getAttribute('data-cycle'),button.getAttribute('data-resolve'),button.getAttribute('data-sha'));};
 scrim.onclick=closePanels;
 document.addEventListener('keydown',ev=>{if(ev.key==='Escape')closePanels();});
 window.addEventListener('resize',()=>{if(innerWidth>1120)closePanels();});

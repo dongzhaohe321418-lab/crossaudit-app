@@ -100,7 +100,8 @@ def _latest_release() -> tuple[str | None, str]:
         headers={"accept": "application/vnd.github+json",
                  "user-agent": f"CrossAudit/{__version__}"})
     try:
-        with urllib.request.urlopen(request, timeout=4) as response:
+        # The Request URL is the module-owned HTTPS GitHub release endpoint.
+        with urllib.request.urlopen(request, timeout=4) as response:  # nosec B310
             payload = json.loads(response.read(256 * 1024))
         tag = str(payload.get("tag_name", "")).lstrip("v")
         return (tag if _tuple(tag) else None,

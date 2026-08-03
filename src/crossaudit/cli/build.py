@@ -160,8 +160,10 @@ def run_loop(cfg, task: str, *, on_step=None, attachments: str = "",
     deterministic_contract = describe_checks(cfg.checks)
     build_cycle_id: str | None = None
     termination_reason = f"build round budget spent ({cfg.max_rounds})"
+    last_round = 0
 
     for round_no in range(1, cfg.max_rounds + 1):
+        last_round = round_no
         report("loop", f"round {round_no} of {cfg.max_rounds}")
         report("generator", "writing")
         current = _current_work(cfg)
@@ -181,6 +183,18 @@ def run_loop(cfg, task: str, *, on_step=None, attachments: str = "",
             findings = (f"[BLOCKER] Your last round was refused before it reached "
                         f"the auditor: {exc.reason}\nReturn only files inside "
                         f"{', '.join(cfg.scope_dirs)}/ and try again.")
+            # Authentication, permission, endpoint and invalid-model HTTP
+            # failures cannot improve by sending the same request for every
+            # remaining round. Stop once, retain the provider's actionable
+            # explanation, and expose a human decision in the UI. Retryable
+            # transport/rate-limit failures and malformed model output may use
+            # the remaining automatic revision budget.
+            if (exc.detail.get("status") is not None and
+                    not exc.detail.get("retryable", False)):
+                termination_reason = (
+                    f"generator provider failure in round {round_no}: "
+                    f"{exc.reason[:400]}")
+                break
             if round_no == cfg.max_rounds:
                 break
             continue
@@ -250,6 +264,16 @@ def run_loop(cfg, task: str, *, on_step=None, attachments: str = "",
     if build_cycle_id:
         store.escalate(build_cycle_id, reason)
         report("auditor", "ESCALATED", f"cycle {build_cycle_id} is waiting for a human")
+    else:
+        # A provider can refuse every generator attempt before there is a work
+        # commit for cmd_run to open. Anchor that stop to the current durable
+        # task/routing commit so the UI exposes an actual human decision instead
+        # of an ephemeral "needs input" banner with nothing to resolve.
+        anchor = git("rev-parse", "HEAD", cwd=cfg.root)
+        cycle = store.record_build_escalation(
+            cfg.science_repo, anchor, reason, last_round, chat_id)
+        report("auditor", "ESCALATED",
+               f"cycle {cycle['cycle_id']} is waiting for a human")
     report("loop", reason)
     return EXIT_ESCALATED
 

@@ -23,7 +23,7 @@ from pathlib import Path
 
 from ..config import CONFIG_NAME, Config, load
 from ..app_keys import env_for_vendor
-from .. import connections
+from .. import connections, skills as skills_mod
 from ..providers import codex_subscription
 from ..controller import StateStore
 from ..errors import ConfigDenial, Denial
@@ -42,6 +42,7 @@ from . import chats, daemon
 
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,79}")
 MODEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,119}")
+SKILL_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,59}")
 SETUP_FILE = "project-setup.json"
 _RUNTIME_CONFIG_LOCK = threading.Lock()
 
@@ -327,7 +328,8 @@ class RuntimeRelays:
         url = (f"http://127.0.0.1:{int(info['port'])}/api/stream"
                f"?t={info['token']}")
         try:
-            with urllib.request.urlopen(url, timeout=20) as response:
+            # Child console URLs are always generated from a local run record.
+            with urllib.request.urlopen(url, timeout=20) as response:  # nosec B310
                 for raw in response:
                     if raw.startswith(b"data:"):
                         _invalidate_runtime(cfg.root)
@@ -569,11 +571,99 @@ def runtime_options(current: Config, role: str = "", model: str = "", *,
             raise ConfigDenial("model ids contain unsupported characters")
         return _runtime_role(current, role, model,
                              live_capabilities=live_capabilities)
+    try:
+        skill_rows, skill_error = skill_options(current), ""
+    except Denial as exc:
+        # A manually edited guidance file must not take down the entire live
+        # console. Keep every other project control usable and surface the
+        # narrow validation error beside the affected editor.
+        skill_rows, skill_error = [], exc.reason
     return {
         "roles": {name: _runtime_role(current, name)
                   for name in ("generator", "auditor")},
+        "max_rounds": current.max_rounds,
+        "skills": skill_rows,
+        "skills_error": skill_error,
         "applies": "next_provider_call",
     }
+
+
+def skill_options(current: Config) -> list[dict]:
+    """Return editable generator guidance without exposing audit internals."""
+    return [{"name": item.name, "path": item.path,
+             "applies_to": list(item.applies_to), "body": item.body}
+            for item in skills_mod.load(current.root)]
+
+
+def update_skill(current: Config, payload: dict) -> dict:
+    """Create or update one committed generator skill from Project controls."""
+    if not is_repo(current.root):
+        raise ConfigDenial("project guidance requires this project to be a git repository")
+    name = str(payload.get("name", "")).strip()
+    if not SKILL_NAME.fullmatch(name):
+        raise ConfigDenial(
+            "guidance names use letters, numbers, hyphens or underscores (60 characters max)")
+    body = str(payload.get("body", "")).replace("\r\n", "\n").replace("\r", "\n").strip()
+    if not body:
+        raise ConfigDenial("project guidance cannot be empty")
+    if len(body.encode("utf-8")) > skills_mod.MAX_SKILL_BYTES:
+        raise ConfigDenial(
+            f"project guidance is larger than {skills_mod.MAX_SKILL_BYTES} bytes")
+    raw_scopes = payload.get("applies_to", [])
+    if isinstance(raw_scopes, str):
+        raw_scopes = raw_scopes.split(",")
+    if not isinstance(raw_scopes, list):
+        raise ConfigDenial("guidance paths must be a comma-separated list")
+    scopes = []
+    for raw in raw_scopes:
+        scope = str(raw).strip().strip("/")
+        if (not scope or scope.startswith(".") or "\\" in scope or
+                any(part in {"", ".", ".."} for part in scope.split("/"))):
+            raise ConfigDenial("guidance paths must be safe project-relative prefixes")
+        if len(scope) > 160:
+            raise ConfigDenial("a guidance path is too long")
+        scopes.append(scope)
+    scopes = list(dict.fromkeys(scopes))
+
+    base = current.root / skills_mod.SKILLS_DIR
+    target = base / f"{name}.md"
+    if target.is_symlink() or base.is_symlink():
+        raise ConfigDenial("refusing to edit symlinked project guidance")
+    dirty = git("status", "--porcelain", "--", skills_mod.SKILLS_DIR,
+                cwd=current.root, check=False)
+    if dirty:
+        raise ConfigDenial(
+            "project guidance has uncommitted changes. Commit or discard that edit, then retry; "
+            "the UI will not overwrite it.", issue="skill_dirty", action="edit_guidance")
+    header = ("---\napplies_to: " + ", ".join(scopes) + "\n---\n\n") if scopes else ""
+    revised = header + body + "\n"
+    original = target.read_text(encoding="utf-8") if target.is_file() else None
+    if original == revised:
+        return {"skills": skill_options(current), "changed": False, "commit": ""}
+    base.mkdir(parents=True, exist_ok=True)
+    temp = base / f".{name}.tmp"
+    try:
+        temp.write_text(revised, encoding="utf-8", newline="\n")
+        temp.replace(target)
+        # Validate the complete guidance set before recording it.
+        skills_mod.load(current.root)
+        rel = target.relative_to(current.root).as_posix()
+        git("add", "--", rel, cwd=current.root)
+        git("-c", "user.name=CrossAudit", "-c",
+            "user.email=crossaudit@local.invalid", "commit", "-q", "--only",
+            "-m", f"guidance: update {name}", "--", rel, cwd=current.root)
+        commit = git("rev-parse", "HEAD", cwd=current.root)
+    except Exception:
+        if original is None:
+            target.unlink(missing_ok=True)
+        else:
+            target.write_text(original, encoding="utf-8", newline="")
+        temp.unlink(missing_ok=True)
+        subprocess.run(["git", "restore", "--staged", "--",
+                        target.relative_to(current.root).as_posix()],
+                       cwd=current.root, capture_output=True, check=False)
+        raise
+    return {"skills": skill_options(current), "changed": True, "commit": commit}
 
 
 def _replace_role_runtime(text: str, role: str, model: str, effort: str) -> str:
@@ -609,8 +699,24 @@ def _replace_role_runtime(text: str, role: str, model: str, effort: str) -> str:
     return "".join(lines)
 
 
+def _replace_max_rounds(text: str, value: int) -> str:
+    """Patch the top-level loop budget without rewriting user YAML formatting."""
+    lines = text.splitlines(keepends=True)
+    at = next((i for i, line in enumerate(lines)
+               if re.match(r"^max_rounds\s*:", line)), None)
+    if at is not None:
+        newline = "\r\n" if lines[at].endswith("\r\n") else "\n"
+        lines[at] = f"max_rounds: {value}{newline}"
+        return "".join(lines)
+    version_at = next((i for i, line in enumerate(lines)
+                       if re.match(r"^version\s*:", line)), -1)
+    newline = "\r\n" if lines and lines[0].endswith("\r\n") else "\n"
+    lines.insert(version_at + 1, f"max_rounds: {value}{newline}")
+    return "".join(lines)
+
+
 def update_runtime(current: Config, payload: dict) -> dict:
-    """Atomically commit model/effort choices for the next provider call."""
+    """Atomically commit model, effort and loop-budget choices from the UI."""
     with _RUNTIME_CONFIG_LOCK:
         if not is_repo(current.root):
             raise ConfigDenial("runtime settings require this project to be a git repository")
@@ -621,6 +727,12 @@ def update_runtime(current: Config, payload: dict) -> dict:
                 "crossaudit.yml has uncommitted changes. Commit or discard that edit, then retry; "
                 "the UI will not overwrite it.", issue="runtime_config_dirty",
                 action="edit_config")
+        try:
+            max_rounds = int(payload.get("max_rounds", current.max_rounds))
+        except (TypeError, ValueError) as exc:
+            raise ConfigDenial("maximum rounds must be a number between 1 and 10") from exc
+        if not 1 <= max_rounds <= 10:
+            raise ConfigDenial("maximum rounds must be between 1 and 10")
         choices = {}
         for role in ("generator", "auditor"):
             current_role = _runtime_role(current, role)
@@ -649,7 +761,7 @@ def update_runtime(current: Config, payload: dict) -> dict:
             choices[role] = (model, effort)
 
         original = current.path.read_text(encoding="utf-8")
-        revised = original
+        revised = _replace_max_rounds(original, max_rounds)
         if current.generator_vendor != "human":
             revised = _replace_role_runtime(revised, "generator", *choices["generator"])
         revised = _replace_role_runtime(revised, "auditor", *choices["auditor"])
@@ -661,7 +773,7 @@ def update_runtime(current: Config, payload: dict) -> dict:
             temp.replace(current.path)
             updated = load(current.path)
             commit_message = (f"config: {choices['generator'][0] or 'human'} -> "
-                              f"{choices['auditor'][0]}")
+                              f"{choices['auditor'][0]}, {max_rounds} rounds")
             git("-c", "user.name=CrossAudit", "-c",
                 "user.email=crossaudit@local.invalid", "commit", "-q", "--only",
                 "-m", commit_message, "--", CONFIG_NAME, cwd=current.root)
