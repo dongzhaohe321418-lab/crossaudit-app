@@ -77,6 +77,13 @@ repository secrets in CI.
 12. A provider repeated an identical output-file block during a correction
     round. Exact byte-for-byte duplicates now collapse into one deterministic
     write, while conflicting duplicates remain refused.
+13. The frozen project-console entry initially relied on its parent process to
+    set the project working directory. It now anchors itself to the validated
+    project root before any shared CLI operation can load configuration.
+14. Receipt admission remained CLI-only. A PASS now exposes an explicit
+    **Admit result** UI action that re-verifies all bindings, confirms the exact
+    controller-recorded latest receipt and frozen-app identity, then consumes it
+    once. No unverified or replayed receipt is promoted.
 
 ## Residual risks and recommendations
 

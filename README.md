@@ -151,7 +151,9 @@ project, or contact a model provider. Setup begins only when you run
    desired output format, and select **Run task**.
 5. Confirm the named provider destination. Watch the generator, deterministic
    checks, auditor, and correction rounds update live. Download only the final
-   user-facing artifacts from their conversation cards.
+   user-facing artifacts from their conversation cards. After PASS, select
+   **Admit result** to re-verify and consume the receipt once; a second attempt
+   is refused.
 
 The Projects button returns to the portfolio view. Every project has its own
 background process and live progress bar, so switching workspaces does not stop

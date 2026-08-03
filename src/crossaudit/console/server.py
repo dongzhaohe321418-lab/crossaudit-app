@@ -37,6 +37,8 @@ from ..config import Config
 from .. import app_keys
 from ..controller import StateStore
 from ..errors import ConfigDenial, Denial
+from ..receipt.verify import (admit as admit_receipt, load as load_receipt,
+                              verify as verify_receipt)
 from ..router import history as routing_history
 from . import daemon, overview, projects
 from .page import PAGE
@@ -72,6 +74,40 @@ def app_settings() -> dict:
             "code_digest": identity["code_digest_sha256"][:12],
         },
     }
+
+
+def admit_latest(cfg: Config) -> dict:
+    """Verify and consume the newest recorded PASS from the desktop UI."""
+    store = StateStore(cfg.root / cfg.state_dir / "state.json")
+    state = store.snapshot()
+    verdicts = [event for event in state.get("history", [])
+                if event.get("event") == "verdict"]
+    if verdicts:
+        event = verdicts[-1]
+        cycle_id = str(event.get("cycle", ""))
+        cycle = state.get("cycles", {}).get(cycle_id, {})
+        if cycle.get("status") == "PASSED":
+            sha = str(cycle.get("active_sha", ""))
+            round_ = int(cycle.get("round", 0))
+            candidates = sorted((cfg.root / cfg.ledger_dir).glob(
+                f"{sha[:12]}-r{round_}*/receipt.json"), reverse=True)
+            for path in candidates:
+                receipt = load_receipt(path)
+                if receipt["cycle"]["cycle_id"] != cycle_id:
+                    continue
+                evidence = verify_receipt(
+                    receipt, science_root=cfg.root, audit_root=cfg.root,
+                    expect_repo=cfg.science_repo, expect_sha=sha, cfg=cfg)
+                digest = evidence["receipt_digest"]
+                recorded = event.get("receipt") == digest[:16]
+                latest = cycle.get("parent_receipt") == digest
+                if not (evidence["admission_ready"] and recorded and latest):
+                    raise ConfigDenial("the latest PASS is not ready for admission")
+                result = admit_receipt(receipt, store, evidence, cfg=cfg)
+                return {**result, "verified": True, "sha": sha,
+                        "receipt": digest[:16]}
+            raise ConfigDenial("the latest PASS receipt is missing")
+    raise ConfigDenial("there is no unconsumed passing result to admit")
 
 
 class _ChangeSignal:
@@ -509,7 +545,7 @@ def make_handler(cfg: Config, token: str, touch) -> type:
             if parsed.path not in {"/api/say", "/api/upload", "/api/projects/create",
                                    "/api/projects/open", "/api/projects/resume",
                                    "/api/github/connect", "/api/models/refresh",
-                                   "/api/settings"}:
+                                   "/api/settings", "/api/admit"}:
                 self._deny(404, "no such action")
                 return
             touch()
@@ -559,6 +595,11 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                     STREAM_CHANGES.notify()
                     self._send(json.dumps({**app_settings(), **result}).encode(),
                                "application/json")
+                    return
+                if parsed.path == "/api/admit":
+                    result = admit_latest(cfg)
+                    STREAM_CHANGES.notify()
+                    self._send(json.dumps(result).encode(), "application/json")
                     return
                 text = str(payload.get("text", "")).strip()
                 if len(text.encode()) > MAX_UTTERANCE:

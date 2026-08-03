@@ -111,6 +111,10 @@ def main() -> int:
 def project_console(root: Path, port: int = 0) -> int:
     """Bundled daemon entry used for independent per-project backgrounds."""
     os.environ["CROSSAUDIT_APP_MODE"] = "1"
+    # CLI commands invoked by the shared console layer call config.load() from
+    # the process working directory. Make the entrypoint self-contained rather
+    # than relying on every parent launcher to remember cwd=project.
+    os.chdir(root)
     load_into_environment()
     cfg = load(root / CONFIG_NAME)
     _url, httpd = serve(cfg, port=port, register=True, idle_timeout=float("inf"))

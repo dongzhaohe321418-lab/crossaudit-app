@@ -1042,8 +1042,10 @@ function deliveryStatus(d){
     :status==='blocked'?['Needs revision','The result did not pass review yet.']
     :status==='escalated'?['Needs your input','CrossAudit needs a decision before it can continue.']
     :['Stopped','The task did not complete.'];
+  const action=status==='passed'?'<button type="button" data-admit>Admit result</button>'
+    :'<button type="button" data-open-audits>View audit details</button>';
   return '<div class="delivery-status '+esc(status)+'"><span class="delivery-dot"></span><span><b>'
-    +copy[0]+'</b> · '+copy[1]+'</span><button type="button" data-open-audits>View audit details</button></div>';
+    +copy[0]+'</b> · '+copy[1]+'</span>'+action+'</div>';
 }
 function artifactRows(d){
   const files = new Map();
@@ -1245,6 +1247,8 @@ document.querySelectorAll('.nav-item').forEach(button => button.onclick=()=>sele
 document.getElementById('conversation').onclick=ev=>{
   if(ev.target.closest('[data-open-artifacts]'))selectView('artifacts');
   if(ev.target.closest('[data-open-audits]'))selectView('audits');
+  const admit=ev.target.closest('[data-admit]');if(admit){admit.disabled=true;admit.textContent='Verifying…';
+    api('/api/admit',{}).catch(e=>{route.className='route on';route.innerHTML='<b>Not admitted</b> — '+esc(e.message);});}
 };
 document.getElementById('new-task').onclick=()=>{
   activeView='tasks';newTaskMode=true;say.value='';route.className='route';pendingFiles=[];

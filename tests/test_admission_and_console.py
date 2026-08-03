@@ -427,6 +427,87 @@ def test_app_settings_write_is_tokened_app_only_and_never_echoes_secret(
     assert error.value.code == 403
 
 
+def test_admit_endpoint_is_tokened_and_returns_only_receipt_identity(
+        console, monkeypatch):
+    from crossaudit.console import server as server_mod
+
+    monkeypatch.setattr(server_mod, "admit_latest", lambda _cfg: {
+        "admitted": True, "verified": True, "cycle_id": "cycle-1",
+        "receipt": "a" * 16, "sha": "b" * 40})
+    status, body, _headers = post_json_to(console, "/api/admit", {})
+    assert status == 200 and body["admitted"] is True and body["verified"] is True
+    assert body["receipt"] == "a" * 16
+
+    bare = console.split("?", 1)[0] + "api/admit"
+    req = urllib.request.Request(bare, data=b"{}", method="POST",
+                                 headers={"content-type": "application/json"})
+    with pytest.raises(urllib.error.HTTPError) as error:
+        urllib.request.urlopen(req, timeout=5)
+    assert error.value.code == 403
+
+
+def test_latest_pass_admission_reverifies_recorded_receipt(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from crossaudit.console import server as server_mod
+
+    sha, digest, cycle_id = "b" * 40, "a" * 64, "cycle-1"
+    receipt_path = tmp_path / "cycles" / f"{sha[:12]}-r1" / "receipt.json"
+    receipt_path.parent.mkdir(parents=True)
+    receipt_path.write_text("{}")
+    state = {
+        "cycles": {cycle_id: {"status": "PASSED", "active_sha": sha,
+                              "round": 1, "parent_receipt": digest}},
+        "history": [{"event": "verdict", "cycle": cycle_id,
+                     "receipt": digest[:16]}],
+    }
+
+    class Store:
+        def __init__(self, _path): pass
+        def snapshot(self): return state
+
+    receipt = {"cycle": {"cycle_id": cycle_id}, "subject": {"sha": sha}}
+    cfg = SimpleNamespace(root=tmp_path, state_dir=".crossaudit",
+                          ledger_dir="cycles", science_repo="owner/project")
+    monkeypatch.setattr(server_mod, "StateStore", Store)
+    monkeypatch.setattr(server_mod, "load_receipt", lambda path: receipt)
+    monkeypatch.setattr(server_mod, "verify_receipt", lambda *a, **k: {
+        "receipt_digest": digest, "admission_ready": True, "cycle_id": cycle_id,
+        "sha": sha})
+    monkeypatch.setattr(server_mod, "admit_receipt", lambda rec, store, evidence,
+                        cfg=None: {"admitted": True, "cycle_id": cycle_id})
+
+    result = server_mod.admit_latest(cfg)
+    assert result["admitted"] and result["verified"]
+    assert result["receipt"] == digest[:16] and result["sha"] == sha
+
+
+def test_admission_never_falls_back_to_an_older_pass(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from crossaudit.console import server as server_mod
+    from crossaudit.errors import ConfigDenial
+
+    state = {
+        "cycles": {
+            "old": {"status": "PASSED", "active_sha": "a" * 40, "round": 1},
+            "new": {"status": "CONSUMED", "active_sha": "b" * 40, "round": 1},
+        },
+        "history": [
+            {"event": "verdict", "cycle": "old", "receipt": "1" * 16},
+            {"event": "verdict", "cycle": "new", "receipt": "2" * 16},
+        ],
+    }
+
+    class Store:
+        def __init__(self, _path): pass
+        def snapshot(self): return state
+
+    cfg = SimpleNamespace(root=tmp_path, state_dir=".crossaudit",
+                          ledger_dir="cycles", science_repo="owner/project")
+    monkeypatch.setattr(server_mod, "StateStore", Store)
+    with pytest.raises(ConfigDenial, match="no unconsumed"):
+        server_mod.admit_latest(cfg)
+
+
 def test_live_stream_pushes_progress_without_waiting_for_the_poll(console,
                                                                   monkeypatch):
     """Same-process progress is event-driven; a long fallback interval must not

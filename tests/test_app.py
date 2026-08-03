@@ -118,3 +118,27 @@ def test_frozen_app_identity_uses_embedded_build_digest(tmp_path, monkeypatch):
     assert _selfid.install_mode() == "frozen-app"
     assert _selfid.code_digest() == digest
     assert "frozen-app" in _selfid.ADMISSIBLE_MODES
+
+
+def test_project_console_anchors_process_cwd_to_the_requested_project(
+        tmp_path, monkeypatch):
+    project = tmp_path / "project"
+    project.mkdir()
+    observed = {}
+    # Register the variable with monkeypatch so project_console's direct
+    # os.environ assignment is undone after this test.
+    monkeypatch.setenv("CROSSAUDIT_APP_MODE", "")
+    monkeypatch.setattr(app, "load_into_environment", lambda: None)
+
+    def stop_at_load(_path):
+        observed["cwd"] = Path.cwd()
+        raise RuntimeError("stop after cwd assertion")
+
+    monkeypatch.setattr(app, "load", stop_at_load)
+    before = Path.cwd()
+    try:
+        with pytest.raises(RuntimeError, match="cwd assertion"):
+            app.project_console(project, 0)
+    finally:
+        os.chdir(before)
+    assert observed["cwd"] == project.resolve()
