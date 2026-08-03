@@ -293,8 +293,9 @@ claim to measure what a ChatGPT subscription costs. Subscription calls can have
 exact runtime token counts while their displayed dollar value remains only the
 equivalent public API value.
 
-Usage data stays in the project's gitignored `.crossaudit/usage.jsonl` file with
-mode 600. Each line contains counts, time, role, phase, provider, and model only;
+Usage data stays in the project's gitignored `.crossaudit/usage.jsonl` file. It
+uses mode 600 on macOS/Linux and the project directory's inherited user ACL on
+Windows. Each line contains counts, time, role, phase, provider, and model only;
 prompts, generated text, provider request IDs, API keys, and OAuth material are
 never written. The aggregation and charts run locally and send no telemetry.
 The local-first event normalization and explicit `≈ API value` presentation are

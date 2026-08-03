@@ -76,7 +76,13 @@ def test_local_ledger_never_contains_prompts_replies_or_provider_ids(cfg):
     for secret in ("private system instructions", "private user prompt",
                    "private model output", "provider-private-id", "a" * 64):
         assert secret not in text
-    assert ((cfg.root / cfg.state_dir / usage.LEDGER_NAME).stat().st_mode & 0o777) == 0o600
+    ledger = cfg.root / cfg.state_dir / usage.LEDGER_NAME
+    if os.name != "nt":
+        assert (ledger.stat().st_mode & 0o777) == 0o600
+    else:
+        # Windows access is represented by the inherited directory ACL rather
+        # than POSIX permission bits; st_mode cannot prove a 0600 equivalent.
+        assert ledger.is_file()
 
 
 def test_unknown_or_custom_models_keep_counts_but_are_unpriced(cfg):
