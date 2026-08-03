@@ -85,6 +85,8 @@ def build(*, cfg: Config, subject: dict, cycle: dict, manifest: dict,
             "verdict": verdict,
             "provider": cfg.auditor.provider,
             "model": cfg.auditor.model,
+            "reasoning_effort": (cfg.auditor.reasoning_effort
+                                 or "provider-default"),
             "vendor": cfg.auditor.vendor,
             "audit_integrity": integrity,
             "exchange": exchange,

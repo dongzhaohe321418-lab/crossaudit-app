@@ -37,7 +37,8 @@ def _auditor_complete(cfg: Config):
     def complete(*, system: str, prompt: str):
         reply = fn(model=cfg.auditor.model, system=system, prompt=prompt,
                    key_env=cfg.auditor.key_env, base_url=cfg.auditor.base_url,
-                   allow_custom=bool(os.environ.get("CROSSAUDIT_ALLOW_CUSTOM_ENDPOINT")))
+                   allow_custom=bool(os.environ.get("CROSSAUDIT_ALLOW_CUSTOM_ENDPOINT")),
+                   reasoning_effort=cfg.auditor.reasoning_effort)
         record_completion(root=cfg.root, state_dir=cfg.state_dir, role="auditor",
                           phase="control", vendor=cfg.auditor.vendor,
                           provider=cfg.auditor.provider, model=cfg.auditor.model,

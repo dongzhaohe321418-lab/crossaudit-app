@@ -144,3 +144,18 @@ def test_ui_model_refresh_uses_subscription_account_not_api_key(cfg, monkeypatch
     result = projects.refresh_models(cfg, "openai", "auditor", "chatgpt")
     assert result["models"] == ["gpt-account-visible"]
     assert result["method"] == "chatgpt"
+
+
+def test_subscription_efforts_come_from_the_signed_in_model_catalog(monkeypatch):
+    monkeypatch.setattr(codex_subscription.SERVER, "account", lambda: {
+        "available": True, "connected": True})
+    monkeypatch.setattr(codex_subscription.SERVER, "model_catalog", lambda: [{
+        "id": "gpt-account-visible",
+        "supportedReasoningEfforts": [
+            {"reasoningEffort": "low", "description": "fast"},
+            {"reasoningEffort": "ultra", "description": "delegated"},
+        ],
+    }])
+
+    assert codex_subscription.list_model_efforts("gpt-account-visible") == [
+        "low", "ultra"]

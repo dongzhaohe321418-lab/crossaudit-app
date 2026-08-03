@@ -26,7 +26,7 @@ from urllib.parse import urlparse
 from ..errors import ConfigDenial, ProviderDenial
 from .base import Reply
 
-CLIENT = {"name": "crossaudit", "title": "CrossAudit", "version": "4.5.0"}
+CLIENT = {"name": "crossaudit", "title": "CrossAudit", "version": "4.6.0"}
 DEFAULT_TIMEOUT_S = 300.0
 FORBIDDEN_ITEM_TYPES = {
     "commandExecution", "fileChange", "mcpToolCall", "dynamicToolCall",
@@ -246,14 +246,15 @@ class CodexAppServer:
                if account and not connected else {}),
         }
 
-    def models(self) -> list[str]:
+    def model_catalog(self) -> list[dict]:
         result = self.call(
             "model/list", {"limit": 100, "includeHidden": False}, timeout=30)
         rows = result.get("data") or []
+        return [row for row in rows if isinstance(row, dict)]
+
+    def models(self) -> list[str]:
         found = []
-        for row in rows:
-            if not isinstance(row, dict):
-                continue
+        for row in self.model_catalog():
             model = row.get("id") or row.get("model")
             if isinstance(model, str) and model and model not in found:
                 found.append(model)
@@ -289,6 +290,7 @@ class CodexAppServer:
                 self._notification_signal.wait(min(left, 5))
 
     def complete(self, *, model: str, system: str, prompt: str,
+                 reasoning_effort: str | None = None,
                  timeout: float = DEFAULT_TIMEOUT_S) -> Reply:
         # Empty, non-project cwd plus disabled network for the model's sandbox:
         # the role receives only the exact prompt CrossAudit constructed.
@@ -309,13 +311,21 @@ class CodexAppServer:
         collector = _Collector(thread_id)
         with self._state_lock:
             self._collectors[thread_id] = collector
-        request = {"model": model, "system": system, "prompt": prompt}
+        request = {"model": model, "system": system, "prompt": prompt,
+                   "reasoning_effort": reasoning_effort}
         try:
-            turn = self.call("turn/start", {
+            turn_params = {
                 "threadId": thread_id,
                 "input": [{"type": "text", "text": prompt}],
                 "sandboxPolicy": {"type": "readOnly", "networkAccess": False},
-            }, timeout=30).get("turn") or {}
+            }
+            if reasoning_effort:
+                # Current Codex app-server protocol calls this turn-level field
+                # `effort`; applying it here leaves the user's global Codex
+                # configuration untouched.
+                turn_params["effort"] = reasoning_effort
+            turn = self.call("turn/start", turn_params,
+                             timeout=30).get("turn") or {}
             turn_id = str(turn.get("id", ""))
             if not collector.done.wait(timeout):
                 try:
@@ -368,13 +378,15 @@ atexit.register(SERVER.close)
 
 
 def complete(*, model: str, system: str, prompt: str, key_env: str = "",
-             base_url: str | None = None, allow_custom: bool = False) -> Reply:
+             base_url: str | None = None, allow_custom: bool = False,
+             reasoning_effort: str | None = None) -> Reply:
     """Provider-compatible subscription completion; endpoint/key args are denied."""
     if base_url:
         raise ConfigDenial(
             "ChatGPT subscription access uses the official Codex service and "
             "cannot be redirected to a custom endpoint")
-    return SERVER.complete(model=model, system=system, prompt=prompt)
+    return SERVER.complete(model=model, system=system, prompt=prompt,
+                           reasoning_effort=reasoning_effort)
 
 
 def account_status() -> dict:
@@ -393,3 +405,22 @@ def list_models() -> list[str]:
     if not rows:
         raise ConfigDenial("ChatGPT returned no Codex models for this subscription")
     return rows
+
+
+def list_model_efforts(model: str) -> list[str]:
+    """Return effort values advertised for one signed-in Codex model."""
+    account = SERVER.account()
+    if not account["connected"]:
+        raise ConfigDenial("Sign in with ChatGPT in Settings before reading model options")
+    for row in SERVER.model_catalog():
+        row_model = row.get("id") or row.get("model")
+        if row_model != model:
+            continue
+        found = []
+        for item in row.get("supportedReasoningEfforts") or []:
+            effort = (item.get("reasoningEffort") if isinstance(item, dict)
+                      else item)
+            if isinstance(effort, str) and effort and effort not in found:
+                found.append(effort)
+        return found
+    return []

@@ -292,6 +292,29 @@ def test_build_loop_itself_passes_the_cycle_through_all_three_rounds(
     assert cycle["round"] == 3 and cycle["status"] == "ESCALATED"
 
 
+def test_build_duplicate_revision_reports_the_actual_escalation_reason(
+        science, cfg, transcripts, monkeypatch):
+    from crossaudit import generator as generator_mod
+    from crossaudit.cli import build as build_mod
+    from crossaudit.errors import EXIT_ESCALATED
+
+    def fake_generate(**_kwargs):
+        return generator_mod.Work(
+            summary="same revision",
+            files={"experiments/demo/SUMMARY.md": "unchanged\n"})
+
+    monkeypatch.setattr(build_mod, "_generator_complete", lambda *_a, **_k: object())
+    monkeypatch.setattr(build_mod.gen_mod, "generate", fake_generate)
+    monkeypatch.chdir(science)
+
+    assert build_mod.run_loop(cfg, "produce the experiment") == EXIT_ESCALATED
+    cycles = StateStore(cfg.root / cfg.state_dir / "state.json").snapshot()["cycles"]
+    cycle = next(iter(cycles.values()))
+    assert cycle["round"] == 1 and cycle["status"] == "ESCALATED"
+    assert cycle["escalation_reason"] == (
+        "generator produced no new auditable revision in round 2")
+
+
 def test_weakened_constitution_is_refused(science, cfg, transcripts):
     sha = write_increment(science, GOOD_RESULTS, "Fine.", "clean")
     outcome, cycle, _s = _audit(cfg, sha, transcripts, PASS_REPLY)

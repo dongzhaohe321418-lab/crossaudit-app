@@ -28,7 +28,10 @@ from ..providers import codex_subscription
 from ..controller import StateStore
 from ..errors import ConfigDenial, Denial
 from ..providers.catalog import list_models
-from ..providers.specs import endpoint as provider_endpoint, endpoints as provider_endpoints
+from ..providers.specs import (EFFORT_HINTS, SPECS, endpoint as provider_endpoint,
+                               endpoints as provider_endpoints,
+                               reasoning_efforts)
+from ..gitio import git, is_repo
 from .. import workspace as workspace_mod
 from ..scaffold import (CONFIG_TEMPLATE, GENERAL_CHECKS, GENERAL_TREE,
                         SCIENCE_CHECKS, SCIENCE_TREE, read, write_tree)
@@ -40,6 +43,7 @@ from . import daemon
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,79}")
 MODEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,119}")
 SETUP_FILE = "project-setup.json"
+_RUNTIME_CONFIG_LOCK = threading.Lock()
 
 
 def workspace_base(current: Config) -> Path:
@@ -490,6 +494,169 @@ def refresh_models(current: Config, vendor: str, role: str,
     return {"vendor": vendor, "role": role, "method": method,
             "endpoint": endpoint_id, "models": rows,
             "refreshed": int(time.time())}
+
+
+def _runtime_role(current: Config, role: str, model: str | None = None, *,
+                  live_capabilities: bool = False) -> dict:
+    if role == "auditor":
+        vendor = current.auditor.vendor
+        provider = current.auditor.provider
+        selected_model = model or current.auditor.model
+        selected_effort = current.auditor.reasoning_effort or ""
+        base_url = current.auditor.base_url or ""
+    elif role == "generator":
+        vendor = current.generator_vendor or ""
+        provider = current.generator_provider or ""
+        selected_model = model or current.generator_model or ""
+        selected_effort = current.generator_reasoning_effort or ""
+        base_url = current.generator_base_url or ""
+    else:
+        raise ConfigDenial("runtime role must be auditor or generator")
+    if vendor == "human":
+        return {"role": role, "vendor": vendor, "label": "Human", "provider": "",
+                "model": "", "reasoning_effort": "", "models": [], "efforts": [],
+                "adjustable": False, "detail": "A human generator has no model settings."}
+    if vendor not in SPECS:
+        raise ConfigDenial(f"{vendor!r} has no supported runtime catalogue")
+    rows = [{"id": item, "hint": hint} for item, hint in SPECS[vendor].models]
+    if selected_model and selected_model not in {row["id"] for row in rows}:
+        rows.insert(0, {"id": selected_model, "hint": "current project model"})
+    efforts = list(reasoning_efforts(vendor, selected_model, provider))
+    if live_capabilities and provider == "openai_codex":
+        advertised = codex_subscription.list_model_efforts(selected_model)
+        if advertised:
+            efforts = advertised
+    endpoint_id = ""
+    for item in provider_endpoints(vendor):
+        if base_url and item[2].rstrip("/") == base_url.rstrip("/"):
+            endpoint_id = item[0]
+            break
+    return {
+        "role": role, "vendor": vendor, "label": SPECS[vendor].label,
+        "provider": provider, "connection": ("chatgpt" if provider == "openai_codex"
+                                                else "api"),
+        "endpoint": endpoint_id,
+        "model": selected_model, "reasoning_effort": selected_effort,
+        "models": rows,
+        "efforts": [{"id": item, "hint": EFFORT_HINTS.get(item, "provider option")}
+                    for item in efforts],
+        "adjustable": bool(efforts),
+        "detail": ("The provider controls reasoning automatically for this model."
+                   if not efforts else
+                   "The selected effort is sent on the next provider request."),
+    }
+
+
+def runtime_options(current: Config, role: str = "", model: str = "", *,
+                    live_capabilities: bool = False) -> dict:
+    """Project model controls, with no credentials or provider-side reasoning."""
+    if role:
+        if not MODEL.fullmatch(model):
+            raise ConfigDenial("model ids contain unsupported characters")
+        return _runtime_role(current, role, model,
+                             live_capabilities=live_capabilities)
+    return {
+        "roles": {name: _runtime_role(current, name)
+                  for name in ("generator", "auditor")},
+        "applies": "next_provider_call",
+    }
+
+
+def _replace_role_runtime(text: str, role: str, model: str, effort: str) -> str:
+    """Patch one block-style role while preserving comments and file layout."""
+    lines = text.splitlines(keepends=True)
+    header = next((i for i, line in enumerate(lines)
+                   if re.fullmatch(rf"{role}:\s*(?:#.*)?\n?", line)), None)
+    if header is None:
+        raise ConfigDenial(
+            f"{role} must use block-style YAML before the UI can edit it",
+            issue="runtime_config_format", action="edit_config")
+    end = len(lines)
+    for i in range(header + 1, len(lines)):
+        if lines[i].strip() and not lines[i].startswith((" ", "\t", "#")):
+            end = i
+            break
+    model_at = next((i for i in range(header + 1, end)
+                     if re.match(r"\s+model\s*:", lines[i])), None)
+    if model_at is None:
+        raise ConfigDenial(f"{role}.model is missing from crossaudit.yml")
+    newline = "\r\n" if lines[model_at].endswith("\r\n") else "\n"
+    indent = re.match(r"\s*", lines[model_at]).group(0)
+    lines[model_at] = f"{indent}model: {model}{newline}"
+    effort_at = next((i for i in range(header + 1, end)
+                      if re.match(r"\s+reasoning_effort\s*:", lines[i])), None)
+    if effort_at is not None:
+        if effort:
+            lines[effort_at] = f"{indent}reasoning_effort: {effort}{newline}"
+        else:
+            lines.pop(effort_at)
+    elif effort:
+        lines.insert(model_at + 1, f"{indent}reasoning_effort: {effort}{newline}")
+    return "".join(lines)
+
+
+def update_runtime(current: Config, payload: dict) -> dict:
+    """Atomically commit model/effort choices for the next provider call."""
+    with _RUNTIME_CONFIG_LOCK:
+        if not is_repo(current.root):
+            raise ConfigDenial("runtime settings require this project to be a git repository")
+        dirty = git("status", "--porcelain", "--", CONFIG_NAME,
+                    cwd=current.root, check=False)
+        if dirty:
+            raise ConfigDenial(
+                "crossaudit.yml has uncommitted changes. Commit or discard that edit, then retry; "
+                "the UI will not overwrite it.", issue="runtime_config_dirty",
+                action="edit_config")
+        choices = {}
+        for role in ("generator", "auditor"):
+            current_role = _runtime_role(current, role)
+            if current_role["vendor"] == "human":
+                choices[role] = ("", "")
+                continue
+            model = _clean_text(payload, f"{role}_model", 120)
+            if not MODEL.fullmatch(model):
+                raise ConfigDenial("model ids contain unsupported characters")
+            effort = str(payload.get(f"{role}_reasoning_effort", "")).strip()
+            allowed = set(reasoning_efforts(current_role["vendor"], model,
+                                            current_role["provider"]))
+            if current_role["provider"] == "openai_codex" and effort not in allowed:
+                # Subscription catalogues advertise capabilities per model and
+                # can include values newer than this release.
+                advertised = set(codex_subscription.list_model_efforts(model))
+                allowed |= advertised
+            if effort and effort not in allowed:
+                if allowed:
+                    raise ConfigDenial(
+                        f"{current_role['label']} does not advertise {effort!r} for "
+                        f"{model}. Choose Automatic or one of {sorted(allowed)}.")
+                raise ConfigDenial(
+                    f"{current_role['label']} does not expose an adjustable effort "
+                    f"for {model}. Choose Automatic.")
+            choices[role] = (model, effort)
+
+        original = current.path.read_text(encoding="utf-8")
+        revised = original
+        if current.generator_vendor != "human":
+            revised = _replace_role_runtime(revised, "generator", *choices["generator"])
+        revised = _replace_role_runtime(revised, "auditor", *choices["auditor"])
+        if revised == original:
+            return {**runtime_options(current), "changed": False, "commit": ""}
+        temp = current.path.with_suffix(".runtime.tmp")
+        try:
+            temp.write_text(revised, encoding="utf-8", newline="")
+            temp.replace(current.path)
+            updated = load(current.path)
+            commit_message = (f"config: {choices['generator'][0] or 'human'} -> "
+                              f"{choices['auditor'][0]}")
+            git("-c", "user.name=CrossAudit", "-c",
+                "user.email=crossaudit@local.invalid", "commit", "-q", "--only",
+                "-m", commit_message, "--", CONFIG_NAME, cwd=current.root)
+            commit = git("rev-parse", "HEAD", cwd=current.root)
+        except Exception:
+            current.path.write_text(original, encoding="utf-8", newline="")
+            temp.unlink(missing_ok=True)
+            raise
+        return {**runtime_options(updated), "changed": True, "commit": commit}
 
 
 def _project_row(path: Path, current: Config) -> dict | None:

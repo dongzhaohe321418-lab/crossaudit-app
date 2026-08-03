@@ -63,7 +63,8 @@ def render_report(*, cfg: Config, sha: str, round_: int, verdict: str, dcl: dict
         f"| verdict | **{verdict}** |",
         f"| round | {round_} |",
         f"| constitution | `{constitution_commit[:12]}` |",
-        f"| auditor | `{provider}:{model}` (vendor {cfg.auditor.vendor}) |",
+        f"| auditor | `{provider}:{model}` (vendor {cfg.auditor.vendor}; effort "
+        f"{cfg.auditor.reasoning_effort or 'provider-default'}) |",
         f"| deterministic layer | {dcl['total_hard_failures']} hard failure(s) |",
         "",
         "## Deterministic findings",
@@ -122,13 +123,15 @@ def run_audit(*, cfg: Config, sha: str, round_: int, files: Mapping[str, bytes],
             raw = complete(model=cfg.auditor.model, system=prompt_mod.SYSTEM,
                            prompt=prompt, key_env=cfg.auditor.key_env,
                            base_url=cfg.auditor.base_url,
-                           allow_custom=allow_custom_endpoint)
+                           allow_custom=allow_custom_endpoint,
+                           reasoning_effort=cfg.auditor.reasoning_effort)
             record_completion(root=cfg.root, state_dir=cfg.state_dir, role="auditor",
                               phase="audit", vendor=cfg.auditor.vendor,
                               provider=cfg.auditor.provider, model=cfg.auditor.model,
                               reply=raw, system=prompt_mod.SYSTEM, prompt=prompt,
                               base_url=cfg.auditor.base_url)
             exchange = {"mode": retention, "provider": cfg.auditor.provider,
+                        "reasoning_effort": cfg.auditor.reasoning_effort or "provider-default",
                         **raw.commitments(retention)}
             parsed, perr = parse_reply(raw.text)
             invalid = perr or validate_reply(parsed, known_rules(constitution))

@@ -76,7 +76,8 @@ def _generator_complete(cfg: Config, allow_custom: bool):
 
     def complete(*, system: str, prompt: str):
         reply = fn(model=model, system=system, prompt=prompt, key_env=key_env,
-                   base_url=base_url, allow_custom=allow_custom)
+                   base_url=base_url, allow_custom=allow_custom,
+                   reasoning_effort=cfg.generator_reasoning_effort)
         record_completion(root=cfg.root, state_dir=cfg.state_dir, role="generator",
                           phase="generation", vendor=cfg.generator_vendor or "unknown",
                           provider=provider, model=model, reply=reply, system=system,
@@ -154,6 +155,7 @@ def run_loop(cfg, task: str, *, on_step=None, attachments: str = "") -> int:
     findings = ""
     deterministic_contract = describe_checks(cfg.checks)
     build_cycle_id: str | None = None
+    termination_reason = f"build round budget spent ({cfg.max_rounds})"
 
     for round_no in range(1, cfg.max_rounds + 1):
         report("loop", f"round {round_no} of {cfg.max_rounds}")
@@ -191,6 +193,8 @@ def run_loop(cfg, task: str, *, on_step=None, attachments: str = "") -> int:
         if not staged:
             report("loop", "the round reproduced the previous one; nothing new to "
                            "audit")
+            termination_reason = (
+                f"generator produced no new auditable revision in round {round_no}")
             break
         try:
             git("commit", "-q", "-m", f"{work.summary} (round {round_no})",
@@ -200,6 +204,8 @@ def run_loop(cfg, task: str, *, on_step=None, attachments: str = "") -> int:
             # and stops cleanly rather than tearing down a run the ledger already
             # has rounds for.
             report("loop", "the round could not be committed", exc.reason[:200])
+            termination_reason = (
+                f"generator revision could not be committed in round {round_no}")
             break
 
         audit_sha = git("rev-parse", "HEAD", cwd=cfg.root)
@@ -231,7 +237,7 @@ def run_loop(cfg, task: str, *, on_step=None, attachments: str = "") -> int:
         findings = gen_mod.render_findings(_last_report(cfg))
         report("loop", "findings returned to the generator")
 
-    reason = f"build round budget spent ({cfg.max_rounds})"
+    reason = termination_reason
     if build_cycle_id:
         store.escalate(build_cycle_id, reason)
         report("auditor", "ESCALATED", f"cycle {build_cycle_id} is waiting for a human")

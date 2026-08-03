@@ -44,7 +44,8 @@ def record(directory: Path, *, system: str, prompt: str, text: str) -> Path:
 
 def complete(*, model: str, system: str, prompt: str, key_env: str,
              base_url: str | None = None, allow_custom: bool = False,
-             max_tokens: int = 4096, timeout: float = 120.0) -> Reply:
+             max_tokens: int = 4096, timeout: float = 120.0,
+             reasoning_effort: str | None = None) -> Reply:
     key = sha256_text(system + "\n" + prompt)
     path = _dir() / f"{key}.json"
     if not path.is_file():

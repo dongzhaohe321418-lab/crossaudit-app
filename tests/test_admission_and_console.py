@@ -458,6 +458,29 @@ def test_admit_endpoint_is_tokened_and_returns_only_receipt_identity(
     assert error.value.code == 403
 
 
+def test_runtime_switch_is_refused_while_a_loop_is_running(console):
+    from crossaudit.console.progress import TRACKER
+
+    TRACKER.clear()
+    TRACKER.start("long audit")
+    try:
+        with pytest.raises(urllib.error.HTTPError) as caught:
+            post_json_to(console, "/api/runtime", {
+                "generator_model": "gpt-5.6-luna",
+                "generator_reasoning_effort": "low",
+                "auditor_model": "claude-sonnet-4-6",
+                "auditor_reasoning_effort": "medium",
+            })
+        body = json.loads(caught.value.read())
+    finally:
+        TRACKER.finish("cancelled")
+        TRACKER.clear()
+
+    assert caught.value.code == 400
+    assert body["issue"] == "runtime_busy"
+    assert "wait for this task to finish" in body["reason"]
+
+
 def test_latest_pass_admission_reverifies_recorded_receipt(tmp_path, monkeypatch):
     from types import SimpleNamespace
     from crossaudit.console import server as server_mod

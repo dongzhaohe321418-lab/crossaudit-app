@@ -59,6 +59,30 @@ CLI credential stores, or ask users to paste access/refresh tokens.
   [Models endpoint](https://docs.mistral.ai/api/endpoint/models),
   [Mistral Medium 3.5](https://docs.mistral.ai/models/model-cards/mistral-medium-3-5-26-04).
 
+## Request-level reasoning effort
+
+The workspace can change model and reasoning effort between calls. CrossAudit
+does not assume that one provider's labels or payload field work for another:
+
+- OpenAI API sends `reasoning_effort` only for recognised GPT-5 reasoning
+  families. ChatGPT subscription choices are taken from the signed-in Codex
+  runtime's live model catalogue and passed as the documented per-turn effort.
+- Anthropic sends `output_config.effort` only for Claude models with documented
+  adaptive-effort support.
+- Gemini thinking models use the OpenAI-compatible `reasoning_effort` mapping.
+- xAI reasoning-capable Grok models use their documented low/medium/high field.
+- Every other model/provider remains on provider-controlled **Automatic**.
+
+Saving is serialized with the project worker. It is refused while a loop is
+running, so one Generator or Auditor call can never start under one setting and
+finish under another. The selected effort is recorded with the exchange and
+receipt evidence for later review.
+
+Official references: [OpenAI reasoning models](https://developers.openai.com/api/docs/guides/latest-model),
+[Anthropic effort](https://platform.claude.com/docs/en/build-with-claude/effort),
+[Gemini OpenAI compatibility](https://ai.google.dev/gemini-api/docs/openai), and
+[xAI reasoning effort](https://docs.x.ai/developers/model-capabilities/text/reasoning).
+
 ## Runtime safety properties
 
 1. Every preset has an allowlisted set of first-party HTTPS origins, exact

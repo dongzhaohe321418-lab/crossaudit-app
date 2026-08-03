@@ -52,7 +52,8 @@ def _request(url: str, payload: dict, headers: dict, timeout: float):
 
 def complete(*, model: str, system: str, prompt: str, key_env: str,
              base_url: str | None = None, allow_custom: bool = False,
-             max_tokens: int = 4096, timeout: float = 120.0) -> Reply:
+             max_tokens: int = 4096, timeout: float = 120.0,
+             reasoning_effort: str | None = None) -> Reply:
     origin = (base_url or BUILTIN_ORIGIN).rstrip("/")
     url = f"{origin}/v1/messages"
     # Loopback HTTP is useful for explicitly authorised local-compatible
@@ -69,6 +70,8 @@ def complete(*, model: str, system: str, prompt: str, key_env: str,
     }
     if _supports_temperature(model):
         payload["temperature"] = 0
+    if reasoning_effort:
+        payload["output_config"] = {"effort": reasoning_effort}
     headers = {"x-api-key": read_key(key_env), "anthropic-version": API_VERSION}
     data, rid = _request(url, payload, headers, timeout)
     try:

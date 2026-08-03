@@ -243,7 +243,8 @@ def _looks_like_a_model_problem(said: str) -> bool:
     # A vendor may mention "this model" while rejecting a request parameter.
     # That is an adapter compatibility problem, not an unavailable model ID.
     if any(field in low for field in
-           ("temperature", "max_tokens", "max_completion_tokens")):
+           ("temperature", "max_tokens", "max_completion_tokens",
+            "reasoning_effort", "output_config", "effort")):
         return False
     if low.startswith("model:") or low.startswith("model "):
         return True

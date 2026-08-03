@@ -216,3 +216,54 @@ def endpoint(vendor: str, endpoint_id: str = "") -> tuple[str, str, str, str]:
         if row[0] == wanted:
             return row
     raise ValueError(f"unsupported {vendor} endpoint {endpoint_id!r}")
+
+
+EFFORT_HINTS = {
+    "none": "fastest · reasoning disabled where supported",
+    "minimal": "very light reasoning",
+    "low": "lower latency and token use",
+    "medium": "balanced",
+    "high": "deeper reasoning",
+    "xhigh": "extended reasoning",
+    "max": "maximum supported reasoning",
+    "ultra": "maximum reasoning with runtime delegation",
+}
+
+
+def reasoning_efforts(vendor: str, model: str, provider: str = "") -> tuple[str, ...]:
+    """Conservative request-level effort controls for a concrete model.
+
+    Provider model catalogues usually return IDs, not parameter capabilities.
+    This list therefore names only combinations documented by the first-party
+    provider. Unknown and custom models stay on provider defaults instead of
+    receiving an optimistic parameter that may turn a valid run into HTTP 400.
+    """
+    vendor = vendor.casefold().strip()
+    lowered = model.casefold().strip()
+    if vendor == "openai":
+        if lowered.startswith("gpt-5.6"):
+            return ("none", "low", "medium", "high", "xhigh", "max")
+        if lowered.startswith(("gpt-5.5", "gpt-5.4", "gpt-5.3-codex",
+                               "gpt-5.2-codex")):
+            return ("low", "medium", "high", "xhigh")
+        if lowered.startswith(("gpt-5", "o1", "o3", "o4")):
+            return ("low", "medium", "high")
+        return ()
+    if vendor == "anthropic":
+        if any(name in lowered for name in
+               ("claude-opus-5", "claude-sonnet-5", "claude-fable-5",
+                "claude-mythos-5", "claude-opus-4-8", "claude-opus-4-7")):
+            return ("low", "medium", "high", "xhigh", "max")
+        if "claude-sonnet-4-6" in lowered or "claude-opus-4-6" in lowered:
+            return ("low", "medium", "high", "max")
+        if "claude-opus-4-5" in lowered or "claude-mythos-preview" in lowered:
+            return ("low", "medium", "high", "max")
+        return ()
+    if vendor == "google" and lowered.startswith(("gemini-3", "gemini-2.5")):
+        return ("minimal", "low", "medium", "high")
+    if vendor == "xai":
+        if lowered.startswith("grok-4.20-multi-agent"):
+            return ("low", "medium", "high", "xhigh")
+        if lowered.startswith("grok-4.5"):
+            return ("low", "medium", "high")
+    return ()

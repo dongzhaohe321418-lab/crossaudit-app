@@ -191,6 +191,9 @@ def test_project_page_contains_the_control_plane_contract():
                  "/api/workspace/select", "/api/github/check",
                  "Check names", "Edit repository names", "recovery-modal"):
         assert text in PAGE
+    for text in ("Models & reasoning", "/api/runtime/options", "/api/runtime",
+                 "Save for next call", "Reasoning effort", "Atomic between calls"):
+        assert text in PAGE
     assert "data-copy-recovery-github" in PAGE
     assert "This dialog updates automatically after approval." in PAGE
 
@@ -385,3 +388,68 @@ def test_live_model_refresh_uses_the_selected_role_key(tmp_path, monkeypatch):
     result = projects.refresh_models(current, "anthropic", "generator")
     assert result["models"] == ["future-model-2", "future-model-1"]
     assert seen == [("anthropic", "CROSSAUDIT_GENERATOR_KEY")]
+
+
+def test_runtime_model_and_effort_switch_is_committed_atomically(tmp_path, monkeypatch):
+    monkeypatch.delenv("CROSSAUDIT_AUDITOR_KEY", raising=False)
+    projects.create_project(tmp_path, payload(name="control"), lambda *_: None)
+    root = tmp_path / "control"
+    current = load(root / "crossaudit.yml")
+
+    options = projects.runtime_options(current)
+    assert options["applies"] == "next_provider_call"
+    assert {row["id"] for row in options["roles"]["auditor"]["efforts"]} >= {
+        "low", "medium", "high", "max"}
+    result = projects.update_runtime(current, {
+        "generator_model": "claude-opus-4-8",
+        "generator_reasoning_effort": "xhigh",
+        "auditor_model": "gpt-5.6-terra",
+        "auditor_reasoning_effort": "max",
+    })
+
+    updated = load(root / "crossaudit.yml")
+    assert result["changed"] is True and len(result["commit"]) == 40
+    assert updated.generator_model == "claude-opus-4-8"
+    assert updated.generator_reasoning_effort == "xhigh"
+    assert updated.auditor.model == "gpt-5.6-terra"
+    assert updated.auditor.reasoning_effort == "max"
+    assert subprocess.run(["git", "status", "--porcelain"], cwd=root,
+                          capture_output=True, text=True, check=True).stdout == ""
+    assert subprocess.run(["git", "show", "--format=%s", "--no-patch", "HEAD"],
+                          cwd=root, capture_output=True, text=True,
+                          check=True).stdout.startswith("config:")
+
+
+def test_runtime_switch_refuses_unsupported_effort_and_preserves_config(
+        tmp_path, monkeypatch):
+    monkeypatch.delenv("CROSSAUDIT_AUDITOR_KEY", raising=False)
+    projects.create_project(tmp_path, payload(name="control"), lambda *_: None)
+    config = tmp_path / "control" / "crossaudit.yml"
+    current = load(config)
+    before = config.read_bytes()
+
+    with pytest.raises(ConfigDenial, match="does not expose an adjustable effort"):
+        projects.update_runtime(current, {
+            "generator_model": "claude-haiku-4-5-20251001",
+            "generator_reasoning_effort": "max",
+            "auditor_model": "gpt-5.6-sol",
+            "auditor_reasoning_effort": "high",
+        })
+    assert config.read_bytes() == before
+
+
+def test_runtime_switch_never_overwrites_an_external_config_edit(tmp_path, monkeypatch):
+    monkeypatch.delenv("CROSSAUDIT_AUDITOR_KEY", raising=False)
+    projects.create_project(tmp_path, payload(name="control"), lambda *_: None)
+    config = tmp_path / "control" / "crossaudit.yml"
+    config.write_text(config.read_text() + "# owner's pending edit\n")
+    before = config.read_bytes()
+
+    with pytest.raises(ConfigDenial, match="uncommitted changes"):
+        projects.update_runtime(load(config), {
+            "generator_model": "claude-sonnet-4-6",
+            "generator_reasoning_effort": "medium",
+            "auditor_model": "gpt-5.6-terra",
+            "auditor_reasoning_effort": "medium",
+        })
+    assert config.read_bytes() == before

@@ -22,7 +22,10 @@ ISOLATION_DIMS = ("parametric", "contextual", "permissive")
 _ALLOWED_TOP = {"version", "science_repo", "audit_repo", "constitution", "max_rounds",
                 "auditor", "generator", "isolation", "state", "ledger", "scope",
                 "checks", "plugins"}
-_ALLOWED_ROLE = {"provider", "model", "base_url", "key_env", "vendor"}
+_ALLOWED_ROLE = {"provider", "model", "base_url", "key_env", "vendor",
+                 "reasoning_effort"}
+_EFFORT_VALUES = {"none", "minimal", "low", "medium", "high", "xhigh", "max",
+                  "ultra"}
 
 
 @dataclass(frozen=True)
@@ -32,6 +35,7 @@ class Role:
     vendor: str
     key_env: str
     base_url: str | None = None
+    reasoning_effort: str | None = None
 
 
 @dataclass(frozen=True)
@@ -47,6 +51,7 @@ class Config:
     generator_model: str | None
     generator_key_env: str | None
     generator_base_url: str | None
+    generator_reasoning_effort: str | None
     isolation_minimum: dict
     state_dir: str
     ledger_dir: str
@@ -66,8 +71,14 @@ def _role(raw: dict, name: str, where: Path) -> Role:
     for req in ("provider", "model", "vendor", "key_env"):
         if not raw.get(req):
             raise ConfigDenial(f"{name}.{req} is required", file=str(where))
+    effort = raw.get("reasoning_effort")
+    if effort is not None and effort not in _EFFORT_VALUES:
+        raise ConfigDenial(
+            f"{name}.reasoning_effort must be one of {sorted(_EFFORT_VALUES)}",
+            file=str(where))
     return Role(provider=raw["provider"], model=raw["model"], vendor=raw["vendor"],
-                key_env=raw["key_env"], base_url=raw.get("base_url"))
+                key_env=raw["key_env"], base_url=raw.get("base_url"),
+                reasoning_effort=effort)
 
 
 def find(start: Path | None = None) -> Path:
@@ -106,6 +117,11 @@ def load(path: Path | None = None) -> Config:
     if gen_unknown:
         raise ConfigDenial(f"generator: unknown keys {sorted(gen_unknown)}", file=str(p))
     generator_vendor = gen.get("vendor")
+    generator_effort = gen.get("reasoning_effort")
+    if generator_effort is not None and generator_effort not in _EFFORT_VALUES:
+        raise ConfigDenial(
+            f"generator.reasoning_effort must be one of {sorted(_EFFORT_VALUES)}",
+            file=str(p))
 
     iso_raw = raw.get("isolation") or {}
     minimum = iso_raw.get("minimum") or {}
@@ -155,6 +171,7 @@ def load(path: Path | None = None) -> Config:
         generator_model=gen.get("model"),
         generator_key_env=gen.get("key_env"),
         generator_base_url=gen.get("base_url"),
+        generator_reasoning_effort=generator_effort,
         isolation_minimum={d: bool(minimum.get(d, False)) for d in ISOLATION_DIMS},
         state_dir=state_dir,
         ledger_dir=ledger_dir,

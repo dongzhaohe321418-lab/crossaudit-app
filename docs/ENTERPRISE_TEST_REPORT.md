@@ -1,14 +1,14 @@
-# CrossAudit 4.5.0 enterprise release assessment
+# CrossAudit 4.6.0 enterprise release assessment
 
 Date: 2026-08-03
 
 Target: Apple Silicon macOS 13 or later
 
-Release candidate: 4.5.0
+Release candidate: 4.6.0
 
 ## Executive result
 
-CrossAudit 4.5.0 is suitable for local evaluation and controlled pilot use. It
+CrossAudit 4.6.0 is suitable for local evaluation and controlled pilot use. It
 preserves the V3.2 audited protocol while adding a native AppKit/WebKit shell,
 Keychain credentials, UI-first project creation, independent background
 projects, GitHub connection, chunked file transfer, final-artifact downloads,
@@ -39,10 +39,37 @@ Policy rather than hidden behind an installation workaround.
 | GitHub setup | Auth states, idempotent adoption, partial-failure retry, origin refusal | Automated |
 | Transfers | Arbitrary type/count, chunk offsets, traversal, one-shot staging, zero-byte file | Automated |
 | Receipts | Binding verification, recorded cycle state, one-time admission | Automated |
+| Runtime models | Atomic model/effort switch, busy refusal, SSE refresh, provider-specific payload | Automated and live |
 
 The final command outputs and artifact hashes are recorded in the GitHub release
 and CI logs. Tests that spend provider credits remain explicitly opt-in and use
 repository secrets in CI.
+
+## V4.6.0 release-candidate evidence
+
+- Automated suite: **429 passed, 2 skipped** in 43.86 seconds. The skipped cases
+  are only explicitly opt-in provider tests; live calls were run separately.
+- Live request controls: OpenAI `gpt-5.6-luna` accepted `low`, Anthropic
+  `claude-sonnet-4-6` accepted `medium`, and the official signed-in Codex runtime
+  accepted a turn-level `low` override. All returned provider/runtime usage.
+- Frozen end-to-end: the signed 4.6.0 core atomically switched Generator to
+  Sonnet 4.6 / medium and Auditor to GPT-5.6 Luna / low, completed a real
+  cross-vendor loop with PASS, admitted the exact receipt to CONSUMED, and
+  refused the replay. The receipt records the auditor effort in both its audit
+  and exchange evidence.
+- Runtime safety: model/effort controls are refused immediately while a loop is
+  running, changes commit only `crossaudit.yml`, dirty configuration is never
+  overwritten, unsupported model/provider combinations stay on Automatic, and
+  the active workspace updates over SSE without restart.
+- Browser acceptance: desktop dark, responsive 390 x 844, and light-theme views
+  rendered the two-role model/effort dialog with zero horizontal overflow and no
+  console warnings or errors. A saved switch appeared in the workspace within
+  the next event frame without reloading.
+- Distribution: valid APFS DMG CRC, valid Info.plist, arm64 shell/core/`gh`/Codex
+  executables, and strict deep code-sign verification. Frozen first launch
+  reported 4.6.0 and refused missing token, wrong token, and foreign Host with
+  HTTP 403. SHA-256:
+  `9352ad0aa1a3e5c64d1020066d6bb8478f62d62c3fbf107e8899acc747c56f69`.
 
 ## V4.5.0 release-candidate evidence
 
@@ -200,6 +227,14 @@ repository secrets in CI.
     complete Git/ledger snapshot before reaching SSE. The stream now reuses its
     last complete durable view for an in-memory progress-only update, then
     performs the usual full derivation on the 100 ms fallback tick.
+27. Model selection was fixed for the lifetime of a project daemon and reasoning
+    effort could not be expressed. V4.6 adds independent live role controls,
+    provider/model capability checks, request-level adapter fields, atomic Git
+    persistence, Codex catalogue discovery, and receipt/report evidence.
+28. If a correction round reproduced the previous bytes, the controller correctly
+    escalated but incorrectly described the cause as spending the full round
+    budget. It now records that the Generator produced no new auditable revision
+    in the exact round where progress stopped.
 
 ## Residual risks and recommendations
 

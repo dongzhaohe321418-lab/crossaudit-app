@@ -100,6 +100,9 @@ button{cursor:pointer}
 .status.BLOCKED,.status.blocked,.status.failed,.status.refused{background:var(--red-bg);color:var(--red)}
 .status.ESCALATED,.status.escalated{background:var(--amber-bg);color:var(--amber)}
 .status.running{background:var(--blue-bg);color:var(--blue)}
+.runtime-button{height:29px;border:1px solid var(--line);border-radius:8px;background:var(--surface);
+  color:var(--muted);padding:0 9px;font-size:10.5px;white-space:nowrap}.runtime-button:hover{
+  background:var(--hover);color:var(--text)}
 .thread{flex:1;overflow:auto;min-height:0;scrollbar-gutter:stable}
 .thread-inner{width:min(760px,calc(100% - 48px));margin:0 auto;padding:28px 0 120px}
 .welcome{padding:56px 20px 26px;text-align:center}.welcome-mark{width:38px;height:38px;
@@ -367,6 +370,7 @@ textarea::placeholder{color:var(--faint)}.compose-button{border:0;background:tra
 }
 @media(max-width:560px){
   .topbar{padding:0 8px;gap:6px}.top-project{display:none}.live-pill{width:27px;padding:0;justify-content:center}
+  .runtime-button{width:29px;padding:0;font-size:0}.runtime-button:after{content:'⌁';font-size:15px}
   #conn-text{display:none}.thread-head{height:54px}.thread-inner{padding-top:20px}
   .composer-meta #model-summary{display:none}.composer-meta{justify-content:flex-end}
   .turn-meta{height:auto;min-height:25px;flex-wrap:wrap}.finding-head{flex-wrap:wrap}
@@ -463,6 +467,12 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
 .path-preview{display:block;margin-top:6px;color:var(--faint);font-size:10px;overflow-wrap:anywhere}
 .role-card{border:1px solid var(--line);border-radius:10px;padding:13px;background:var(--panel)}
 .role-card b{display:block;margin-bottom:9px}.role-card .field+.field{margin-top:10px}
+.runtime-role-head{display:flex;align-items:flex-start;gap:9px;margin-bottom:11px}.runtime-role-head b{
+  margin:0}.runtime-role-head span{margin-left:auto;color:var(--faint);font-size:10px}.runtime-grid{
+  display:grid;grid-template-columns:1fr 1fr;gap:12px}.runtime-note{margin-top:12px;padding:10px 11px;
+  border:1px solid var(--line);border-radius:9px;background:var(--surface-2);color:var(--muted);
+  font-size:10.5px;line-height:1.5}.runtime-note b{color:var(--text)}.effort-help{display:block;
+  color:var(--faint);font-size:10px;margin-top:6px;line-height:1.4}.runtime-saved{color:var(--green)}
 .model-actions{display:flex;justify-content:flex-end;margin-top:6px}.model-actions button{height:27px;font-size:10px}
 .custom-model.off{display:none}
 .github-box{border:1px solid var(--line);border-radius:10px;padding:14px;background:var(--panel)}
@@ -514,13 +524,14 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
   .project-models,.project-tier{display:none}.form-grid{grid-template-columns:1fr}
   .field.full{grid-column:auto}.project-modal{padding:8px}.wizard{max-height:calc(100vh - 16px)}
   #provider-credentials{grid-template-columns:1fr}
+  .runtime-grid{grid-template-columns:1fr}
   .path-picker{align-items:stretch;flex-direction:column}.path-picker button{width:100%}.repo-actions{align-items:flex-start;
     flex-direction:column}.hub-tools,.hub-search{width:100%;min-width:0}}
 </style></head>
 <body>
 <section class="project-hub" id="project-hub" aria-label="Projects">
   <header class="hub-bar"><button class="brand-button" id="hub-brand"><span class="brand-mark">◇</span>
-    CrossAudit <span class="version" id="hub-version">V4.5.0</span></button><span class="spacer"></span>
+    CrossAudit <span class="version" id="hub-version">V4.6.0</span></button><span class="spacer"></span>
     <button class="icon-button" id="hub-settings" aria-label="Settings" title="Settings">⚙</button>
     <button class="icon-button" id="hub-theme" aria-label="Switch theme">◐</button>
     <button class="primary" id="create-project">＋ New project</button></header>
@@ -595,6 +606,30 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
   </form>
 </div>
 
+<div class="project-modal" id="runtime-modal" role="dialog" aria-modal="true" aria-labelledby="runtime-title">
+  <form class="wizard" id="runtime-form"><div class="wizard-head"><div><h2 id="runtime-title">Models & reasoning</h2>
+    <p>Change either role for the next provider call without restarting this workspace.</p></div>
+    <span class="spacer"></span><button type="button" class="icon-button" id="close-runtime" aria-label="Close">×</button></div>
+    <div class="wizard-body"><div class="runtime-grid">
+      <section class="role-card" id="runtime-generator-card"><div class="runtime-role-head"><b>Generator</b><span id="runtime-generator-vendor">…</span></div>
+        <label class="field"><span>Model</span><select id="runtime-generator-model"></select></label>
+        <label class="field custom-model off" id="runtime-generator-custom-wrap"><span>Custom model ID</span><input id="runtime-generator-custom" maxlength="120" placeholder="Exact provider model ID"></label>
+        <label class="field"><span>Reasoning effort</span><select id="runtime-generator-effort"></select><small class="effort-help" id="runtime-generator-effort-help"></small></label>
+        <div class="model-actions"><button type="button" class="secondary" data-runtime-refresh="generator">Refresh models</button></div>
+      </section>
+      <section class="role-card" id="runtime-auditor-card"><div class="runtime-role-head"><b>Independent auditor</b><span id="runtime-auditor-vendor">…</span></div>
+        <label class="field"><span>Model</span><select id="runtime-auditor-model"></select></label>
+        <label class="field custom-model off" id="runtime-auditor-custom-wrap"><span>Custom model ID</span><input id="runtime-auditor-custom" maxlength="120" placeholder="Exact provider model ID"></label>
+        <label class="field"><span>Reasoning effort</span><select id="runtime-auditor-effort"></select><small class="effort-help" id="runtime-auditor-effort-help"></small></label>
+        <div class="model-actions"><button type="button" class="secondary" data-runtime-refresh="auditor">Refresh models</button></div>
+      </section>
+    </div><div class="runtime-note" id="runtime-note"><b>Atomic between calls.</b> Saving commits only crossaudit.yml. A running audit round keeps the model and effort it started with.</div>
+      <div class="wizard-error" id="runtime-error"></div></div>
+    <div class="wizard-foot"><span id="runtime-foot">Automatic means the provider chooses its documented default.</span>
+      <button type="button" class="secondary" id="cancel-runtime">Cancel</button><button class="primary" id="save-runtime">Save for next call</button></div>
+  </form>
+</div>
+
 <div class="project-modal" id="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
   <form class="wizard" id="settings-form"><div class="wizard-head"><div><h2 id="settings-title">CrossAudit settings</h2>
     <p>Connect subscriptions or enter API keys without editing files or environment variables.</p></div>
@@ -625,7 +660,7 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
       aria-controls="sidebar-panel" aria-expanded="false">☰</button>
     <button class="icon-button" id="back-projects" aria-label="Back to projects" title="Back to projects">←</button>
     <button class="brand-button" id="projects-home"><span class="brand-mark">◇</span>CrossAudit
-      <span class="version" id="version-badge">V4.5.0</span></button>
+      <span class="version" id="version-badge">V4.6.0</span></button>
     <button class="top-project" id="project-switcher"><b id="proj">…</b> <span id="branch-label">/ supervised workspace</span>⌄</button>
     <span class="spacer"></span>
     <div class="live-pill"><span class="live-dot" id="livedot"></span><span id="conn-text">connecting</span></div>
@@ -653,6 +688,7 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
       <span class="participant" title="You">Y</span><span class="participant" title="Generator">G</span>
       <span class="participant auditor" title="Auditor">A</span></div><div class="thread-title"><h1 id="thread-title">New task</h1>
       <p id="thread-subtitle">Independent generation and audit</p></div><span class="spacer"></span>
+      <button type="button" class="runtime-button" id="runtime-open" title="Switch models and reasoning effort">Models & effort</button>
       <span class="status" id="thread-status">ready</span></div>
     <div class="thread" id="thread"><div class="thread-inner">
       <div class="interrupted" id="interrupted"></div><div id="conversation"></div>
@@ -885,6 +921,77 @@ settingsForm.onsubmit=async ev=>{ev.preventDefault();const save=document.getElem
     if(projectState)configureProjectForm();}
   catch(e){error.textContent=e.message;error.className='wizard-error on';}
   save.disabled=false;};
+
+const runtimeModal=document.getElementById('runtime-modal');
+const runtimeForm=document.getElementById('runtime-form');
+let runtimeRoles={};let runtimeCapabilityNonce={generator:0,auditor:0};
+function runtimeEl(role,name){return document.getElementById('runtime-'+role+'-'+name);}
+function runtimeModel(role){const select=runtimeEl(role,'model');return select.value==='__custom__'
+  ?runtimeEl(role,'custom').value.trim():select.value;}
+function renderRuntimeEfforts(role,row){const target=runtimeEl(role,'effort');const previous=target.value;
+  target.innerHTML='<option value="">Automatic · provider default</option>'+(row.efforts||[]).map(item=>
+    '<option value="'+esc(item.id)+'">'+esc(item.id)+' — '+esc(item.hint||'')+'</option>').join('');
+  const wanted=row.reasoning_effort!==undefined?row.reasoning_effort:previous;
+  if([...target.options].some(option=>option.value===wanted))target.value=wanted;else target.value='';
+  runtimeEl(role,'effort-help').textContent=row.detail||((row.efforts||[]).length
+    ?'Applies to the next provider request.':'This model uses its provider-controlled default.');
+  target.disabled=!(row.efforts||[]).length;}
+function renderRuntimeRole(role,row){runtimeRoles[role]=row;const card=runtimeEl(role,'card');
+  const human=row.vendor==='human';card.classList.toggle('human',human);runtimeEl(role,'vendor').textContent=row.label||row.vendor;
+  const select=runtimeEl(role,'model');const rows=row.models||[];select.innerHTML=rows.map(item=>
+    '<option value="'+esc(item.id)+'">'+esc(item.id)+' — '+esc(item.hint||'available')+'</option>').join('')
+    +(human?'':'<option value="__custom__">Enter a custom model ID…</option>');
+  if(human){select.innerHTML='<option value="">Human-written changes</option>';select.disabled=true;
+    runtimeEl(role,'custom-wrap').className='field custom-model off';runtimeEl(role,'effort').innerHTML='<option>Not applicable</option>';
+    runtimeEl(role,'effort').disabled=true;runtimeEl(role,'effort-help').textContent=row.detail||'';return;}
+  select.disabled=false;if([...select.options].some(option=>option.value===row.model))select.value=row.model;
+  else{select.value='__custom__';runtimeEl(role,'custom').value=row.model||'';}
+  runtimeEl(role,'custom-wrap').className='field custom-model'+(select.value==='__custom__'?'':' off');
+  renderRuntimeEfforts(role,row);}
+function syncRuntimeBusy(d){const busy=Boolean(d&&d.progress&&!d.progress.finished);const save=document.getElementById('save-runtime');
+  save.disabled=busy;document.getElementById('runtime-foot').textContent=busy
+    ?'A loop is running. These controls unlock when its current model calls finish.'
+    :'Automatic means the provider chooses its documented default.';}
+async function updateRuntimeCapabilities(role){const model=runtimeModel(role);if(!model)return;
+  const nonce=++runtimeCapabilityNonce[role];runtimeEl(role,'effort').disabled=true;
+  runtimeEl(role,'effort-help').textContent='Checking this model…';
+  try{const row=await api('/api/runtime/options',{role,model});if(nonce!==runtimeCapabilityNonce[role])return;
+    row.models=runtimeRoles[role].models;row.reasoning_effort='';runtimeRoles[role]={...runtimeRoles[role],...row};renderRuntimeEfforts(role,row);}
+  catch(e){if(nonce!==runtimeCapabilityNonce[role])return;runtimeEl(role,'effort').innerHTML='<option value="">Automatic · provider default</option>';
+    runtimeEl(role,'effort').disabled=true;runtimeEl(role,'effort-help').textContent=e.message;}}
+function openRuntime(){const config=lastState&&lastState.runtime_config;if(!config)return;
+  document.getElementById('runtime-error').className='wizard-error';
+  for(const role of ['generator','auditor'])renderRuntimeRole(role,config.roles[role]);
+  syncRuntimeBusy(lastState);runtimeModal.className='project-modal on';}
+function closeRuntime(){runtimeModal.className='project-modal';runtimeForm.reset();}
+for(const role of ['generator','auditor']){
+  runtimeEl(role,'model').onchange=()=>{runtimeEl(role,'custom-wrap').className='field custom-model'
+      +(runtimeEl(role,'model').value==='__custom__'?'':' off');if(runtimeEl(role,'model').value!=='__custom__')updateRuntimeCapabilities(role);};
+  runtimeEl(role,'custom').onchange=()=>updateRuntimeCapabilities(role);
+}
+document.querySelectorAll('[data-runtime-refresh]').forEach(button=>button.onclick=async()=>{
+  const role=button.getAttribute('data-runtime-refresh'),row=runtimeRoles[role];if(!row||row.vendor==='human')return;
+  button.disabled=true;button.textContent='Refreshing…';
+  try{const result=await api('/api/models/refresh',{role,vendor:row.vendor,method:row.connection,endpoint:row.endpoint||''});
+    row.models=result.models.map(id=>({id,hint:'visible to this account'}));const selected=runtimeModel(role);
+    renderRuntimeRole(role,{...row,model:selected});button.textContent='Models updated';}
+  catch(e){showInlineError('runtime-error',e);button.textContent='Refresh failed';}
+  finally{button.disabled=false;setTimeout(()=>button.textContent='Refresh models',2500);}
+});
+document.getElementById('runtime-open').onclick=openRuntime;
+document.getElementById('close-runtime').onclick=closeRuntime;
+document.getElementById('cancel-runtime').onclick=closeRuntime;
+runtimeModal.addEventListener('click',ev=>{if(ev.target===runtimeModal)closeRuntime();});
+runtimeForm.onsubmit=async ev=>{ev.preventDefault();const save=document.getElementById('save-runtime');
+  const error=document.getElementById('runtime-error');error.className='wizard-error';save.disabled=true;
+  const payload={generator_model:runtimeModel('generator'),auditor_model:runtimeModel('auditor'),
+    generator_reasoning_effort:runtimeEl('generator','effort').value||'',
+    auditor_reasoning_effort:runtimeEl('auditor','effort').value||''};
+  try{const result=await api('/api/runtime',payload);if(lastState)lastState.runtime_config=result;
+    closeRuntime();route.className='route on';route.innerHTML='<b>Runtime updated</b> — the next provider call will use the saved models and effort.';}
+  catch(e){showInlineError('runtime-error',e);syncRuntimeBusy(lastState);}
+  finally{if(!lastState||!lastState.progress||lastState.progress.finished)save.disabled=false;}
+};
 
 let projectState=null;
 let projectSource=null;
@@ -1506,6 +1613,7 @@ function renderInspector(d){
 }
 function render(d){
   lastState = d;
+  if(runtimeModal.classList.contains('on'))syncRuntimeBusy(d);
   document.querySelector('.composer-wrap').classList.toggle('view-hidden',activeView==='usage');
   const preview=document.getElementById('contract-preview');preview.className='contract-preview';preview.innerHTML='';
   document.getElementById('version-badge').textContent = 'V' + d.version;

@@ -33,7 +33,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, quote, urlparse
 
-from ..config import Config
+from ..config import Config, load
 from .. import app_keys, connections, usage
 from ..controller import StateStore
 from ..errors import ConfigDenial, Denial
@@ -136,6 +136,7 @@ class _ChangeSignal:
 
 STREAM_CHANGES = _ChangeSignal()
 PROGRESS_CHANGES = _ChangeSignal()
+MODEL_SWITCH_LOCK = threading.Lock()
 
 
 def _notify_progress() -> None:
@@ -194,14 +195,19 @@ def snapshot(cfg: Config) -> dict:
         "rules": const.read_text(encoding="utf-8").count("\n### ") if const.is_file() else 0,
         "skills": house,
         "auditor": (f"{cfg.auditor.vendor} · "
-                    f"{cfg.auditor.provider}:{cfg.auditor.model}"),
+                    f"{cfg.auditor.provider}:{cfg.auditor.model}" +
+                    (f" · {cfg.auditor.reasoning_effort}" if
+                     cfg.auditor.reasoning_effort else "")),
         "generator": (
             "human"
             if (cfg.generator_vendor or "").lower() == "human"
             else (f"{cfg.generator_vendor or 'unset'} · "
                   f"{cfg.generator_provider or 'unset'}:"
-                  f"{cfg.generator_model or 'unset'}")
+                  f"{cfg.generator_model or 'unset'}" +
+                  (f" · {cfg.generator_reasoning_effort}" if
+                   cfg.generator_reasoning_effort else ""))
         ),
+        "runtime_config": projects.runtime_options(cfg),
         "check_contracts": check_contracts(cfg.checks),
         "max_rounds": cfg.max_rounds,
         # Presence, never the value: a console that can show a key can leak one.
@@ -455,6 +461,12 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                 return False           # rebinding arrives with someone else's Host
             return secrets.compare_digest((query.get("t") or [""])[0], token)
 
+        def _config(self) -> Config:
+            # Runtime model controls replace crossaudit.yml atomically. Every
+            # request takes a fresh immutable snapshot so a long-lived console
+            # applies the new choice without a restart.
+            return load(cfg.path)
+
         def do_GET(self) -> None:                                   # noqa: N802
             parsed = urlparse(self.path)
             if not self._authorised(parse_qs(parsed.query)):
@@ -465,11 +477,11 @@ def make_handler(cfg: Config, token: str, touch) -> type:
             if parsed.path == "/":
                 self._send(PAGE.encode(), "text/html; charset=utf-8")
             elif parsed.path == "/api/state":
-                self._send(json.dumps(snapshot(cfg)).encode(), "application/json")
+                self._send(json.dumps(snapshot(self._config())).encode(), "application/json")
             elif parsed.path == "/api/stream":
                 self._stream(cfg, touch)
             elif parsed.path == "/api/projects":
-                self._send(json.dumps(projects.snapshot(cfg)).encode(),
+                self._send(json.dumps(projects.snapshot(self._config())).encode(),
                            "application/json")
             elif parsed.path == "/api/projects/stream":
                 self._stream_projects(cfg, touch)
@@ -480,7 +492,7 @@ def make_handler(cfg: Config, token: str, touch) -> type:
             elif parsed.path == "/api/file":
                 try:
                     path, filename, size = resolve_artifact(
-                        cfg, (parse_qs(parsed.query).get("path") or [""])[0])
+                        self._config(), (parse_qs(parsed.query).get("path") or [""])[0])
                 except TransferError as exc:
                     self._deny(exc.status, exc.reason)
                     return
@@ -503,7 +515,7 @@ def make_handler(cfg: Config, token: str, touch) -> type:
             change_version = STREAM_CHANGES.current()
             try:
                 while True:
-                    payload = json.dumps(projects.snapshot(cfg), sort_keys=True)
+                    payload = json.dumps(projects.snapshot(self._config()), sort_keys=True)
                     digest = hashlib.sha256(payload.encode()).hexdigest()
                     now = time.monotonic()
                     if digest != last_digest:
@@ -585,7 +597,7 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                         state = dict(last_state)
                         state["progress"] = TRACKER.snapshot()
                     else:
-                        state = snapshot(cfg)
+                        state = snapshot(self._config())
                     progress_version = current_progress_version
                     last_state = state
                     payload = json.dumps(state, sort_keys=True)
@@ -618,6 +630,7 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                                    "/api/projects/open", "/api/projects/resume",
                                    "/api/github/connect", "/api/github/check",
                                    "/api/workspace/select", "/api/models/refresh",
+                                   "/api/runtime/options", "/api/runtime",
                                    "/api/settings", "/api/providers/connect",
                                    "/api/admit"}:
                 self._deny(404, "no such action")
@@ -636,20 +649,22 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                 if not isinstance(payload, dict):
                     raise ValueError("object required")
                 if parsed.path == "/api/upload":
-                    result = receive_upload_chunk(cfg, payload)
+                    result = receive_upload_chunk(self._config(), payload)
                     self._send(json.dumps(result).encode(), "application/json")
                     return
                 if parsed.path == "/api/projects/create":
-                    result = projects.JOBS.start(cfg, payload, STREAM_CHANGES.notify)
+                    result = projects.JOBS.start(self._config(), payload,
+                                                 STREAM_CHANGES.notify)
                     self._send(json.dumps(result).encode(), "application/json")
                     return
                 if parsed.path == "/api/projects/open":
-                    result = projects.open_project(cfg, str(payload.get("root", "")))
+                    result = projects.open_project(self._config(),
+                                                   str(payload.get("root", "")))
                     self._send(json.dumps(result).encode(), "application/json")
                     return
                 if parsed.path == "/api/projects/resume":
                     result = projects.JOBS.resume(
-                        cfg, str(payload.get("root", "")), payload,
+                        self._config(), str(payload.get("root", "")), payload,
                         STREAM_CHANGES.notify)
                     self._send(json.dumps(result).encode(), "application/json")
                     return
@@ -663,16 +678,41 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                     return
                 if parsed.path == "/api/workspace/select":
                     result = projects.select_workspace(
-                        cfg, str(payload.get("path", "")))
+                        self._config(), str(payload.get("path", "")))
                     STREAM_CHANGES.notify()
                     self._send(json.dumps(result).encode(), "application/json")
                     return
                 if parsed.path == "/api/models/refresh":
                     result = projects.refresh_models(
-                        cfg, str(payload.get("vendor", "")),
+                        self._config(), str(payload.get("vendor", "")),
                         str(payload.get("role", "")),
                         str(payload.get("method", "api")),
                         str(payload.get("endpoint", "")))
+                    self._send(json.dumps(result).encode(), "application/json")
+                    return
+                if parsed.path == "/api/runtime/options":
+                    result = projects.runtime_options(
+                        self._config(), str(payload.get("role", "")),
+                        str(payload.get("model", "")), live_capabilities=True)
+                    self._send(json.dumps(result).encode(), "application/json")
+                    return
+                if parsed.path == "/api/runtime":
+                    # Fast-path refusal matters to the UI: do not leave this
+                    # request waiting behind a multi-minute provider turn just
+                    # to explain that switching mid-turn is unsafe.
+                    if TRACKER.running:
+                        raise ConfigDenial(
+                            "A loop is running. Model and effort changes apply between "
+                            "provider calls, so wait for this task to finish and save again.",
+                            issue="runtime_busy", action="wait")
+                    with MODEL_SWITCH_LOCK:
+                        if TRACKER.running:
+                            raise ConfigDenial(
+                                "A loop is running. Model and effort changes apply between "
+                                "provider calls, so wait for this task to finish and save again.",
+                                issue="runtime_busy", action="wait")
+                        result = projects.update_runtime(self._config(), payload)
+                    STREAM_CHANGES.notify()
                     self._send(json.dumps(result).encode(), "application/json")
                     return
                 if parsed.path == "/api/settings":
@@ -692,7 +732,7 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                     self._send(json.dumps(result).encode(), "application/json")
                     return
                 if parsed.path == "/api/admit":
-                    result = admit_latest(cfg)
+                    result = admit_latest(self._config())
                     STREAM_CHANGES.notify()
                     self._send(json.dumps(result).encode(), "application/json")
                     return
@@ -706,9 +746,9 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                 if transfer_kinds > 1:
                     raise TransferError("use one file-transfer method per message")
                 if payload.get("upload_batch") is not None:
-                    attachments = resolve_upload_batch(cfg, payload["upload_batch"])
+                    attachments = resolve_upload_batch(self._config(), payload["upload_batch"])
                 elif payload.get("uploads") is not None:
-                    attachments = resolve_uploads(cfg, payload.get("uploads"))
+                    attachments = resolve_uploads(self._config(), payload.get("uploads"))
                 else:
                     attachments = decode_attachments(payload.get("attachments"))
             except TransferError as exc:
@@ -724,10 +764,11 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                 self._deny(400, "say something")
                 return
             try:
-                result = say(
-                    cfg, text, attachments=attachments,
-                    attachment_consent=payload.get("attachment_consent") is True,
-                    delivery_choices=payload.get("delivery_choices"))
+                with MODEL_SWITCH_LOCK:
+                    result = say(
+                        self._config(), text, attachments=attachments,
+                        attachment_consent=payload.get("attachment_consent") is True,
+                        delivery_choices=payload.get("delivery_choices"))
             except TransferError as exc:
                 self._deny(exc.status, exc.reason)
                 return

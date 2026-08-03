@@ -1,10 +1,10 @@
-# CrossAudit 4.5.0
+# CrossAudit 4.6.0
 
-[![Version 4.5.0](https://img.shields.io/badge/version-4.5.0-6d5dfc)](https://github.com/dongzhaohe321418-lab/crossaudit_v4/releases/tag/v4.5.0)
+[![Version 4.6.0](https://img.shields.io/badge/version-4.6.0-6d5dfc)](https://github.com/dongzhaohe321418-lab/crossaudit_v4/releases/tag/v4.6.0)
 [![macOS 13+](https://img.shields.io/badge/macOS-13%2B-111111)](https://github.com/dongzhaohe321418-lab/crossaudit_v4#install)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776ab)](https://github.com/dongzhaohe321418-lab/crossaudit_v4#command-line-installation)
 
-**Latest release: [CrossAudit 4.5.0](https://github.com/dongzhaohe321418-lab/crossaudit_v4/releases/tag/v4.5.0).**
+**Latest release: [CrossAudit 4.6.0](https://github.com/dongzhaohe321418-lab/crossaudit_v4/releases/tag/v4.6.0).**
 
 CrossAudit is a local, cross-vendor AI work loop. One model creates files, a
 model from a different provider audits the committed result, and every task,
@@ -74,6 +74,9 @@ structured content.
   trusted custom OpenAI-compatible endpoint for CLI deployments.
 - Live model discovery using the exact credential selected for each role, plus
   manual model IDs for staged, regional, or account-specific releases.
+- Live Generator and Auditor model switching, with model-specific reasoning
+  effort controls. A saved change is committed atomically and applies to the
+  next provider call without restarting the project.
 - Correct OpenAI `max_completion_tokens` handling.
 - Deterministic schema, units, convergence, and provenance checks.
 - Git-backed reports and receipt verification.
@@ -98,12 +101,12 @@ official OpenAI Codex runtime.
 
 ### macOS application
 
-1. Download `CrossAudit-4.5.0-arm64.dmg` and its checksum from the
-   [V4.5.0 release](https://github.com/dongzhaohe321418-lab/crossaudit_v4/releases/tag/v4.5.0).
+1. Download `CrossAudit-4.6.0-arm64.dmg` and its checksum from the
+   [V4.6.0 release](https://github.com/dongzhaohe321418-lab/crossaudit_v4/releases/tag/v4.6.0).
 2. Optionally verify it in Terminal:
 
    ```bash
-   shasum -a 256 -c CrossAudit-4.5.0-arm64.dmg.sha256
+   shasum -a 256 -c CrossAudit-4.6.0-arm64.dmg.sha256
    ```
 
 3. Open the DMG and drag **CrossAudit** to **Applications**.
@@ -133,7 +136,7 @@ crossaudit --version
 Expected version output:
 
 ```text
-crossaudit 4.5.0 (receipt schema 2)
+crossaudit 4.6.0 (receipt schema 2)
 ```
 
 Use a virtual environment instead when developing CrossAudit, testing source
@@ -337,6 +340,14 @@ The form will not permit both roles to use the same vendor.
 Every model menu includes a custom-ID escape hatch and **Refresh from provider**,
 which asks the selected vendor which models the exact role credential can use;
 this avoids freezing the UI at the model list current when CrossAudit shipped.
+Inside an existing workspace, **Models & effort** changes either role's model
+and, where the provider publishes a supported request control, its reasoning
+effort. Changes are serialized between calls: controls lock while a loop is
+running, the active call keeps the settings it started with, and the next call
+uses the newly committed settings. The project view and Projects screen update
+immediately over SSE; no daemon or app restart is needed. **Automatic** omits
+the parameter and lets the provider use its documented default. CrossAudit does
+not send guessed effort fields to an unknown model or provider.
 For region-bound services, the same role card also exposes **API region**.
 CrossAudit sends the key only to that allowlisted regional host, and stores the
 chosen base URL in the project so later background runs use the same region.
@@ -513,12 +524,14 @@ auditor:
   vendor: openai
   provider: openai_compat
   model: gpt-5.6-terra
+  reasoning_effort: high
   key_env: CROSSAUDIT_AUDITOR_KEY
 
 generator:
   vendor: anthropic
   provider: anthropic
   model: claude-sonnet-4-6
+  reasoning_effort: medium
   key_env: CROSSAUDIT_GENERATOR_KEY
 
 isolation:
@@ -636,6 +649,15 @@ Built-in OpenAI requests use `max_completion_tokens`. Custom OpenAI-compatible
 providers retain family-based compatibility with endpoints that still expect
 `max_tokens`.
 
+Reasoning effort is request-level, not a permanent account setting. V4.6 exposes
+only values that the selected model/provider combination documents or, for a
+ChatGPT connection, values advertised live by the bundled official runtime.
+Current built-in mappings cover OpenAI GPT-5 reasoning families, supported
+Anthropic Claude models, Gemini thinking models, and reasoning-capable xAI
+models. Other providers remain on **Automatic** until their public API contract
+offers a compatible request control. Unsupported custom IDs are also kept on
+Automatic so a model switch cannot introduce an avoidable HTTP 400.
+
 Custom origins are denied by default because a base URL controls where the key
 is sent. Opt in only after checking the endpoint:
 
@@ -735,13 +757,13 @@ Exit codes are stable so scripts do not need to parse prose:
 
 V4 sends `max_completion_tokens` to the built-in OpenAI endpoint and retries
 once when a compatible endpoint explicitly asks for that field. Confirm that
-`crossaudit --version` reports 4.5.0 and reinstall if an older package is still
+`crossaudit --version` reports 4.6.0 and reinstall if an older package is still
 on your PATH. Restart a background console after upgrading because an existing
 daemon keeps the Python code that was loaded when it started.
 
 ### The macOS app is blocked on first launch
 
-V4.5.0 is structurally signed with the hardened runtime but is not notarized.
+V4.6.0 is structurally signed with the hardened runtime but is not notarized.
 Control-click **CrossAudit.app**, choose **Open**, and confirm only after you
 have verified the published SHA-256 checksum. An Apple Developer ID signed and
 notarized build is required before broad organizational deployment.
@@ -763,6 +785,14 @@ durable, so reloading or returning from Projects does not restart the work.
 Use the menu's manual-entry option or pass `--auditor-model` and
 `--generator-model` to setup. Model availability belongs to the provider
 account, not the API key format.
+
+### Reasoning effort cannot be selected
+
+This means the selected model/provider combination has no verified effort
+contract in CrossAudit. Leave it on **Automatic**. For ChatGPT connections,
+use **Refresh models** after signing in so the choices come from the live
+workspace catalogue. If a loop is already running, wait for that loop to finish;
+the controls deliberately lock rather than changing a request mid-flight.
 
 ### A provider returns HTTP 400 mentioning the model
 

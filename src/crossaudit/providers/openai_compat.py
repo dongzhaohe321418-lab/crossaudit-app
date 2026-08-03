@@ -84,6 +84,7 @@ def _request(url: str, payload: dict, headers: dict, timeout: float):
 def complete(*, model: str, system: str, prompt: str, key_env: str,
              base_url: str | None = None, allow_custom: bool = False,
              max_tokens: int = 4096, timeout: float = 120.0,
+             reasoning_effort: str | None = None,
              _builtin_base: str = BUILTIN_BASE,
              _extra_headers: dict[str, str] | None = None,
              _official_bases: tuple[str, ...] = (),
@@ -106,6 +107,10 @@ def complete(*, model: str, system: str, prompt: str, key_env: str,
     # temperature=0 behaviour.
     if not _uses_modern_completion_controls(model) and _temperature is not None:
         payload["temperature"] = _temperature
+    if reasoning_effort:
+        # The caller supplies this only after provider/model capability
+        # validation. An explicit choice is never silently removed on HTTP 400.
+        payload["reasoning_effort"] = reasoning_effort
     payload[_completion_token_parameter(
         model, builtin_openai=(api_base == BUILTIN_BASE))] = max_tokens
     headers = {"authorization": f"Bearer {read_key(key_env)}",

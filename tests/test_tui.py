@@ -767,6 +767,33 @@ def test_anthropic_temperature_matches_the_model_generation(
         assert captured["temperature"] == 0
 
 
+def test_reasoning_effort_uses_each_provider_official_request_shape(monkeypatch):
+    from crossaudit.providers import anthropic, openai_compat
+
+    captured = {}
+    monkeypatch.setenv("CROSSAUDIT_TEST_KEY", "not-a-real-key")
+    monkeypatch.setattr(
+        openai_compat, "request_json",
+        lambda _url, payload, _headers, *, timeout:
+        (captured.setdefault("openai", dict(payload)) and
+         {"choices": [{"message": {"content": "OK"}}]}, "openai-request"))
+    monkeypatch.setattr(
+        anthropic, "request_json",
+        lambda _url, payload, _headers, *, timeout:
+        (captured.setdefault("anthropic", dict(payload)) and
+         {"content": [{"type": "text", "text": "OK"}]}, "anthropic-request"))
+
+    openai_compat.complete(
+        model="gpt-5.6-terra", system="system", prompt="prompt",
+        key_env="CROSSAUDIT_TEST_KEY", reasoning_effort="medium")
+    anthropic.complete(
+        model="claude-sonnet-4-6", system="system", prompt="prompt",
+        key_env="CROSSAUDIT_TEST_KEY", reasoning_effort="max")
+
+    assert captured["openai"]["reasoning_effort"] == "medium"
+    assert captured["anthropic"]["output_config"] == {"effort": "max"}
+
+
 def test_anthropic_custom_loopback_needs_explicit_opt_in(monkeypatch):
     from crossaudit.errors import ConfigDenial
     from crossaudit.providers import anthropic
