@@ -10,7 +10,7 @@ mitigation. Do not include real API keys or user data.
 
 ## Supported version
 
-Security fixes are made against the latest `main` release. CrossAudit 4.4.0 is
+Security fixes are made against the latest `main` release. CrossAudit 4.5.0 is
 the current native-app release.
 
 ## Desktop trust boundary
@@ -34,6 +34,6 @@ shell program: CrossAudit does not execute generated commands automatically.
 
 ## Distribution status
 
-The 4.4.0 community DMG is ad-hoc signed and is not Apple-notarized. Verify the
+The 4.5.0 community DMG is ad-hoc signed and is not Apple-notarized. Verify the
 published SHA-256 checksum before first launch. Organization-wide distribution
 should wait for a Developer ID signed, notarized, and stapled artifact.

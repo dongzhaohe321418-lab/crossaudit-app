@@ -647,7 +647,8 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                     result = projects.refresh_models(
                         cfg, str(payload.get("vendor", "")),
                         str(payload.get("role", "")),
-                        str(payload.get("method", "api")))
+                        str(payload.get("method", "api")),
+                        str(payload.get("endpoint", "")))
                     self._send(json.dumps(result).encode(), "application/json")
                     return
                 if parsed.path == "/api/settings":

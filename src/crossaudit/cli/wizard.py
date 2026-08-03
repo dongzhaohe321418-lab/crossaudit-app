@@ -25,48 +25,25 @@ from ..config import CONFIG_NAME
 from ..errors import ConfigDenial, Denial
 from ..scaffold import (AUDIT_TREE, CONFIG_TEMPLATE, DEFAULT_CHECKS, SCIENCE_TREE,
                         read, write_tree)
+from ..providers.specs import SPECS
 from . import tui
 
 DEFAULT_KEYS_FILE = Path.home() / ".crossaudit-keys.env"
 
-VENDORS = {
-    "anthropic": ("anthropic", "claude-sonnet-4-6", "https://api.anthropic.com"),
-    "openai": ("openai_compat", "gpt-5.6-terra", "https://api.openai.com"),
-    "google": ("openai_compat", "gemini-2.5-pro",
-               "https://generativelanguage.googleapis.com/v1beta/openai"),
-    "deepseek": ("openai_compat", "deepseek-chat", "https://api.deepseek.com"),
-    "other": ("openai_compat", "", ""),
-}
-VENDOR_HINTS = {
-    "anthropic": "Claude", "openai": "GPT", "google": "Gemini",
-    "deepseek": "DeepSeek", "other": "any OpenAI-compatible endpoint",
-}
+_VENDOR_ORDER = ("anthropic", "openai", "google", "deepseek", "zhipu",
+                 "moonshot", "minimax", "qwen", "xai", "mistral")
+VENDORS = {vendor: (SPECS[vendor].provider, SPECS[vendor].default_model,
+                    SPECS[vendor].api_base) for vendor in _VENDOR_ORDER}
+VENDORS["other"] = ("openai_compat", "", "")
+VENDOR_HINTS = {vendor: item.label for vendor, item in SPECS.items()}
+VENDOR_HINTS["other"] = "any explicitly trusted OpenAI-compatible endpoint"
 
 #: Models offered per vendor, most capable first. A list is not a promise that
 #: every entry is available on your account — the last option always lets you
 #: type an id, because a wizard that only offers what it knew when it shipped
 #: goes stale the week after a release.
-VENDOR_MODELS = {
-    "anthropic": [
-        ("claude-sonnet-4-6", "recommended, verified for CrossAudit"),
-        ("claude-opus-4-8", "high capability"),
-        ("claude-haiku-4-5-20251001", "fastest, cheapest"),
-    ],
-    "openai": [
-        ("gpt-5.6-sol", "highest capability"),
-        ("gpt-5.6-terra", "balanced"),
-        ("gpt-5.6-luna", "fastest, lowest cost"),
-    ],
-    "google": [
-        ("gemini-2.5-pro", "most capable"),
-        ("gemini-2.5-flash", "faster, cheaper"),
-    ],
-    "deepseek": [
-        ("deepseek-reasoner", "reasoning"),
-        ("deepseek-chat", "general"),
-    ],
-    "other": [],
-}
+VENDOR_MODELS = {vendor: list(item.models) for vendor, item in SPECS.items()}
+VENDOR_MODELS["other"] = []
 TYPE_IT = "__type__"
 
 

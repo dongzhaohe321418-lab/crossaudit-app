@@ -505,18 +505,22 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
 .settings-readiness{display:grid;grid-template-columns:1fr 1fr;gap:8px}.readiness-item{border:1px solid var(--line);
   border-radius:8px;padding:10px;background:var(--panel);font-size:11px}.readiness-item span{float:right;color:var(--green)}
 .readiness-item span.bad{color:var(--red)}
+#provider-credentials{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+#provider-credentials .credential-card{margin:0;min-width:0}
+#provider-credentials .provider-note{min-height:58px}
 .top-project{cursor:pointer;border-top:0;border-right:0;border-bottom:0;background:transparent;text-align:left}
 @media(max-width:760px){.hub-bar{padding:0 14px}.hub-main{width:calc(100% - 24px);padding-top:26px}
   .hub-heading{align-items:flex-start;flex-direction:column}.hub-summary{margin-left:0}.project-row{grid-template-columns:minmax(0,1fr) 60px 62px 16px;gap:8px}
   .project-models,.project-tier{display:none}.form-grid{grid-template-columns:1fr}
   .field.full{grid-column:auto}.project-modal{padding:8px}.wizard{max-height:calc(100vh - 16px)}
+  #provider-credentials{grid-template-columns:1fr}
   .path-picker{align-items:stretch;flex-direction:column}.path-picker button{width:100%}.repo-actions{align-items:flex-start;
     flex-direction:column}.hub-tools,.hub-search{width:100%;min-width:0}}
 </style></head>
 <body>
 <section class="project-hub" id="project-hub" aria-label="Projects">
   <header class="hub-bar"><button class="brand-button" id="hub-brand"><span class="brand-mark">◇</span>
-    CrossAudit <span class="version" id="hub-version">V4.4.0</span></button><span class="spacer"></span>
+    CrossAudit <span class="version" id="hub-version">V4.5.0</span></button><span class="spacer"></span>
     <button class="icon-button" id="hub-settings" aria-label="Settings" title="Settings">⚙</button>
     <button class="icon-button" id="hub-theme" aria-label="Switch theme">◐</button>
     <button class="primary" id="create-project">＋ New project</button></header>
@@ -549,11 +553,13 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
     <section class="form-section"><div class="form-title">Independent roles</div><div class="form-grid">
       <div class="role-card"><b>Auditor</b><label class="field"><span>Provider</span><select name="auditor_vendor" id="auditor-vendor"></select></label>
         <label class="field"><span>Connection</span><select name="auditor_connection" id="auditor-connection" required></select></label>
+        <label class="field"><span>API region</span><select name="auditor_endpoint" id="auditor-endpoint"></select><small class="field-help">The region must match the API key.</small></label>
         <label class="field"><span>Model</span><select name="auditor_model_choice" id="auditor-model"></select></label>
         <label class="field custom-model off" id="auditor-custom-wrap"><span>Custom model ID</span><input id="auditor-custom" maxlength="120" placeholder="Model available to your account"></label>
         <div class="model-actions"><button type="button" class="secondary" data-refresh-models="auditor">Refresh from provider</button></div></div>
       <div class="role-card"><b>Generator</b><label class="field"><span>Provider</span><select name="generator_vendor" id="generator-vendor"></select></label>
         <label class="field"><span>Connection</span><select name="generator_connection" id="generator-connection" required></select></label>
+        <label class="field"><span>API region</span><select name="generator_endpoint" id="generator-endpoint"></select><small class="field-help">The region must match the API key.</small></label>
         <label class="field"><span>Model</span><select name="generator_model_choice" id="generator-model"></select></label>
         <label class="field custom-model off" id="generator-custom-wrap"><span>Custom model ID</span><input id="generator-custom" maxlength="120" placeholder="Model available to your account"></label>
         <div class="model-actions"><button type="button" class="secondary" data-refresh-models="generator">Refresh from provider</button></div></div>
@@ -594,14 +600,8 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
     <p>Connect subscriptions or enter API keys without editing files or environment variables.</p></div>
     <span class="spacer"></span><button type="button" class="icon-button" id="close-settings" aria-label="Close settings">×</button></div>
     <div class="wizard-body"><section class="form-section"><div class="form-title">Provider credentials</div>
-      <div class="credential-card"><div class="credential-head"><b>OpenAI</b><span class="credential-state" id="openai-state">Checking…</span></div>
-        <div class="connection-method"><div class="connection-method-copy"><b>ChatGPT subscription</b><small id="chatgpt-detail">Use the official Codex login and an eligible ChatGPT plan. CrossAudit never receives the OAuth token.</small></div><button type="button" class="secondary" id="connect-chatgpt">Connect</button></div>
-        <div class="secret-row"><label class="field"><span>New API key</span><input type="password" id="openai-key" autocomplete="new-password" placeholder="Leave blank to keep the saved key"></label>
-          <label class="toggle-line"><input type="checkbox" id="remove-openai"><span><b>Remove</b><small>Delete saved key</small></span></label></div></div>
-      <div class="credential-card"><div class="credential-head"><b>Anthropic</b><span class="credential-state" id="anthropic-state">Checking…</span></div>
-        <div class="provider-note"><b>Subscription login unavailable.</b> Anthropic currently requires third-party applications to use API or approved enterprise-cloud credentials; CrossAudit will not capture Claude.ai cookies or subscription tokens.</div>
-        <div class="secret-row"><label class="field"><span>New API key</span><input type="password" id="anthropic-key" autocomplete="new-password" placeholder="Leave blank to keep the saved key"></label>
-          <label class="toggle-line"><input type="checkbox" id="remove-anthropic"><span><b>Remove</b><small>Delete saved key</small></span></label></div></div>
+      <div class="provider-note"><b>Developer access and consumer subscriptions are different products.</b> CrossAudit only offers web sign-in where the provider publishes a supported third-party inference flow. It never imports browser cookies or CLI session files.</div>
+      <div id="provider-credentials"></div>
     </section><section class="form-section"><div class="form-title">Application readiness</div>
       <div class="settings-readiness"><div class="readiness-item">Git<span id="git-state">…</span></div>
         <div class="readiness-item">GitHub connection tool<span id="ghcli-state">…</span></div>
@@ -625,7 +625,7 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
       aria-controls="sidebar-panel" aria-expanded="false">☰</button>
     <button class="icon-button" id="back-projects" aria-label="Back to projects" title="Back to projects">←</button>
     <button class="brand-button" id="projects-home"><span class="brand-mark">◇</span>CrossAudit
-      <span class="version" id="version-badge">V4.4.0</span></button>
+      <span class="version" id="version-badge">V4.5.0</span></button>
     <button class="top-project" id="project-switcher"><b id="proj">…</b> <span id="branch-label">/ supervised workspace</span>⌄</button>
     <span class="spacer"></span>
     <div class="live-pill"><span class="live-dot" id="livedot"></span><span id="conn-text">connecting</span></div>
@@ -804,8 +804,25 @@ window.crossauditWorkspaceSelected=async choice=>{
 const settingsModal=document.getElementById('settings-modal');
 const settingsForm=document.getElementById('settings-form');
 let settingsSource=null;
+function renderProviderCards(d){
+  const host=document.getElementById('provider-credentials');
+  const vendors=Object.keys(d.providers||{});
+  if(host.getAttribute('data-vendors')===vendors.join(','))return;
+  host.setAttribute('data-vendors',vendors.join(','));
+  host.innerHTML=vendors.map(vendor=>{const p=d.providers[vendor]||{};const label=p.label||vendor;
+    const subscription=vendor==='openai'
+      ?'<div class="connection-method"><div class="connection-method-copy"><b>ChatGPT subscription</b><small id="chatgpt-detail">'+esc((p.subscription||{}).detail||'Official Codex sign-in.')+'</small></div><button type="button" class="secondary" id="connect-chatgpt">Connect</button></div>'
+      :'<div class="provider-note"><b>API access.</b> '+esc((p.subscription||{}).detail||'Use an official developer API key.')+'</div>';
+    const links=(p.console_url?'<a class="login-link" href="'+esc(p.console_url)+'" target="_blank" rel="noopener">Get key ↗</a> ':'')
+      +(p.docs_url?'<a class="login-link" href="'+esc(p.docs_url)+'" target="_blank" rel="noopener">API docs ↗</a>':'');
+    return '<div class="credential-card"><div class="credential-head"><b>'+esc(label)+'</b><span class="credential-state" id="'+esc(vendor)+'-state">Checking…</span></div>'
+      +subscription+'<div class="secret-row"><label class="field"><span>New API key · '+links+'</span><input type="password" id="'+esc(vendor)+'-key" data-provider-key="'+esc(vendor)+'" autocomplete="new-password" placeholder="Leave blank to keep the saved key"></label>'
+      +'<label class="toggle-line"><input type="checkbox" id="remove-'+esc(vendor)+'" data-provider-remove="'+esc(vendor)+'"><span><b>Remove</b><small>Delete saved key</small></span></label></div></div>';
+  }).join('');
+}
 function renderSettings(d){
-  for(const vendor of ['openai','anthropic']){
+  renderProviderCards(d);
+  for(const vendor of Object.keys(d.providers||{})){
     const provider=d.providers&&d.providers[vendor]||{};
     const apiConfigured=Boolean(provider.api_key&&provider.api_key.configured);
     const configured=Boolean(provider.configured);
@@ -851,7 +868,7 @@ document.getElementById('close-settings').onclick=closeSettings;
 document.getElementById('cancel-settings').onclick=closeSettings;
 document.getElementById('choose-settings-workspace').onclick=()=>chooseWorkspace('settings');
 settingsModal.addEventListener('click',ev=>{if(ev.target===settingsModal)closeSettings();});
-document.getElementById('connect-chatgpt').onclick=async()=>{
+document.getElementById('provider-credentials').onclick=async ev=>{if(!ev.target.closest('#connect-chatgpt'))return;
   const button=document.getElementById('connect-chatgpt');const error=document.getElementById('settings-error');
   button.disabled=true;button.textContent='Starting…';error.className='wizard-error';
   try{const result=await api('/api/providers/connect',{provider:'openai',method:'chatgpt'});
@@ -862,10 +879,8 @@ document.getElementById('connect-chatgpt').onclick=async()=>{
 };
 settingsForm.onsubmit=async ev=>{ev.preventDefault();const save=document.getElementById('save-settings');
   const error=document.getElementById('settings-error');error.className='wizard-error';save.disabled=true;
-  const payload={openai_key:document.getElementById('openai-key').value,
-    anthropic_key:document.getElementById('anthropic-key').value,
-    remove_openai:document.getElementById('remove-openai').checked,
-    remove_anthropic:document.getElementById('remove-anthropic').checked};
+  const payload={};document.querySelectorAll('[data-provider-key]').forEach(el=>payload[el.getAttribute('data-provider-key')+'_key']=el.value);
+  document.querySelectorAll('[data-provider-remove]').forEach(el=>payload['remove_'+el.getAttribute('data-provider-remove')]=el.checked);
   try{const state=await api('/api/settings',payload);settingsForm.reset();renderSettings(state);
     if(projectState)configureProjectForm();}
   catch(e){error.textContent=e.message;error.className='wizard-error on';}
@@ -885,6 +900,8 @@ const auditorVendor=document.getElementById('auditor-vendor');
 const generatorVendor=document.getElementById('generator-vendor');
 const auditorConnection=document.getElementById('auditor-connection');
 const generatorConnection=document.getElementById('generator-connection');
+const auditorEndpoint=document.getElementById('auditor-endpoint');
+const generatorEndpoint=document.getElementById('generator-endpoint');
 const auditorModel=document.getElementById('auditor-model');
 const generatorModel=document.getElementById('generator-model');
 const projectType=document.getElementById('project-type');
@@ -899,14 +916,21 @@ function modelOptions(vendor,target){
 }
 function connectionOptions(vendor,target){
   const previous=target.value;const state=projectState&&projectState.connections&&projectState.connections[vendor]||{};
+  const label=state.label||vendor[0].toUpperCase()+vendor.slice(1);
   const rows=[];
   if(vendor==='openai')rows.push({id:'chatgpt',label:'ChatGPT subscription',ready:Boolean(state.chatgpt&&state.chatgpt.connected)});
-  rows.push({id:'api',label:vendor[0].toUpperCase()+vendor.slice(1)+' API key',ready:Boolean(state.api_key&&state.api_key.configured)});
+  rows.push({id:'api',label:label+' API key',ready:Boolean(state.api_key&&state.api_key.configured)});
   const readyRows=rows.filter(x=>x.ready);
   target.innerHTML=(readyRows.length?'':'<option value="" selected disabled>Connect '+esc(vendor)+' in Settings first</option>')
     +rows.map(x=>'<option value="'+x.id+'"'+(x.ready?'':' disabled')+'>'+esc(x.label)+(x.ready?'':' — connect in Settings')+'</option>').join('');
   if([...target.options].some(o=>o.value===previous&&!o.disabled))target.value=previous;
   else{const ready=[...target.options].find(o=>!o.disabled);if(ready)target.value=ready.value;}
+}
+function endpointOptions(vendor,target){
+  const previous=target.value;const rows=(projectState&&projectState.endpoints&&projectState.endpoints[vendor])||[];
+  target.innerHTML=rows.map(x=>'<option value="'+esc(x.id)+'">'+esc(x.label)+'</option>').join('');
+  if([...target.options].some(o=>o.value===previous))target.value=previous;
+  target.closest('.field').hidden=rows.length<2;
 }
 function syncCustomModel(role){
   const select=role==='auditor'?auditorModel:generatorModel;
@@ -920,14 +944,16 @@ function syncRoleChoices(){
     generatorVendor.value=[...generatorVendor.options].find(o=>!o.disabled).value;
   }
   connectionOptions(auditorVendor.value,auditorConnection);connectionOptions(generatorVendor.value,generatorConnection);
+  endpointOptions(auditorVendor.value,auditorEndpoint);endpointOptions(generatorVendor.value,generatorEndpoint);
   modelOptions(auditorVendor.value,auditorModel);modelOptions(generatorVendor.value,generatorModel);
 }
 function configureProjectForm(){
   if(!projectState)return;
   const vendors=Object.keys(projectState.models||{});
   if(!auditorVendor.options.length){
-    auditorVendor.innerHTML=vendors.map(v=>'<option value="'+esc(v)+'">'+esc(v)+'</option>').join('');
-    generatorVendor.innerHTML=vendors.map(v=>'<option value="'+esc(v)+'">'+esc(v)+'</option>').join('');
+    const label=v=>(projectState.connections&&projectState.connections[v]&&projectState.connections[v].label)||v;
+    auditorVendor.innerHTML=vendors.map(v=>'<option value="'+esc(v)+'">'+esc(label(v))+'</option>').join('');
+    generatorVendor.innerHTML=vendors.map(v=>'<option value="'+esc(v)+'">'+esc(label(v))+'</option>').join('');
     auditorVendor.value=vendors.includes('openai')?'openai':vendors[0];
     generatorVendor.value=vendors.includes('anthropic')?'anthropic':vendors.find(v=>v!==auditorVendor.value);
     syncRoleChoices();
@@ -1081,12 +1107,15 @@ function closeProjectModal(){projectModal.className='project-modal';}
 auditorVendor.onchange=syncRoleChoices;generatorVendor.onchange=syncRoleChoices;
 auditorConnection.onchange=()=>modelOptions(auditorVendor.value,auditorModel);
 generatorConnection.onchange=()=>modelOptions(generatorVendor.value,generatorModel);
+auditorEndpoint.onchange=()=>modelOptions(auditorVendor.value,auditorModel);
+generatorEndpoint.onchange=()=>modelOptions(generatorVendor.value,generatorModel);
 auditorModel.onchange=()=>syncCustomModel('auditor');generatorModel.onchange=()=>syncCustomModel('generator');
 document.querySelectorAll('[data-refresh-models]').forEach(button=>button.onclick=async()=>{
   const role=button.getAttribute('data-refresh-models');const vendor=role==='auditor'?auditorVendor.value:generatorVendor.value;
   const method=role==='auditor'?auditorConnection.value:generatorConnection.value;
+  const endpoint=role==='auditor'?auditorEndpoint.value:generatorEndpoint.value;
   button.disabled=true;button.textContent='Refreshing…';
-  try{const result=await api('/api/models/refresh',{role,vendor,method});
+  try{const result=await api('/api/models/refresh',{role,vendor,method,endpoint});
     projectState.models[vendor]=result.models.map(id=>({id,hint:'visible to this account'}));
     modelOptions(vendor,role==='auditor'?auditorModel:generatorModel);
     button.textContent='Updated '+new Date(result.refreshed*1000).toLocaleTimeString();}
@@ -1676,6 +1705,6 @@ form.onsubmit=async ev=>{ev.preventDefault();const rawText=say.value.trim();if(!
 api('/api/state').then(render).catch(e=>{document.getElementById('thread-title').textContent='Disconnected — '+e.message;});
 startStream();
 if(location.hash==='#projects')showProjects();
-api('/api/settings').then(s=>{if(s.app_mode&&location.hash==='#projects'&&
-  (!s.providers.openai.configured||!s.providers.anthropic.configured))openSettings();}).catch(()=>{});
+api('/api/settings').then(s=>{const ready=Object.values(s.providers||{}).filter(p=>p.configured).length;
+  if(s.app_mode&&location.hash==='#projects'&&ready<2)openSettings();}).catch(()=>{});
 </script></body></html>"""

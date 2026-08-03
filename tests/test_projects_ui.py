@@ -380,7 +380,7 @@ def test_live_model_refresh_uses_the_selected_role_key(tmp_path, monkeypatch):
     current = load(tmp_path / "control" / "crossaudit.yml")
     seen = []
     monkeypatch.setattr(projects, "list_models",
-                        lambda vendor, key_env: seen.append((vendor, key_env)) or
+                        lambda vendor, key_env, **kwargs: seen.append((vendor, key_env)) or
                         ["future-model-2", "future-model-1"])
     result = projects.refresh_models(current, "anthropic", "generator")
     assert result["models"] == ["future-model-2", "future-model-1"]

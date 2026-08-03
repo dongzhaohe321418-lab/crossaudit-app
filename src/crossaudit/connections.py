@@ -8,6 +8,7 @@ import uuid
 from . import app_keys
 from .errors import ConfigDenial
 from .providers import codex_subscription
+from .providers.specs import SPECS
 
 
 class LoginJobs:
@@ -19,11 +20,9 @@ class LoginJobs:
 
     def start(self, vendor: str, method: str, notify) -> dict:
         if (vendor, method) != ("openai", "chatgpt"):
-            if vendor == "anthropic":
-                raise ConfigDenial(
-                    "Anthropic does not permit third-party apps to bind Claude "
-                    "subscription credentials; use an API or enterprise cloud connection")
-            raise ConfigDenial("that provider login method is not supported")
+            detail = (SPECS.get(vendor).subscription_detail
+                      if vendor in SPECS else "that provider login method is not supported")
+            raise ConfigDenial(detail)
         account = codex_subscription.account_status()
         if account.get("connected"):
             return {"connected": True, "provider": "openai",
@@ -93,24 +92,21 @@ def status(*, force: bool = False) -> dict:
             return _STATUS_CACHE[1]
     keys = app_keys.status()
     chatgpt = codex_subscription.account_status()
-    openai_key = bool(keys.get("openai", {}).get("configured"))
-    anthropic_key = bool(keys.get("anthropic", {}).get("configured"))
-    result = {
-        "openai": {
-            "configured": openai_key or bool(chatgpt.get("connected")),
-            "api_key": {"configured": openai_key},
-            "chatgpt": chatgpt,
-        },
-        "anthropic": {
-            "configured": anthropic_key,
-            "api_key": {"configured": anthropic_key},
-            "subscription": {
-                "supported": False,
-                "detail": ("Claude subscriptions cannot be bound by third-party "
-                           "applications under Anthropic's current terms."),
-            },
-        },
-    }
+    result = {}
+    for vendor, spec in SPECS.items():
+        has_key = bool(keys.get(vendor, {}).get("configured"))
+        result[vendor] = {
+            "label": spec.label,
+            "configured": has_key,
+            "api_key": {"configured": has_key},
+            "console_url": spec.console_url,
+            "docs_url": spec.api_docs_url,
+            "subscription": {"supported": False,
+                             "detail": spec.subscription_detail},
+        }
+    result["openai"]["chatgpt"] = chatgpt
+    result["openai"]["configured"] = (
+        result["openai"]["configured"] or bool(chatgpt.get("connected")))
     with _STATUS_LOCK:
         _STATUS_CACHE = (now, result)
     return result
@@ -132,8 +128,7 @@ def provider_for(vendor: str, method: str) -> str:
         return "openai_codex"
     if method != "api":
         raise ConfigDenial(f"{vendor} does not support connection {method!r}")
-    from .cli.wizard import VENDORS
     try:
-        return VENDORS[vendor][0]
+        return SPECS[vendor].provider
     except KeyError:
         raise ConfigDenial(f"unsupported provider vendor {vendor!r}") from None

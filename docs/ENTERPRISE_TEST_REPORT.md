@@ -1,14 +1,14 @@
-# CrossAudit 4.4.0 enterprise release assessment
+# CrossAudit 4.5.0 enterprise release assessment
 
 Date: 2026-08-03
 
 Target: Apple Silicon macOS 13 or later
 
-Release candidate: 4.4.0
+Release candidate: 4.5.0
 
 ## Executive result
 
-CrossAudit 4.4.0 is suitable for local evaluation and controlled pilot use. It
+CrossAudit 4.5.0 is suitable for local evaluation and controlled pilot use. It
 preserves the V3.2 audited protocol while adding a native AppKit/WebKit shell,
 Keychain credentials, UI-first project creation, independent background
 projects, GitHub connection, chunked file transfer, final-artifact downloads,
@@ -43,6 +43,38 @@ Policy rather than hidden behind an installation workaround.
 The final command outputs and artifact hashes are recorded in the GitHub release
 and CI logs. Tests that spend provider credits remain explicitly opt-in and use
 repository secrets in CI.
+
+## V4.5.0 release-candidate evidence
+
+- Automated suite: **422 passed, 2 skipped** in 42.06 seconds. The skipped cases
+  are only the explicitly opt-in paid-provider tests.
+- Paid-provider smoke: **2 passed**, using real OpenAI and Anthropic completions
+  and provider-reported usage. No credential value was printed or persisted in
+  the repository.
+- First-party provider matrix: OpenAI, Anthropic, Google Gemini, DeepSeek,
+  Zhipu GLM, Moonshot Kimi, MiniMax, Alibaba Qwen, xAI, and Mistral each have a
+  tested credential name, model catalogue, exact completion adapter, and
+  allowlisted first-party origin. Live model discovery remains authoritative;
+  curated model IDs are fallbacks.
+- Regional routing: Zhipu, Moonshot, MiniMax, and Qwen expose explicit API-region
+  choices. Unit and project-creation tests prove that the selected regional base
+  is persisted independently for Auditor and Generator and that an unknown
+  region is refused before a network request.
+- Compatibility regression: built-in OpenAI uses
+  `max_completion_tokens`; OpenAI-compatible providers retry only a named token
+  parameter mismatch; MiniMax uses its documented non-zero temperature; and
+  single-origin providers cannot acquire a duplicated `/v1` path from the UI.
+- Browser acceptance: the installed frozen UI rendered V4.5.0, ten provider
+  cards and ten write-only key fields with no horizontal overflow or console
+  error. Project setup displayed the regional choices and continued to disable
+  the Generator's copy of the selected Auditor vendor.
+- Frozen runtime: authenticated state reported version 4.5.0 and
+  `frozen-app`, listened on loopback, and returned HTTP 403 for missing token,
+  wrong token, and forged Host requests. Native shell launch created exactly one
+  child core; normal AppKit Quit stopped both.
+- Distribution: valid APFS DMG CRC, valid Info.plist, arm64 shell/core/`gh`/Codex
+  executables, and strict deep code-sign verification. SHA-256:
+  `db213b5308c5ace44af7aafb35bfff992ac6e2ca7ea4f6fbc0f3bff85959c3d5`.
 
 ## V4.4.0 release-candidate evidence
 
@@ -151,6 +183,16 @@ repository secrets in CI.
     lifecycle. V4.4 installs main-queue signal sources so managed shutdowns use
     `applicationWillTerminate`, terminate the frozen core, and close its
     provider runtime instead of leaving a local orphan process.
+23. Provider names previously existed only as UI/model-catalog entries, so a
+    configured Gemini or DeepSeek role could still fall through to OpenAI's
+    completion origin. V4.5 generates every settings card, wizard choice,
+    catalogue request, credential name, and runtime adapter from one registry.
+24. Region-bound API keys could be sent to the wrong first-party regional host.
+    V4.5 makes the region explicit and allowlists each supported host; it never
+    probes multiple regions with the same secret.
+25. OpenAI's token-limit migration and MiniMax's non-zero temperature contract
+    produced avoidable provider HTTP 400 failures. Both are now encoded in the
+    adapter contract with a narrowly scoped one-retry compatibility path.
 
 ## Residual risks and recommendations
 
@@ -160,6 +202,9 @@ repository secrets in CI.
   upgrades.
 - Run the live-provider workflow on every provider/model change and weekly
   thereafter because provider contracts change independently of this codebase.
+- Add live credential-backed contract jobs for the eight newly preset providers
+  as isolated non-production accounts become available. Static origin and
+  payload tests do not prove provider-side entitlement or quota.
 - Treat GitHub repository creation as an external transaction: retain the
   existing resumable setup journal and never auto-delete partially created
   repositories.

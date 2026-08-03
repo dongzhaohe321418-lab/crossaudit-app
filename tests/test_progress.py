@@ -249,10 +249,10 @@ def test_console_has_one_primary_command_composer():
     assert 'id="auditor-connection" required' in PAGE
     assert 'id="generator-connection" required' in PAGE
     assert "ChatGPT subscription" in PAGE and "/api/providers/connect" in PAGE
-    assert "Subscription login unavailable" in PAGE
+    assert "consumer subscriptions are different products" in PAGE
     assert "Automatic revision limit" in PAGE and "It never auto-passes" in PAGE
-    assert 'type="password" id="openai-key"' in PAGE
-    assert 'type="password" id="anthropic-key"' in PAGE
+    assert "data-provider-key" in PAGE and "data-provider-remove" in PAGE
+    assert "Get key ↗" in PAGE and "API docs ↗" in PAGE
     assert 'data-theme="dark"' in PAGE and "crossaudit-theme" in PAGE
     assert 'data-view="tasks"' in PAGE
     assert 'data-audience="auto"' in PAGE

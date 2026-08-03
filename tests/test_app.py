@@ -13,6 +13,7 @@ from crossaudit.config import load
 from crossaudit.console import projects
 from crossaudit.constitution import Draft, Rule
 from crossaudit.errors import ConfigDenial
+from crossaudit.providers.specs import SPECS
 
 
 def app_payload(**changes):
@@ -59,6 +60,16 @@ def test_settings_response_reports_presence_but_never_secret(monkeypatch):
     assert result["providers"]["openai"]["configured"]
     assert result["providers"]["anthropic"]["configured"]
     assert "private-openai" not in encoded and "private-anthropic" not in encoded
+
+
+def test_settings_exposes_every_first_party_provider_without_a_secret(monkeypatch):
+    for vendor, spec in SPECS.items():
+        monkeypatch.setenv(spec.key_env, f"private-{vendor}")
+    result = app_keys.apply({})
+    encoded = json.dumps(result)
+    assert set(result["providers"]) == set(SPECS)
+    assert all(row["configured"] for row in result["providers"].values())
+    assert "private-" not in encoded
 
 
 def test_app_bootstrap_creates_a_clean_hidden_controller(tmp_path):
@@ -148,6 +159,47 @@ def test_app_project_config_binds_keys_to_vendor_not_role(tmp_path, monkeypatch)
     assert cfg.auditor.key_env == "CROSSAUDIT_OPENAI_KEY"
     assert cfg.generator_key_env == "CROSSAUDIT_ANTHROPIC_KEY"
     assert "CA-TASK-001" in (cfg.root / cfg.constitution).read_text()
+
+
+def test_project_can_bind_gemini_and_deepseek_without_openai_routing(
+        tmp_path, monkeypatch):
+    monkeypatch.setenv("CROSSAUDIT_APP_MODE", "1")
+    monkeypatch.setenv("CROSSAUDIT_GOOGLE_KEY", "google-test")
+    monkeypatch.setenv("CROSSAUDIT_DEEPSEEK_KEY", "deepseek-test")
+    monkeypatch.setattr(projects.wizard, "_distil", lambda *a, **kw: Draft(
+        "A review", "review", [Rule("CA-OUT-001", "BLOCKER", "One output",
+                                        "Exactly one output exists.")]))
+
+    result = projects.create_project(tmp_path, app_payload(
+        auditor_vendor="google", auditor_model="gemini-3.6-flash",
+        generator_vendor="deepseek", generator_model="deepseek-v4-flash"),
+        lambda *_: None)
+    cfg = load(Path(result["root"]) / "crossaudit.yml")
+
+    assert cfg.auditor.provider == "google"
+    assert cfg.auditor.key_env == "CROSSAUDIT_GOOGLE_KEY"
+    assert cfg.auditor.base_url is None
+    assert cfg.generator_provider == "deepseek"
+    assert cfg.generator_key_env == "CROSSAUDIT_DEEPSEEK_KEY"
+    assert cfg.generator_base_url is None
+
+
+def test_project_persists_each_roles_selected_api_region(tmp_path, monkeypatch):
+    monkeypatch.setenv("CROSSAUDIT_APP_MODE", "1")
+    monkeypatch.setenv("CROSSAUDIT_MINIMAX_KEY", "minimax-test")
+    monkeypatch.setenv("CROSSAUDIT_QWEN_KEY", "qwen-test")
+    monkeypatch.setattr(projects.wizard, "_distil", lambda *a, **kw: Draft(
+        "A review", "review", [Rule("CA-OUT-001", "BLOCKER", "One output",
+                                    "Exactly one output exists.")]))
+    result = projects.create_project(tmp_path, app_payload(
+        auditor_vendor="minimax", auditor_model="MiniMax-M2.7",
+        auditor_endpoint="global", generator_vendor="qwen",
+        generator_model="qwen3.7-plus", generator_endpoint="singapore"),
+        lambda *_: None)
+    cfg = load(Path(result["root"]) / "crossaudit.yml")
+    assert cfg.auditor.base_url == "https://api.minimax.io/v1"
+    assert cfg.generator_base_url == (
+        "https://dashscope-intl.aliyuncs.com/compatible-mode/v1")
 
 
 def test_frozen_app_identity_uses_embedded_build_digest(tmp_path, monkeypatch):

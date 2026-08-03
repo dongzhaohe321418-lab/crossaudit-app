@@ -1,10 +1,10 @@
-# CrossAudit 4.4.0
+# CrossAudit 4.5.0
 
-[![Version 4.4.0](https://img.shields.io/badge/version-4.4.0-6d5dfc)](https://github.com/dongzhaohe321418-lab/crossaudit_v4/releases/tag/v4.4.0)
+[![Version 4.5.0](https://img.shields.io/badge/version-4.5.0-6d5dfc)](https://github.com/dongzhaohe321418-lab/crossaudit_v4/releases/tag/v4.5.0)
 [![macOS 13+](https://img.shields.io/badge/macOS-13%2B-111111)](https://github.com/dongzhaohe321418-lab/crossaudit_v4#install)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776ab)](https://github.com/dongzhaohe321418-lab/crossaudit_v4#command-line-installation)
 
-**Latest release: [CrossAudit 4.4.0](https://github.com/dongzhaohe321418-lab/crossaudit_v4/releases/tag/v4.4.0).**
+**Latest release: [CrossAudit 4.5.0](https://github.com/dongzhaohe321418-lab/crossaudit_v4/releases/tag/v4.5.0).**
 
 CrossAudit is a local, cross-vendor AI work loop. One model creates files, a
 model from a different provider audits the committed result, and every task,
@@ -69,9 +69,11 @@ structured content.
   view, cache-aware counts, role/model breakdowns, and clearly labelled public
   API-value estimates.
 - A command-line interface for automation and development.
-- OpenAI, Anthropic, Google, DeepSeek, and custom OpenAI-compatible endpoints.
-- Current OpenAI GPT-5.6 and Anthropic Claude model choices, plus manual model
-  IDs for future or account-specific releases.
+- First-party OpenAI, Anthropic, Google Gemini, DeepSeek, Zhipu GLM, Moonshot
+  Kimi, MiniMax, Alibaba Qwen, xAI, and Mistral connections, plus an explicitly
+  trusted custom OpenAI-compatible endpoint for CLI deployments.
+- Live model discovery using the exact credential selected for each role, plus
+  manual model IDs for staged, regional, or account-specific releases.
 - Correct OpenAI `max_completion_tokens` handling.
 - Deterministic schema, units, convergence, and provenance checks.
 - Git-backed reports and receipt verification.
@@ -84,7 +86,8 @@ structured content.
 - Git (the application reports clearly when the Xcode Command Line Tools are
   missing)
 - Two independent model-provider connections. OpenAI can use a ChatGPT plan or
-  an API key. Anthropic currently requires an API/enterprise-cloud credential.
+  an API key. Every other built-in provider currently uses its official
+  developer API credential in CrossAudit.
 - A GitHub account only when you choose the optional two-repository workflow
 
 Python 3.10 or newer is required only for the optional command-line/source
@@ -95,19 +98,19 @@ official OpenAI Codex runtime.
 
 ### macOS application
 
-1. Download `CrossAudit-4.4.0-arm64.dmg` and its checksum from the
-   [V4.4.0 release](https://github.com/dongzhaohe321418-lab/crossaudit_v4/releases/tag/v4.4.0).
+1. Download `CrossAudit-4.5.0-arm64.dmg` and its checksum from the
+   [V4.5.0 release](https://github.com/dongzhaohe321418-lab/crossaudit_v4/releases/tag/v4.5.0).
 2. Optionally verify it in Terminal:
 
    ```bash
-   shasum -a 256 -c CrossAudit-4.4.0-arm64.dmg.sha256
+   shasum -a 256 -c CrossAudit-4.5.0-arm64.dmg.sha256
    ```
 
 3. Open the DMG and drag **CrossAudit** to **Applications**.
 4. Open CrossAudit, then open **Settings**. For OpenAI, choose **Connect** to
-   complete the official ChatGPT browser login or enter an API key. Enter the
-   independent Anthropic API key and save. API keys go to the macOS login
-   Keychain; ChatGPT credentials remain owned by the official Codex runtime.
+   complete the official ChatGPT browser login or enter an API key. Connect any
+   second first-party provider from the same screen. API keys go to the macOS
+   login Keychain; ChatGPT credentials remain owned by the official Codex runtime.
 
 This initial community build is ad-hoc signed but not Apple-notarized because
 the project does not yet have an Apple Developer ID certificate. macOS may
@@ -130,7 +133,7 @@ crossaudit --version
 Expected version output:
 
 ```text
-crossaudit 4.4.0 (receipt schema 2)
+crossaudit 4.5.0 (receipt schema 2)
 ```
 
 Use a virtual environment instead when developing CrossAudit, testing source
@@ -334,6 +337,9 @@ The form will not permit both roles to use the same vendor.
 Every model menu includes a custom-ID escape hatch and **Refresh from provider**,
 which asks the selected vendor which models the exact role credential can use;
 this avoids freezing the UI at the model list current when CrossAudit shipped.
+For region-bound services, the same role card also exposes **API region**.
+CrossAudit sends the key only to that allowlisted regional host, and stores the
+chosen base URL in the project so later background runs use the same region.
 It can also use the account already authenticated with `gh` to create a private
 work repository and a separate audit repository. Both names are independently
 editable. **Check names** verifies the exact connected account and both names
@@ -571,6 +577,14 @@ content from it. An already-exported environment variable takes precedence.
 | `CROSSAUDIT_GENERATOR_KEY` | Separate credential used only by the generator. |
 | `CROSSAUDIT_OPENAI_KEY` | OpenAI vendor credential used by desktop-created projects. |
 | `CROSSAUDIT_ANTHROPIC_KEY` | Anthropic vendor credential used by desktop-created projects. |
+| `CROSSAUDIT_GOOGLE_KEY` | Google AI Studio Gemini API/auth key. |
+| `CROSSAUDIT_DEEPSEEK_KEY` | DeepSeek Platform API key. |
+| `CROSSAUDIT_ZHIPU_KEY` | Zhipu BigModel GLM API key. |
+| `CROSSAUDIT_MOONSHOT_KEY` | Moonshot/Kimi Platform API key. |
+| `CROSSAUDIT_MINIMAX_KEY` | MiniMax Open Platform API key. |
+| `CROSSAUDIT_QWEN_KEY` | Alibaba Cloud Model Studio/DashScope API key. |
+| `CROSSAUDIT_XAI_KEY` | xAI Console inference API key. |
+| `CROSSAUDIT_MISTRAL_KEY` | Mistral La Plateforme API key. |
 | `CROSSAUDIT_GENERATOR_MODEL` | Override the configured generator model. |
 | `CROSSAUDIT_GENERATOR_PROVIDER` | Override the configured generator provider. |
 | `CROSSAUDIT_GENERATOR_BASE_URL` | Override the generator's provider endpoint. |
@@ -598,13 +612,25 @@ The setup wizard includes these provider families:
 |---|---|---|
 | OpenAI API | `openai_compat` | `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna` |
 | ChatGPT subscription | `openai_codex` | Models returned live by the connected ChatGPT workspace |
-| Anthropic | `anthropic` | `claude-fable-5`, `claude-opus-4-8`, `claude-sonnet-4-6`, `claude-haiku-4-5-20251001` |
-| Google | `openai_compat` | `gemini-2.5-pro`, `gemini-2.5-flash` |
-| DeepSeek | `openai_compat` | `deepseek-reasoner`, `deepseek-chat` |
+| Anthropic | `anthropic` | `claude-opus-4-8`, `claude-sonnet-4-6`, `claude-haiku-4-5-20251001` |
+| Google Gemini | `google` | Models returned by the Gemini `models.list` endpoint; curated fallback includes Gemini 3.x |
+| DeepSeek | `deepseek` | `deepseek-v4-pro`, `deepseek-v4-flash` |
+| Zhipu GLM | `zhipu` | `glm-5.2`, `glm-5`, `glm-4.7` |
+| Moonshot Kimi | `moonshot` | `kimi-k2.6`, `kimi-k2.5`, `kimi-k2-thinking-turbo` |
+| MiniMax | `minimax` | `MiniMax-M2.7`, `MiniMax-M2.7-highspeed`, `MiniMax-M2.5` |
+| Alibaba Qwen | `qwen` | `qwen3.7-max`, `qwen3.7-plus`, `qwen3-coder-plus`, `qwen-plus` |
+| xAI | `xai` | `grok-4.5`, `grok-4.3`, `grok-code-fast-1` |
+| Mistral AI | `mistral` | `mistral-medium-3-5`, `mistral-medium-latest`, `devstral-latest` |
 | Other | `openai_compat` | exact model ID entered by the user |
 
-The menu is a convenience, not a guarantee that every account can access every
-model. Use the exact ID returned by your provider account.
+The curated rows are resilient fallbacks, not a guarantee that every region or
+account can access every model. In the app, click **Refresh from provider** to
+replace them with the exact IDs visible to the selected credential. This avoids
+freezing a fast-moving model catalogue into an application release.
+Zhipu, Moonshot, MiniMax, and Qwen expose their supported China/international
+API regions directly in the project form. Their regional keys are not assumed
+to be interchangeable. See [provider support and authentication boundaries](docs/PROVIDER_SUPPORT.md)
+for the researched endpoint and subscription-login policy.
 
 Built-in OpenAI requests use `max_completion_tokens`. Custom OpenAI-compatible
 providers retain family-based compatibility with endpoints that still expect
@@ -709,13 +735,13 @@ Exit codes are stable so scripts do not need to parse prose:
 
 V4 sends `max_completion_tokens` to the built-in OpenAI endpoint and retries
 once when a compatible endpoint explicitly asks for that field. Confirm that
-`crossaudit --version` reports 4.4.0 and reinstall if an older package is still
+`crossaudit --version` reports 4.5.0 and reinstall if an older package is still
 on your PATH. Restart a background console after upgrading because an existing
 daemon keeps the Python code that was loaded when it started.
 
 ### The macOS app is blocked on first launch
 
-V4.4.0 is structurally signed with the hardened runtime but is not notarized.
+V4.5.0 is structurally signed with the hardened runtime but is not notarized.
 Control-click **CrossAudit.app**, choose **Open**, and confirm only after you
 have verified the published SHA-256 checksum. An Apple Developer ID signed and
 notarized build is required before broad organizational deployment.

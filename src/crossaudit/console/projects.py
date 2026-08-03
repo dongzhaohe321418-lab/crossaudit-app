@@ -28,6 +28,7 @@ from ..providers import codex_subscription
 from ..controller import StateStore
 from ..errors import ConfigDenial, Denial
 from ..providers.catalog import list_models
+from ..providers.specs import endpoint as provider_endpoint, endpoints as provider_endpoints
 from .. import workspace as workspace_mod
 from ..scaffold import (CONFIG_TEMPLATE, GENERAL_CHECKS, GENERAL_TREE,
                         SCIENCE_CHECKS, SCIENCE_TREE, read, write_tree)
@@ -457,8 +458,15 @@ def models() -> dict:
     }
 
 
+def endpoint_choices() -> dict:
+    return {
+        vendor: [{"id": row[0], "label": row[1]} for row in provider_endpoints(vendor)]
+        for vendor in models()
+    }
+
+
 def refresh_models(current: Config, vendor: str, role: str,
-                   method: str = "api") -> dict:
+                   method: str = "api", endpoint_id: str = "") -> dict:
     """Ask the provider which models this role's exact credential can access."""
     if vendor not in models():
         raise ConfigDenial(f"{vendor!r} has no supported model catalogue")
@@ -473,10 +481,14 @@ def refresh_models(current: Config, vendor: str, role: str,
         role_env = (current.auditor.key_env if role == "auditor"
                     else "CROSSAUDIT_GENERATOR_KEY")
         key_env = vendor_env if os.environ.get(vendor_env, "").strip() else role_env
-        rows = list_models(vendor, key_env)
+        try:
+            rows = list_models(vendor, key_env, endpoint_id=endpoint_id)
+        except ValueError as exc:
+            raise ConfigDenial(str(exc)) from exc
     if not rows:
         raise ConfigDenial(f"{vendor} returned no models visible to this key")
-    return {"vendor": vendor, "role": role, "method": method, "models": rows,
+    return {"vendor": vendor, "role": role, "method": method,
+            "endpoint": endpoint_id, "models": rows,
             "refreshed": int(time.time())}
 
 
@@ -549,6 +561,7 @@ def snapshot(current: Config) -> dict:
             "capacity": daemon.workspace_capacity(current),
             "github_auth": GITHUB_AUTH.snapshot(),
             "github": github_status(), "models": models(),
+            "endpoints": endpoint_choices(),
             "connections": connections.status()}
 
 
@@ -631,6 +644,8 @@ def create_project(base: Path, payload: dict, progress) -> dict:
     generator_model = (_clean_text(payload, "generator_model", 120,
                                    required=generator_vendor != "human")
                        if generator_vendor != "human" else "")
+    auditor_endpoint_id = str(payload.get("auditor_endpoint", "")).strip()
+    generator_endpoint_id = str(payload.get("generator_endpoint", "")).strip()
     if auditor_vendor not in wizard.VENDORS or auditor_vendor == "other":
         raise ConfigDenial("choose a supported auditor vendor")
     if generator_vendor not in (*wizard.VENDORS, "human") or generator_vendor == "other":
@@ -640,6 +655,24 @@ def create_project(base: Path, payload: dict, progress) -> dict:
     if not MODEL.fullmatch(auditor_model) or (generator_model and
                                              not MODEL.fullmatch(generator_model)):
         raise ConfigDenial("model ids contain unsupported characters")
+    try:
+        _aeid, _aelabel, auditor_base_url, _amodels_url = provider_endpoint(
+            auditor_vendor, auditor_endpoint_id)
+        # Single-origin adapters already own their exact base. Persist a URL
+        # only where the user made a regional choice; this also avoids feeding
+        # an SDK-style /v1 base into adapters whose optional override expects an
+        # origin (notably Anthropic).
+        if len(provider_endpoints(auditor_vendor)) == 1:
+            auditor_base_url = ""
+        if generator_vendor != "human":
+            _geid, _gelabel, generator_base_url, _gmodels_url = provider_endpoint(
+                generator_vendor, generator_endpoint_id)
+            if len(provider_endpoints(generator_vendor)) == 1:
+                generator_base_url = ""
+        else:
+            generator_base_url = ""
+    except ValueError as exc:
+        raise ConfigDenial(str(exc)) from exc
     auditor_key_env = env_for_vendor(auditor_vendor)
     generator_key_env = env_for_vendor(generator_vendor)
     auditor_provider = connections.provider_for(auditor_vendor, auditor_connection)
@@ -710,7 +743,8 @@ def create_project(base: Path, payload: dict, progress) -> dict:
         record("constitution", "Drafting the Constitution with the auditor")
         try:
             draft = wizard._distil(
-                description, auditor_provider, auditor_model or default_model, "",
+                description, auditor_provider, auditor_model or default_model,
+                auditor_base_url,
                 key_env=auditor_key_env, usage_root=target,
                 vendor=auditor_vendor)
             const_path.write_text(draft.render(name), encoding="utf-8", newline="\n")
@@ -733,10 +767,14 @@ def create_project(base: Path, payload: dict, progress) -> dict:
         audit_repo_line=f"audit_repo: {audit}" if audit else "# audit_repo: (local ledger)",
         constitution=const_name, max_rounds=max_rounds,
         auditor_vendor=auditor_vendor, auditor_provider=auditor_provider,
-        auditor_model=auditor_model, base_url_line="",
+        auditor_model=auditor_model,
+        base_url_line=(f"  base_url: {auditor_base_url}\n"
+                       if auditor_base_url else ""),
         generator_vendor=generator_vendor,
         generator_details=(f"  provider: {generator_provider}\n  model: {generator_model}\n"
                            f"  key_env: {generator_key_env}"
+                           + (f"\n  base_url: {generator_base_url}"
+                              if generator_base_url else "")
                            if generator_vendor != "human" else
                            "  # Human-written changes are committed first."),
         permissive_minimum="true" if github else "false", state_dir=".crossaudit",

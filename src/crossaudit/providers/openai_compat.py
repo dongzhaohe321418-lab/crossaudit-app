@@ -8,10 +8,24 @@ says nothing about who is on the other end.
 """
 from __future__ import annotations
 
+from urllib.parse import urlparse
+
 from ..errors import ProviderDenial
 from .base import Reply, egress_check, read_key, request_json, sha256_text
 
 BUILTIN_ORIGIN = "https://api.openai.com"
+BUILTIN_BASE = "https://api.openai.com/v1"
+
+
+def _origin(url: str) -> str:
+    parsed = urlparse(url)
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+
+def _api_base(value: str) -> str:
+    """Normalise SDK-style base URLs without doubling a version segment."""
+    value = value.rstrip("/")
+    return value + "/v1" if not urlparse(value).path.rstrip("/") else value
 
 
 def _completion_token_parameter(model: str, *, builtin_openai: bool = False) -> str:
@@ -69,10 +83,18 @@ def _request(url: str, payload: dict, headers: dict, timeout: float):
 
 def complete(*, model: str, system: str, prompt: str, key_env: str,
              base_url: str | None = None, allow_custom: bool = False,
-             max_tokens: int = 4096, timeout: float = 120.0) -> Reply:
-    origin = (base_url or BUILTIN_ORIGIN).rstrip("/")
-    url = f"{origin}/v1/chat/completions"
-    egress_check(url, builtin_origin=BUILTIN_ORIGIN, allow_custom=allow_custom,
+             max_tokens: int = 4096, timeout: float = 120.0,
+             _builtin_base: str = BUILTIN_BASE,
+             _extra_headers: dict[str, str] | None = None,
+             _official_bases: tuple[str, ...] = (),
+             _temperature: float | None = 0) -> Reply:
+    api_base = _api_base(base_url) if base_url else _builtin_base.rstrip("/")
+    builtin_origin = _origin(_builtin_base)
+    url = f"{api_base}/chat/completions"
+    official = {_api_base(value) for value in (_official_bases or (_builtin_base,))}
+    trusted_origin = _origin(api_base) if api_base in official else builtin_origin
+    egress_check(url, builtin_origin=trusted_origin,
+                 allow_custom=allow_custom and api_base not in official,
                  allow_insecure_localhost=True)
     payload = {
         "model": model,
@@ -82,11 +104,12 @@ def complete(*, model: str, system: str, prompt: str, key_env: str,
     # GPT-5 and o-series models only accept their default temperature. Omitting
     # the field preserves that default; legacy chat models retain deterministic
     # temperature=0 behaviour.
-    if not _uses_modern_completion_controls(model):
-        payload["temperature"] = 0
+    if not _uses_modern_completion_controls(model) and _temperature is not None:
+        payload["temperature"] = _temperature
     payload[_completion_token_parameter(
-        model, builtin_openai=origin == BUILTIN_ORIGIN)] = max_tokens
-    headers = {"authorization": f"Bearer {read_key(key_env)}"}
+        model, builtin_openai=(api_base == BUILTIN_BASE))] = max_tokens
+    headers = {"authorization": f"Bearer {read_key(key_env)}",
+               **(_extra_headers or {})}
     data, rid = _request(url, payload, headers, timeout)
     try:
         text = data["choices"][0]["message"]["content"] or ""

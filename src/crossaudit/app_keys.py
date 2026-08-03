@@ -15,12 +15,10 @@ import subprocess
 from pathlib import Path
 
 from .errors import ConfigDenial
+from .providers.specs import SPECS
 
 APP_SERVICE_PREFIX = "io.crossaudit.app.provider"
-PROVIDER_ENVS = {
-    "openai": "CROSSAUDIT_OPENAI_KEY",
-    "anthropic": "CROSSAUDIT_ANTHROPIC_KEY",
-}
+PROVIDER_ENVS = {vendor: item.key_env for vendor, item in SPECS.items()}
 ROLE_FALLBACKS = {
     "openai": "CROSSAUDIT_AUDITOR_KEY",
     "anthropic": "CROSSAUDIT_GENERATOR_KEY",
@@ -73,7 +71,8 @@ def write(vendor: str, secret: str) -> None:
         raise ConfigDenial(
             f"macOS Keychain refused the {vendor} key: {proc.stderr.strip()[:240]}")
     os.environ[env_for_vendor(vendor)] = secret
-    os.environ[ROLE_FALLBACKS[vendor]] = secret
+    if vendor in ROLE_FALLBACKS:
+        os.environ[ROLE_FALLBACKS[vendor]] = secret
 
 
 def remove(vendor: str) -> None:
@@ -81,8 +80,9 @@ def remove(vendor: str) -> None:
         [_security(), "delete-generic-password", "-a", _account(),
          "-s", _service(vendor)], capture_output=True, text=True, timeout=10)
     os.environ.pop(env_for_vendor(vendor), None)
-    fallback = ROLE_FALLBACKS[vendor]
-    os.environ.pop(fallback, None)
+    fallback = ROLE_FALLBACKS.get(vendor)
+    if fallback:
+        os.environ.pop(fallback, None)
 
 
 def load_into_environment() -> None:
@@ -91,11 +91,12 @@ def load_into_environment() -> None:
         secret = os.environ.get(env_name, "").strip()
         if not secret:
             secret = read(vendor).strip()
-        if not secret:
+        if not secret and vendor in ROLE_FALLBACKS:
             secret = os.environ.get(ROLE_FALLBACKS[vendor], "").strip()
         if secret:
             os.environ[env_name] = secret
-            os.environ[ROLE_FALLBACKS[vendor]] = secret
+            if vendor in ROLE_FALLBACKS:
+                os.environ[ROLE_FALLBACKS[vendor]] = secret
 
 
 def status() -> dict:
