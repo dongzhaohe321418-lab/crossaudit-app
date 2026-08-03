@@ -40,10 +40,10 @@ from ..errors import ConfigDenial, Denial
 from ..receipt.verify import (admit as admit_receipt, load as load_receipt,
                               verify as verify_receipt)
 from ..router import history as routing_history
-from . import daemon, overview, projects
+from . import chats, daemon, overview, projects
 from .page import PAGE
 from .progress import TRACKER
-from .streams import both
+from .streams import bundle
 from .transfers import (MAX_REQUEST_BYTES, TransferError, decode_attachments,
                         prompt_section, receive_upload_chunk, resolve_artifact,
                         resolve_upload_batch, resolve_uploads, stage_attachments)
@@ -77,12 +77,15 @@ def app_settings() -> dict:
     }
 
 
-def admit_latest(cfg: Config) -> dict:
-    """Verify and consume the newest recorded PASS from the desktop UI."""
+def admit_latest(cfg: Config, cycle_id: str = "") -> dict:
+    """Verify and consume the selected, or newest, recorded PASS."""
     store = StateStore(cfg.root / cfg.state_dir / "state.json")
     state = store.snapshot()
     verdicts = [event for event in state.get("history", [])
                 if event.get("event") == "verdict"]
+    if cycle_id:
+        verdicts = [event for event in verdicts
+                    if str(event.get("cycle", "")) == cycle_id]
     if verdicts:
         event = verdicts[-1]
         cycle_id = str(event.get("cycle", ""))
@@ -103,11 +106,11 @@ def admit_latest(cfg: Config) -> dict:
                 recorded = event.get("receipt") == digest[:16]
                 latest = cycle.get("parent_receipt") == digest
                 if not (evidence["admission_ready"] and recorded and latest):
-                    raise ConfigDenial("the latest PASS is not ready for admission")
+                    raise ConfigDenial("the selected PASS is not ready for admission")
                 result = admit_receipt(receipt, store, evidence, cfg=cfg)
                 return {**result, "verified": True, "sha": sha,
                         "receipt": digest[:16]}
-            raise ConfigDenial("the latest PASS receipt is missing")
+            raise ConfigDenial("the selected PASS receipt is missing")
     raise ConfigDenial("there is no unconsumed passing result to admit")
 
 
@@ -149,7 +152,7 @@ TRACKER.subscribe(_notify_progress)
 usage.subscribe(STREAM_CHANGES.notify)
 
 
-def _ordered_cycles(state: dict) -> list[dict]:
+def _ordered_cycles(state: dict, commit_chats: dict[str, str] | None = None) -> list[dict]:
     """Project controller cycles oldest first, following recorded event time.
 
     Cycle IDs are hashes and therefore have no chronological meaning. Keeping
@@ -165,8 +168,10 @@ def _ordered_cycles(state: dict) -> list[dict]:
                                     int(event.get("t", 0) or 0))
     ordered = sorted(states.items(), key=lambda item: (
         updated.get(item[0], 0), item[0]))
+    chat_map = commit_chats or {}
     return [{"id": cid, "status": cycle["status"], "round": cycle["round"],
-             "sha": cycle["active_sha"], "updated": updated.get(cid, 0)}
+             "sha": cycle["active_sha"], "updated": updated.get(cid, 0),
+             "chat_id": chat_map.get(cycle["active_sha"], chats.LEGACY_CHAT_ID)}
             for cid, cycle in ordered]
 
 
@@ -183,7 +188,21 @@ def snapshot(cfg: Config) -> dict:
                       controller_persistent=caps["persistent"],
                       controller_atomic=caps["atomic"], online=False)
     const = cfg.root / cfg.constitution
-    gen_stream, aud_stream = both(cfg)
+    gen_stream, aud_stream, commit_chats = bundle(cfg)
+    cycles = _ordered_cycles(controller_state, commit_chats)
+    known_chats = {str(row.get("chat_id", ""))
+                   for row in (*gen_stream, *aud_stream, *cycles)
+                   if row.get("chat_id")}
+    chat_state = chats.snapshot(cfg, known_chats)
+    progress = TRACKER.snapshot()
+    for row in chat_state["items"]:
+        related = [cycle for cycle in cycles if cycle["chat_id"] == row["id"]]
+        row["cycles"] = len(related)
+        row["status"] = ("running" if progress and not progress.get("finished")
+                         and progress.get("chat_id") == row["id"] else
+                         related[-1]["status"].lower() if related else "ready")
+        if related:
+            row["updated"] = max(row["updated"], related[-1]["updated"])
     audits = overview.read_cycles(cfg)
     try:
         house = [s.name for s in skills_mod.load(cfg.root)]
@@ -192,6 +211,7 @@ def snapshot(cfg: Config) -> dict:
     return {
         "version": __version__,
         "project": cfg.science_repo,
+        "root": str(cfg.root),
         "rules": const.read_text(encoding="utf-8").count("\n### ") if const.is_file() else 0,
         "skills": house,
         "auditor": (f"{cfg.auditor.vendor} · "
@@ -216,7 +236,8 @@ def snapshot(cfg: Config) -> dict:
             if cfg.auditor.provider == "openai_codex"
             else bool(os.environ.get(cfg.auditor.key_env, "").strip())
         ),
-        "cycles": _ordered_cycles(controller_state),
+        "cycles": cycles,
+        "chats": chat_state,
         "tier": tier.as_dict(),
         # Every figure below is derived from the ledger; where it cannot answer,
         # the answer is absent rather than a confident zero.
@@ -232,7 +253,7 @@ def snapshot(cfg: Config) -> dict:
         "auditor_stream": aud_stream,
         # In-flight work, if any. Ephemeral by construction: the ledger is still
         # the record, and this vanishes with the process.
-        "progress": TRACKER.snapshot(),
+        "progress": progress,
         # A build that was in flight when a previous process ended. The ledger
         # holds the rounds that were committed; only this can say one was cut off.
         "interrupted": daemon.interrupted(cfg),
@@ -240,7 +261,7 @@ def snapshot(cfg: Config) -> dict:
 
 
 def start_build(cfg: Config, task: str, *, before_start=None,
-                attachments=None) -> dict:
+                attachments=None, chat_id: str = "") -> dict:
     """Run a build in the background so the browser can watch it happen.
 
     The loop is the same one the CLI runs — the console watches it, it does not
@@ -260,7 +281,7 @@ def start_build(cfg: Config, task: str, *, before_start=None,
         before_start(resolved)
     slot = daemon.acquire_workspace_slot(cfg)
     try:
-        run = TRACKER.start(resolved)
+        run = TRACKER.start(resolved, chat_id=chat_id)
     except Exception:
         daemon.release_workspace_slot(slot)
         raise
@@ -268,7 +289,7 @@ def start_build(cfg: Config, task: str, *, before_start=None,
         TRACKER.step("input", f"{len(staged)} attachment(s) received",
                      ", ".join(item["name"] for item in staged))
     try:
-        daemon.mark_build(cfg, resolved)
+        daemon.mark_build(cfg, resolved, chat_id=chat_id)
     except Exception:
         daemon.release_workspace_slot(slot)
         raise
@@ -276,7 +297,8 @@ def start_build(cfg: Config, task: str, *, before_start=None,
     def work() -> None:
         try:
             code = run_loop(cfg, resolved, attachments=prompt_section(staged),
-                            on_step=lambda a, txt, d="": TRACKER.step(a, txt, d))
+                            on_step=lambda a, txt, d="": TRACKER.step(a, txt, d),
+                            chat_id=chat_id)
             TRACKER.finish({0: "passed", 11: "escalated"}.get(code, "blocked"))
         except Denial as exc:
             TRACKER.finish("refused", exc.reason)
@@ -326,7 +348,8 @@ def _guided_task(text: str, choices) -> str:
 
 
 def say(cfg: Config, text: str, *, attachments=None,
-        attachment_consent: bool = False, delivery_choices=None) -> dict:
+        attachment_consent: bool = False, delivery_choices=None,
+        chat_id: str = "") -> dict:
     """Route one sentence and run its lane — the same path `talk` takes.
 
     The sentence submit is the normal action confirmation. Attachments cross a
@@ -349,11 +372,12 @@ def say(cfg: Config, text: str, *, attachments=None,
             utterance=text, lane="generator", confidence=1.0,
             reasoning="the owner confirmed delivery choices and started the task",
             restated=_guided_task(task_text, delivery_choices), t=int(time.time()),
-            addressed_to="generator", routing_mode="guided")
+            addressed_to="generator", routing_mode="guided", chat_id=chat_id)
     else:
         routing = router_mod.route_addressed(
             text, complete=talk_mod._auditor_complete(cfg),
             context=talk_mod._context(cfg))
+        routing.chat_id = chat_id
     if not routing.certain:
         talk_mod._record_routing(cfg, routing, "asked for clarification")
         return {"asked": True, "lane": routing.lane, "confidence": routing.confidence,
@@ -375,7 +399,7 @@ def say(cfg: Config, text: str, *, attachments=None,
 
         started = start_build(cfg, routing.restated,
                               before_start=record_before_start,
-                              attachments=prepared)
+                              attachments=prepared, chat_id=chat_id)
         attachments_accepted = bool(started["attachments"])
         suffix = (f"\nattachments: "
                   + ", ".join(item["name"] for item in started["attachments"])) \
@@ -628,6 +652,8 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                 return
             if parsed.path not in {"/api/say", "/api/upload", "/api/projects/create",
                                    "/api/projects/open", "/api/projects/resume",
+                                   "/api/projects/pin", "/api/chats/new",
+                                   "/api/chats/pin",
                                    "/api/github/connect", "/api/github/check",
                                    "/api/workspace/select", "/api/models/refresh",
                                    "/api/runtime/options", "/api/runtime",
@@ -656,6 +682,26 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                     result = projects.JOBS.start(self._config(), payload,
                                                  STREAM_CHANGES.notify)
                     self._send(json.dumps(result).encode(), "application/json")
+                    return
+                if parsed.path == "/api/projects/pin":
+                    result = projects.set_project_pin(
+                        self._config(), str(payload.get("root", "")),
+                        payload.get("pinned") is True)
+                    STREAM_CHANGES.notify()
+                    self._send(json.dumps(result).encode(), "application/json")
+                    return
+                if parsed.path == "/api/chats/new":
+                    result = chats.create(
+                        self._config(), str(payload.get("title", "New chat")))
+                    STREAM_CHANGES.notify()
+                    self._send(json.dumps({"chat": result}).encode(), "application/json")
+                    return
+                if parsed.path == "/api/chats/pin":
+                    result = chats.set_chat_pin(
+                        self._config(), str(payload.get("chat_id", "")),
+                        payload.get("pinned") is True)
+                    STREAM_CHANGES.notify()
+                    self._send(json.dumps({"chat": result}).encode(), "application/json")
                     return
                 if parsed.path == "/api/projects/open":
                     result = projects.open_project(self._config(),
@@ -732,7 +778,8 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                     self._send(json.dumps(result).encode(), "application/json")
                     return
                 if parsed.path == "/api/admit":
-                    result = admit_latest(self._config())
+                    result = admit_latest(
+                        self._config(), str(payload.get("cycle_id", "")))
                     STREAM_CHANGES.notify()
                     self._send(json.dumps(result).encode(), "application/json")
                     return
@@ -764,11 +811,16 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                 self._deny(400, "say something")
                 return
             try:
+                chat = chats.touch(self._config(),
+                                   str(payload.get("chat_id", "")), text)
                 with MODEL_SWITCH_LOCK:
                     result = say(
                         self._config(), text, attachments=attachments,
                         attachment_consent=payload.get("attachment_consent") is True,
-                        delivery_choices=payload.get("delivery_choices"))
+                        delivery_choices=payload.get("delivery_choices"),
+                        chat_id=chat["id"])
+                result["chat_id"] = chat["id"]
+                STREAM_CHANGES.notify()
             except TransferError as exc:
                 self._deny(exc.status, exc.reason)
                 return

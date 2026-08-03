@@ -40,6 +40,7 @@ class Step:
 @dataclass
 class Run:
     task: str
+    chat_id: str = ""
     started: float = field(default_factory=time.time)
     steps: list[Step] = field(default_factory=list)
     finished: bool = False
@@ -47,7 +48,7 @@ class Run:
     error: str = ""
 
     def as_dict(self) -> dict:
-        return {"task": self.task, "started": self.started,
+        return {"task": self.task, "chat_id": self.chat_id, "started": self.started,
                 "steps": [s.as_dict() for s in self.steps],
                 "finished": self.finished, "outcome": self.outcome,
                 "error": self.error,
@@ -80,11 +81,11 @@ class Tracker:
         with self._lock:
             return self._run is not None and not self._run.finished
 
-    def start(self, task: str) -> Run:
+    def start(self, task: str, chat_id: str = "") -> Run:
         with self._lock:
             if self._run is not None and not self._run.finished:
                 raise RuntimeError("a build is already running in this project")
-            self._run = Run(task=task)
+            self._run = Run(task=task, chat_id=chat_id)
             run = self._run
         self._changed()
         return run

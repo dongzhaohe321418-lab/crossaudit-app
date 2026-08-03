@@ -23,6 +23,7 @@ from __future__ import annotations
 import contextlib
 import io
 import os
+import re
 from pathlib import Path
 
 from .. import generator as gen_mod
@@ -136,7 +137,8 @@ class _Args:
     allow_custom_endpoint = True
 
 
-def run_loop(cfg, task: str, *, on_step=None, attachments: str = "") -> int:
+def run_loop(cfg, task: str, *, on_step=None, attachments: str = "",
+             chat_id: str = "") -> int:
     """The build loop itself. `on_step(actor, text, detail)` narrates it.
 
     Kept separate from cmd_build so the console can watch the same loop the CLI
@@ -147,6 +149,8 @@ def run_loop(cfg, task: str, *, on_step=None, attachments: str = "") -> int:
         if on_step is not None:
             on_step(actor, text, detail)
 
+    if chat_id and not re.fullmatch(r"(?:history|[a-f0-9]{16})", chat_id):
+        raise ConfigDenial("chat id is invalid")
     allow_custom = bool(os.environ.get("CROSSAUDIT_ALLOW_CUSTOM_ENDPOINT"))
     complete = _generator_complete(cfg, allow_custom)
     constitution = (cfg.root / cfg.constitution).read_text(encoding="utf-8")
@@ -197,8 +201,13 @@ def run_loop(cfg, task: str, *, on_step=None, attachments: str = "") -> int:
                 f"generator produced no new auditable revision in round {round_no}")
             break
         try:
-            git("commit", "-q", "-m", f"{work.summary} (round {round_no})",
-                cwd=cfg.root)
+            commit_args = ["commit", "-q", "-m",
+                           f"{work.summary} (round {round_no})"]
+            if chat_id:
+                # A commit trailer associates durable work/audit evidence with
+                # its UI chat without putting conversation metadata in files.
+                commit_args += ["-m", f"CrossAudit-Chat: {chat_id}"]
+            git(*commit_args, cwd=cfg.root)
         except ConfigDenial as exc:
             # git refusing is a refused round, like any other: the loop reports it
             # and stops cleanly rather than tearing down a run the ledger already

@@ -1,14 +1,14 @@
-# CrossAudit 4.6.0 enterprise release assessment
+# CrossAudit 4.7.0 enterprise release assessment
 
-Date: 2026-08-03
+Date: 2026-08-04
 
 Target: Apple Silicon macOS 13 or later
 
-Release candidate: 4.6.0
+Release candidate: 4.7.0
 
 ## Executive result
 
-CrossAudit 4.6.0 is suitable for local evaluation and controlled pilot use. It
+CrossAudit 4.7.0 is suitable for local evaluation and controlled pilot use. It
 preserves the V3.2 audited protocol while adding a native AppKit/WebKit shell,
 Keychain credentials, UI-first project creation, independent background
 projects, GitHub connection, chunked file transfer, final-artifact downloads,
@@ -36,6 +36,7 @@ Policy rather than hidden behind an installation workaround.
 | Live state | Same-process event latency below 250 ms; external fallback at 100 ms | Automated |
 | Usage metering | Provider/runtime counts, cache normalization, local-only ledger, unknown-price refusal | Automated and local smoke |
 | Project isolation | Separate worker, token, lock, ledger, and progress state | Automated |
+| Project/Chat hierarchy | Multiple filtered Chats per real folder; persistent pins; Git association and recovery | Automated and browser smoke |
 | GitHub setup | Auth states, idempotent adoption, partial-failure retry, origin refusal | Automated |
 | Transfers | Arbitrary type/count, chunk offsets, traversal, one-shot staging, zero-byte file | Automated |
 | Receipts | Binding verification, recorded cycle state, one-time admission | Automated |
@@ -44,6 +45,31 @@ Policy rather than hidden behind an installation workaround.
 The final command outputs and artifact hashes are recorded in the GitHub release
 and CI logs. Tests that spend provider credits remain explicitly opt-in and use
 repository secrets in CI.
+
+## V4.7.0 release-candidate evidence
+
+- Automated suite: **437 passed, 2 skipped** in 45.30 seconds. The skipped
+  cases are only explicitly opt-in paid-provider checks.
+- Project hierarchy: a Project remains the user-selected local folder and Git
+  repository, while any number of lightweight Chats can own independent task,
+  output, audit, and progress views inside it. Project and Chat pins persist in
+  a mode-600 gitignored file; no conversation content is duplicated there.
+- Evidence association: each generated round carries a validated
+  `CrossAudit-Chat` Git trailer. Deleting local navigation metadata does not
+  orphan a Chat because immutable committed evidence can reconstruct it.
+- Backward compatibility: pre-4.7 routing and audit evidence appears as
+  **Project history** without rewriting commits, reports, receipts, or routing
+  records.
+- Browser acceptance: two Chats were created and switched in one real Project,
+  one Chat and its Project were pinned, both groupings survived a daemon
+  restart, light/dark themes rendered correctly, and no console warning or
+  error was emitted. A 390 x 844 check found and fixed a 42 px top-bar overflow;
+  the retest reported viewport width = body width = workspace width = 390 px.
+- Distribution: valid APFS DMG CRC, valid 4.7.0 Info.plist, arm64 shell and
+  frozen core, and strict deep code-sign verification. An isolated frozen first
+  launch served V4.7.0 and refused missing token, wrong token, and foreign Host
+  with HTTP 403. SHA-256:
+  `83239f7565d1be7384eef62ed1d1c3164c16ef6319a799c3518c6ab1bf56888a`.
 
 ## V4.6.0 release-candidate evidence
 

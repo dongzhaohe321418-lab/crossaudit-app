@@ -20,6 +20,7 @@ from pathlib import Path
 from ..config import Config
 from ..dispute import DISPUTES_LOG, parse_findings
 from ..router import history as routing_history
+from .chats import LEGACY_CHAT_ID
 
 GENERATOR_LANES = {"generator", "project"}
 AUDITOR_LANES = {"auditor", "amendment", "dispute", "resolve", "query"}
@@ -48,14 +49,16 @@ KIND_BY_SUFFIX = {
 }
 
 
-def _commits(root: Path, limit: int = 60) -> list[dict]:
+def _commits(root: Path, limit: int = 200) -> list[dict]:
     import subprocess
 
     # The record separator leads each entry: with --name-only the file list
     # follows its commit's header, so a trailing separator would put every
     # commit's files at the head of the next commit's chunk.
     out = subprocess.run(
-        ["git", "log", f"-{limit}", "--format=%x1e%H%x1f%ct%x1f%s", "--name-only"],
+        ["git", "log", f"-{limit}",
+         "--format=%x1e%H%x1f%ct%x1f%s%x1f%(trailers:key=CrossAudit-Chat,valueonly)",
+         "--name-only"],
         cwd=str(root), capture_output=True, text=True)
     if out.returncode != 0:
         return []
@@ -65,11 +68,29 @@ def _commits(root: Path, limit: int = 60) -> list[dict]:
             continue
         head, _, files = chunk.partition("\n")
         parts = head.split("\x1f")
-        if len(parts) < 3:
+        if len(parts) < 4:
             continue
         rows.append({"sha": parts[0], "t": int(parts[1]), "subject": parts[2],
+                     "chat_id": parts[3].strip() or LEGACY_CHAT_ID,
                      "files": [f for f in files.split("\n") if f.strip()]})
     return rows[::-1]
+
+
+def _chat_map(root: Path) -> dict[str, str]:
+    """All durable Chat associations; unlike the visible stream, never capped."""
+    import subprocess
+
+    result = subprocess.run(
+        ["git", "log", "--format=%H%x1f%(trailers:key=CrossAudit-Chat,valueonly)"],
+        cwd=str(root), capture_output=True, text=True)
+    if result.returncode != 0:
+        return {}
+    rows = {}
+    for line in result.stdout.splitlines():
+        sha, separator, chat_id = line.partition("\x1f")
+        if separator:
+            rows[sha] = chat_id.strip() or LEGACY_CHAT_ID
+    return rows
 
 
 def _artifact(cfg: Config, relative: str) -> dict:
@@ -92,11 +113,12 @@ def _artifact(cfg: Config, relative: str) -> dict:
     }
 
 
-def generator_stream(cfg: Config, routing: list[dict]) -> list[dict]:
+def generator_stream(cfg: Config, routing: list[dict],
+                     commits: list[dict] | None = None) -> list[dict]:
     """What the generator did, plus the user's words that were meant for it."""
     stream: list[dict] = []
     scope = tuple((cfg.scope_dirs or []))
-    for c in _commits(cfg.root):
+    for c in commits if commits is not None else _commits(cfg.root):
         work = [f for f in c["files"]
                 if not scope or f.split("/", 1)[0] in scope]
         if not work or c["subject"].startswith(NON_GENERATOR_COMMITS):
@@ -104,6 +126,7 @@ def generator_stream(cfg: Config, routing: list[dict]) -> list[dict]:
         m = ROUND_RE.search(c["subject"])
         stream.append({
             "kind": "generator", "t": c["t"],
+            "chat_id": c["chat_id"],
             "sha": c["sha"],
             "summary": ROUND_RE.sub("", c["subject"]).strip(),
             "round": int(m.group(1)) if m else None,
@@ -113,14 +136,20 @@ def generator_stream(cfg: Config, routing: list[dict]) -> list[dict]:
         })
     for r in routing:
         if r.get("lane") in GENERATOR_LANES:
-            stream.append({"kind": "you", **r})
+            stream.append({**r, "kind": "you",
+                           "chat_id": str(r.get("chat_id") or LEGACY_CHAT_ID)})
     return sorted(stream, key=lambda m: m["t"])[-40:]
 
 
-def auditor_stream(cfg: Config, routing: list[dict]) -> list[dict]:
+def auditor_stream(cfg: Config, routing: list[dict],
+                   commits: list[dict] | None = None,
+                   commit_chats: dict[str, str] | None = None) -> list[dict]:
     """Every verdict, every dispute ruling, and the user's words about standards."""
     stream: list[dict] = []
     ledger = cfg.root / cfg.ledger_dir
+    commit_rows = commits if commits is not None else _commits(cfg.root)
+    commit_chats = commit_chats or {row["sha"]: row["chat_id"]
+                                    for row in commit_rows}
     for report in ledger.glob("*/report.md"):
         text = report.read_text(encoding="utf-8")
         verdict = "?"
@@ -130,6 +159,9 @@ def auditor_stream(cfg: Config, routing: list[dict]) -> list[dict]:
         round_match = re.search(r"-r(\d+)$", report.parent.name)
         stream.append({
             "kind": "auditor", "t": int(report.stat().st_mtime), "verdict": verdict,
+            "chat_id": next((chat for sha, chat in commit_chats.items()
+                              if sha.startswith(report.parent.name.split("-r", 1)[0])),
+                             LEGACY_CHAT_ID),
             "round": int(round_match.group(1)) if round_match else 1,
             "findings": [{"severity": f.severity, "rule": f.rule,
                           "artifact": f.artifact, "observation": f.observation[:400]}
@@ -143,21 +175,38 @@ def auditor_stream(cfg: Config, routing: list[dict]) -> list[dict]:
             d = json.loads(line)
             stream.append({
                 "kind": "auditor", "t": d.get("t", 0), "verdict": d["ruling"],
+                "chat_id": str(d.get("chat_id") or LEGACY_CHAT_ID),
                 "findings": [{"severity": "dispute", "rule": d["rule"],
                               "artifact": d["artifact"],
                               "observation": d["reasoning"]}],
             })
     for r in routing:
         if r.get("lane") in AUDITOR_LANES:
-            stream.append({"kind": "you", **r})
+            stream.append({**r, "kind": "you",
+                           "chat_id": str(r.get("chat_id") or LEGACY_CHAT_ID)})
             prefix = "answered by auditor: "
             if r.get("lane") == "auditor" and str(r.get("executed", "")).startswith(prefix):
                 stream.append({"kind": "auditor_chat", "t": r.get("t", 0),
+                               "chat_id": str(r.get("chat_id") or LEGACY_CHAT_ID),
                                "response": r["executed"][len(prefix):],
                                "addressed_to": "auditor"})
     return sorted(stream, key=lambda m: (m["t"], m.get("round", 0)))[-40:]
 
 
-def both(cfg: Config) -> tuple[list[dict], list[dict]]:
+def bundle(cfg: Config) -> tuple[list[dict], list[dict], dict[str, str]]:
+    """Build both streams and the commit association map with one Git read."""
     routing = routing_history(cfg.root / cfg.ledger_dir / "routing.jsonl", 60)
-    return generator_stream(cfg, routing), auditor_stream(cfg, routing)
+    commits = _commits(cfg.root)
+    chat_map = _chat_map(cfg.root)
+    return (generator_stream(cfg, routing, commits),
+            auditor_stream(cfg, routing, commits, chat_map), chat_map)
+
+
+def both(cfg: Config) -> tuple[list[dict], list[dict]]:
+    generator, auditor, _chat_map = bundle(cfg)
+    return generator, auditor
+
+
+def commit_chat_map(cfg: Config) -> dict[str, str]:
+    """Full audited commit SHA to chat association from immutable trailers."""
+    return _chat_map(cfg.root)

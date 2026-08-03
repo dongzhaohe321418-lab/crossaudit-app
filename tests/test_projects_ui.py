@@ -191,6 +191,10 @@ def test_project_page_contains_the_control_plane_contract():
                  "/api/workspace/select", "/api/github/check",
                  "Check names", "Edit repository names", "recovery-modal"):
         assert text in PAGE
+    for text in ("New chat", "Pinned", "/api/chats/new", "/api/chats/pin",
+                 "/api/projects/pin", "data-pin-chat", "data-pin-project",
+                 "current-project-pin", "chat_id:activeChatId"):
+        assert text in PAGE
     for text in ("Models & reasoning", "/api/runtime/options", "/api/runtime",
                  "Save for next call", "Reasoning effort", "Atomic between calls"):
         assert text in PAGE

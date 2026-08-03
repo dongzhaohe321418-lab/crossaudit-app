@@ -38,7 +38,7 @@ from ..scaffold import (CONFIG_TEMPLATE, GENERAL_CHECKS, GENERAL_TREE,
 from ..dcl import describe as describe_checks
 from ..cli import pair as pair_mod
 from ..cli import wizard
-from . import daemon
+from . import chats, daemon
 
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,79}")
 MODEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,119}")
@@ -673,6 +673,7 @@ def _project_row(path: Path, current: Config) -> dict | None:
                            and setup.get("github"))
         pair_ready = bool(cfg.audit_repo and
                           (not setup or setup.get("status") == "complete"))
+        chat_state = chats.snapshot(cfg)
         return {
             "name": cfg.root.name, "label": cfg.science_repo, "root": str(cfg.root),
             "current": cfg.root == current.root, "paired": pair_ready,
@@ -682,6 +683,8 @@ def _project_row(path: Path, current: Config) -> dict | None:
                        "interrupted" if interrupted else
                        latest["status"].lower() if latest else "ready"),
             "cycles": len(cycles),
+            "chats": len(chat_state["items"]),
+            "pinned": chat_state["project_pinned"],
             "progress": progress,
             "interrupted": interrupted,
             "setup": ({"status": setup.get("status"),
@@ -723,7 +726,8 @@ def snapshot(current: Config) -> dict:
             row = _project_row(path, current)
             if row:
                 rows.append(row)
-    rows.sort(key=lambda p: (not p["current"], -p["updated"], p["name"].lower()))
+    rows.sort(key=lambda p: (not p["pinned"], not p["current"],
+                             -p["updated"], p["name"].lower()))
     return {"workspace": str(base), "items": rows, "jobs": JOBS.snapshot(),
             "capacity": daemon.workspace_capacity(current),
             "github_auth": GITHUB_AUTH.snapshot(),
@@ -1023,3 +1027,11 @@ def open_project(current: Config, root: str) -> dict:
     cfg = load(path / CONFIG_NAME)
     info = daemon.live(cfg) or daemon.spawn(cfg, 0)
     return {"url": daemon.url_for(info), "project": cfg.science_repo}
+
+
+def set_project_pin(current: Config, root: str, pinned: bool) -> dict:
+    path = Path(root).resolve()
+    if not _trusted_project(current, path) or not (path / CONFIG_NAME).is_file():
+        raise ConfigDenial("that project is outside your selected workspaces")
+    cfg = load(path / CONFIG_NAME)
+    return {"root": str(path), "pinned": chats.set_project_pin(cfg, pinned)}

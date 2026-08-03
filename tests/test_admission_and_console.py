@@ -199,6 +199,35 @@ def test_the_console_serves_its_page_with_the_token(console):
     assert "default-src 'none'" in headers["content-security-policy"]
 
 
+def test_console_creates_and_pins_individual_chats(console):
+    status, created, _headers = post_json_to(
+        console, "/api/chats/new", {"title": "Pinned investigation"})
+    chat = created["chat"]
+    assert status == 200 and len(chat["id"]) == 16
+
+    status, pinned, _headers = post_json_to(
+        console, "/api/chats/pin", {"chat_id": chat["id"], "pinned": True})
+    assert status == 200 and pinned["chat"]["pinned"] is True
+    state_url = console.replace("/?t=", "/api/state?t=")
+    _, body, _ = fetch(state_url)
+    state = json.loads(body)
+    row = next(item for item in state["chats"]["items"]
+               if item["id"] == chat["id"])
+    assert row["title"] == "Pinned investigation"
+    assert row["pinned"] is True and row["cycles"] == 0
+
+
+def test_console_can_pin_the_current_project_folder(console):
+    state_url = console.replace("/?t=", "/api/state?t=")
+    _, body, _ = fetch(state_url)
+    root = json.loads(body)["root"]
+    status, result, _headers = post_json_to(
+        console, "/api/projects/pin", {"root": root, "pinned": True})
+    assert status == 200 and result["pinned"] is True
+    _, body, _ = fetch(state_url)
+    assert json.loads(body)["chats"]["project_pinned"] is True
+
+
 def test_without_the_token_everything_is_refused(console):
     bare = console.split("?")[0]
     with pytest.raises(urllib.error.HTTPError) as e:
@@ -283,10 +312,10 @@ def test_validated_attachments_reach_say_only_after_consent(console, monkeypatch
     seen = {}
 
     def fake_say(_cfg, text, *, attachments, attachment_consent,
-                 delivery_choices=None):
+                 delivery_choices=None, chat_id=""):
         seen.update(text=text, attachments=attachments,
                     attachment_consent=attachment_consent,
-                    delivery_choices=delivery_choices)
+                    delivery_choices=delivery_choices, chat_id=chat_id)
         return {"asked": False, "lane": "generator", "confidence": 1.0,
                 "reasoning": "test", "executed": "building: smoke",
                 "attachments_accepted": True}
@@ -297,6 +326,7 @@ def test_validated_attachments_reach_say_only_after_consent(console, monkeypatch
         "attachment_consent": True})
     assert status == 200 and body["attachments_accepted"] is True
     assert seen["attachment_consent"] is True
+    assert len(seen["chat_id"]) == 16
     assert seen["attachments"][0].text == "x,y\n1,2\n"
 
 
@@ -318,8 +348,8 @@ def test_chunked_http_batch_accepts_large_binary_and_reaches_say(
     seen = {}
 
     def fake_say(_cfg, text, *, attachments, attachment_consent,
-                 delivery_choices=None):
-        seen.update(text=text, attachments=attachments)
+                 delivery_choices=None, chat_id=""):
+        seen.update(text=text, attachments=attachments, chat_id=chat_id)
         return {"asked": False, "lane": "generator", "confidence": 1.0,
                 "reasoning": "test", "executed": "building: smoke",
                 "attachments_accepted": True}
@@ -443,12 +473,18 @@ def test_admit_endpoint_is_tokened_and_returns_only_receipt_identity(
         console, monkeypatch):
     from crossaudit.console import server as server_mod
 
-    monkeypatch.setattr(server_mod, "admit_latest", lambda _cfg: {
+    selected = {}
+    def fake_admit(_cfg, cycle_id=""):
+        selected["cycle_id"] = cycle_id
+        return {
         "admitted": True, "verified": True, "cycle_id": "cycle-1",
-        "receipt": "a" * 16, "sha": "b" * 40})
-    status, body, _headers = post_json_to(console, "/api/admit", {})
+        "receipt": "a" * 16, "sha": "b" * 40}
+    monkeypatch.setattr(server_mod, "admit_latest", fake_admit)
+    status, body, _headers = post_json_to(
+        console, "/api/admit", {"cycle_id": "selected-cycle"})
     assert status == 200 and body["admitted"] is True and body["verified"] is True
     assert body["receipt"] == "a" * 16
+    assert selected["cycle_id"] == "selected-cycle"
 
     bare = console.split("?", 1)[0] + "api/admit"
     req = urllib.request.Request(bare, data=b"{}", method="POST",

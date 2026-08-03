@@ -48,7 +48,7 @@ button{cursor:pointer}
 .app{height:100vh;display:grid;grid-template-columns:var(--sidebar) minmax(480px,1fr);
   grid-template-rows:48px minmax(0,1fr);background:var(--surface)}
 .topbar{grid-column:1/-1;display:flex;align-items:center;gap:10px;padding:0 14px;
-  border-bottom:1px solid var(--line);background:var(--header-bg);z-index:5}
+  border-bottom:1px solid var(--line);background:var(--header-bg);z-index:5;min-width:0;overflow:hidden}
 .brand{display:flex;align-items:center;gap:9px;font-weight:680;letter-spacing:-.02em}
 .brand-mark{width:25px;height:25px;border-radius:8px;background:var(--inverse);color:var(--inverse-text);
   display:grid;place-items:center;font-size:12px}.version{font-size:10px;color:var(--muted);
@@ -62,6 +62,7 @@ button{cursor:pointer}
 .live-dot.on{background:var(--green);box-shadow:0 0 0 3px var(--green-bg)}
 .icon-button{border:0;background:transparent;border-radius:7px;width:30px;height:30px;
   display:grid;place-items:center;color:var(--muted)}.icon-button:hover{background:var(--hover)}
+.icon-button.pinned{color:var(--violet)}
 
 .sidebar{grid-row:2;background:var(--panel);border-right:1px solid var(--line);
   min-width:0;display:flex;flex-direction:column;padding:10px 9px 12px;overflow:hidden}
@@ -77,13 +78,19 @@ button{cursor:pointer}
 .nav-icon{width:16px;text-align:center;color:var(--faint)}
 .side-label{font-size:10px;text-transform:uppercase;letter-spacing:.09em;color:var(--faint);
   padding:13px 10px 7px;font-weight:650}.task-list{overflow:auto;min-height:0}
-.task{padding:9px 10px;border-radius:8px;margin-bottom:2px}.task:hover{background:var(--hover)}
+.task{padding:8px 7px 8px 10px;border-radius:8px;margin-bottom:2px;display:flex;align-items:center;
+  gap:6px;cursor:pointer}.task:hover{background:var(--hover)}
 .task.active{background:var(--surface);box-shadow:inset 0 0 0 1px var(--line)}
-.task-title{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12.5px}
+.task-copy{min-width:0;flex:1}.task-title{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12.5px}
 .task-meta{display:flex;align-items:center;gap:6px;margin-top:3px;color:var(--faint);font-size:10.5px}
+.pin-button{width:24px;height:24px;border:0;border-radius:6px;background:transparent;color:var(--faint);
+  opacity:0;flex:none}.task:hover .pin-button,.task.active .pin-button,.pin-button.pinned{opacity:1}
+.pin-button:hover{background:var(--hover);color:var(--text)}.pin-button.pinned{color:var(--violet)}
 .state-dot{width:6px;height:6px;border-radius:50%;background:var(--faint)}
-.state-dot.PASSED,.state-dot.CONSUMED{background:var(--green)}
-.state-dot.BLOCKED{background:var(--red)}.state-dot.ESCALATED{background:var(--amber)}
+.state-dot.PASSED,.state-dot.CONSUMED,.state-dot.passed,.state-dot.consumed{background:var(--green)}
+.state-dot.BLOCKED,.state-dot.blocked{background:var(--red)}
+.state-dot.ESCALATED,.state-dot.escalated{background:var(--amber)}
+.state-dot.running{background:var(--blue);box-shadow:0 0 0 3px var(--blue-bg)}
 .sidebar-foot{margin-top:auto;border-top:1px solid var(--line);padding:10px 9px 0;
   color:var(--muted);font-size:11px}.sidebar-foot b{display:block;color:var(--text);
   font-weight:560;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -417,8 +424,10 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
 .project-table{border:1px solid var(--line);border-radius:12px;background:var(--surface);overflow:hidden;
   box-shadow:var(--shadow)}.project-row{width:100%;border:0;border-bottom:1px solid var(--line);
   background:transparent;display:grid;grid-template-columns:minmax(220px,1.5fr) minmax(220px,1fr)
-  92px 100px 116px 28px;align-items:center;gap:14px;padding:15px 18px;text-align:left;cursor:pointer}
+  92px 100px 116px 28px 28px;align-items:center;gap:14px;padding:15px 18px;text-align:left;cursor:pointer}
 .project-row:last-child{border-bottom:0}.project-row:hover{background:var(--surface-2)}
+.project-pin{width:27px;height:27px;border:0;border-radius:7px;background:transparent;color:var(--faint);
+  font-size:15px}.project-pin:hover{background:var(--hover);color:var(--text)}.project-pin.pinned{color:var(--violet)}
 .project-name{display:block;font-weight:630;font-size:13.5px}.project-path{display:block;font-size:10.5px;color:var(--faint);
   margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.project-models{font-size:11px;
   color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.project-stat{font-size:11px;
@@ -520,7 +529,7 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
 #provider-credentials .provider-note{min-height:58px}
 .top-project{cursor:pointer;border-top:0;border-right:0;border-bottom:0;background:transparent;text-align:left}
 @media(max-width:760px){.hub-bar{padding:0 14px}.hub-main{width:calc(100% - 24px);padding-top:26px}
-  .hub-heading{align-items:flex-start;flex-direction:column}.hub-summary{margin-left:0}.project-row{grid-template-columns:minmax(0,1fr) 60px 62px 16px;gap:8px}
+  .hub-heading{align-items:flex-start;flex-direction:column}.hub-summary{margin-left:0}.project-row{grid-template-columns:minmax(0,1fr) 58px 62px 28px 16px;gap:8px}
   .project-models,.project-tier{display:none}.form-grid{grid-template-columns:1fr}
   .field.full{grid-column:auto}.project-modal{padding:8px}.wizard{max-height:calc(100vh - 16px)}
   #provider-credentials{grid-template-columns:1fr}
@@ -531,12 +540,12 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
 <body>
 <section class="project-hub" id="project-hub" aria-label="Projects">
   <header class="hub-bar"><button class="brand-button" id="hub-brand"><span class="brand-mark">◇</span>
-    CrossAudit <span class="version" id="hub-version">V4.6.0</span></button><span class="spacer"></span>
+    CrossAudit <span class="version" id="hub-version">V4.7.0</span></button><span class="spacer"></span>
     <button class="icon-button" id="hub-settings" aria-label="Settings" title="Settings">⚙</button>
     <button class="icon-button" id="hub-theme" aria-label="Switch theme">◐</button>
     <button class="primary" id="create-project">＋ New project</button></header>
   <main class="hub-main"><div class="hub-heading"><div><h1>Projects</h1>
-    <p>Supervised workspaces on this computer.</p></div><div class="hub-summary" id="workspace-label">Discovering workspace…</div></div>
+    <p>Local project folders, each with its own files and individual chats.</p></div><div class="hub-summary" id="workspace-label">Discovering workspace…</div></div>
     <div class="job-panel" id="project-job"><span class="job-spinner"></span><div class="job-copy">
       <b id="job-title">Creating project</b><span id="job-detail">Validating settings…</span>
       <ul class="job-steps" id="job-steps"></ul><div class="job-guidance" id="job-guidance"></div></div>
@@ -660,8 +669,9 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
       aria-controls="sidebar-panel" aria-expanded="false">☰</button>
     <button class="icon-button" id="back-projects" aria-label="Back to projects" title="Back to projects">←</button>
     <button class="brand-button" id="projects-home"><span class="brand-mark">◇</span>CrossAudit
-      <span class="version" id="version-badge">V4.6.0</span></button>
-    <button class="top-project" id="project-switcher"><b id="proj">…</b> <span id="branch-label">/ supervised workspace</span>⌄</button>
+      <span class="version" id="version-badge">V4.7.0</span></button>
+    <button class="top-project" id="project-switcher"><b id="proj">…</b> <span id="branch-label">/ project folder</span>⌄</button>
+    <button class="icon-button" id="current-project-pin" aria-label="Pin project" title="Pin project">☆</button>
     <span class="spacer"></span>
     <div class="live-pill"><span class="live-dot" id="livedot"></span><span id="conn-text">connecting</span></div>
     <button class="icon-button" id="settings-open" aria-label="Settings" title="Settings">⚙</button>
@@ -673,13 +683,13 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
   <button class="scrim" id="scrim" aria-label="Close open panel"></button>
 
   <aside class="sidebar" id="sidebar-panel" aria-label="Tasks">
-    <button class="new-task" id="new-task"><span>＋</span>New task<span>⌘ N</span></button>
+    <button class="new-task" id="new-task"><span>＋</span>New chat<span>⌘ N</span></button>
     <nav class="nav" aria-label="Workspace views">
-      <button type="button" class="nav-item active" data-view="tasks" aria-pressed="true"><span class="nav-icon">◫</span>Tasks</button>
+      <button type="button" class="nav-item active" data-view="tasks" aria-pressed="true"><span class="nav-icon">◫</span>Chat</button>
       <button type="button" class="nav-item" data-view="artifacts" aria-pressed="false"><span class="nav-icon">▱</span>Artifacts</button>
       <button type="button" class="nav-item" data-view="audits" aria-pressed="false"><span class="nav-icon">◇</span>Audits</button>
       <button type="button" class="nav-item" data-view="usage" aria-pressed="false"><span class="nav-icon">◒</span>Usage</button></nav>
-    <div class="side-label">Recent</div><div class="task-list" id="task-list"></div>
+    <div class="task-list" id="task-list"></div>
     <div class="sidebar-foot"><b id="side-project">…</b><span id="tier-label">local controller</span></div>
   </aside>
 
@@ -772,6 +782,7 @@ let taskChoiceMode = '';
 let pendingChoiceTask = '';
 let activeView = 'tasks';
 let newTaskMode = false;
+let activeChatId = '';
 
 const THEME_KEY = 'crossaudit-theme';
 const themeButton = document.getElementById('theme-toggle');
@@ -1179,8 +1190,10 @@ function renderProjects(d){
       +'<span class="retry-setup" role="button" tabindex="0" data-resume-root="'+esc(p.root)+'">Fix & retry</span></span>':'')
     +(p.interrupted?'<span class="project-interrupted">Interrupted · open to review and run again</span>':'')+'</span>'
     +'<span class="project-models">'+esc(p.generator)+' → '+esc(p.auditor)+'</span>'
-    +'<span class="project-stat">'+p.cycles+' cycles</span><span class="status '+esc(p.status)+'">'+esc(p.status)+'</span>'
+    +'<span class="project-stat">'+p.chats+' chats · '+p.cycles+' cycles</span><span class="status '+esc(p.status)+'">'+esc(p.status)+'</span>'
     +(p.paired?'<span class="paired-mark project-tier">GitHub paired</span>':'<span class="project-stat project-tier">Local</span>')
+    +'<button type="button" class="project-pin'+(p.pinned?' pinned':'')+'" data-pin-project="'+esc(p.root)+'" '
+      +'aria-label="'+(p.pinned?'Unpin':'Pin')+' project" title="'+(p.pinned?'Unpin':'Pin')+' project">'+(p.pinned?'★':'☆')+'</button>'
     +'<span class="project-arrow">›</span></div>').join(''):'<div class="hub-empty">No matching projects.</div>';
   renderProjectJob(d.jobs);configureProjectForm();
 }
@@ -1256,8 +1269,13 @@ document.getElementById('back-projects').onclick=showProjects;
 document.getElementById('project-switcher').onclick=showProjects;
 document.getElementById('hub-brand').onclick=hideProjects;
 document.getElementById('project-search').oninput=()=>projectState&&renderProjects(projectState);
-document.getElementById('project-list').onclick=ev=>{const row=ev.target.closest('[data-root]');
+document.getElementById('project-list').onclick=async ev=>{const row=ev.target.closest('[data-root]');
+  const pin=ev.target.closest('[data-pin-project]');
   const retry=ev.target.closest('[data-resume-root]');
+  if(pin){ev.preventDefault();ev.stopPropagation();const root=pin.getAttribute('data-pin-project');
+    const project=projectState&&projectState.items.find(p=>p.root===root);if(!project)return;
+    pin.disabled=true;try{await api('/api/projects/pin',{root,pinned:!project.pinned});project.pinned=!project.pinned;
+      renderProjects(projectState);}catch(e){pin.disabled=false;}return;}
   if(retry){ev.preventDefault();ev.stopPropagation();openRecovery(retry.getAttribute('data-resume-root'));return;}
   if(row)openProject(row.getAttribute('data-root'),row.getAttribute('data-current')==='1');};
 document.getElementById('project-list').onkeydown=ev=>{
@@ -1325,17 +1343,22 @@ projectForm.onsubmit=async ev=>{ev.preventDefault();const submit=document.getEle
   catch(e){showInlineError('wizard-error',e);}
   submit.disabled=false;};
 
+function activeChat(d){return d&&d.chats&&(d.chats.items||[]).find(row=>row.id===activeChatId)||null;}
+function chatCycles(d){return (d.cycles||[]).filter(row=>(row.chat_id||'history')===activeChatId);}
+function chatProgress(d){const p=d.progress;return p&&(p.chat_id||'history')===activeChatId?p:null;}
 function statusOf(d){
-  if(d.progress && !d.progress.finished) return 'running';
-  if(d.progress && d.progress.finished) return d.progress.outcome || 'ready';
-  if(d.cycles.length) return d.cycles[d.cycles.length-1].status;
+  const p=chatProgress(d),cycles=chatCycles(d);
+  if(p && !p.finished) return 'running';
+  if(p && p.finished) return p.outcome || 'ready';
+  if(cycles.length) return cycles[cycles.length-1].status;
   return 'ready';
 }
 function titleOf(d){
-  const users = [...d.generator_stream,...d.auditor_stream].filter(x => x.kind === 'you');
+  const chat=activeChat(d);if(chat)return chat.title;
+  const users = [...d.generator_stream,...d.auditor_stream].filter(x => x.kind === 'you'&&(x.chat_id||'history')===activeChatId);
   if(users.length) return users.sort((a,b) => b.t-a.t)[0].utterance.replace(/\s+/g,' ').slice(0,88);
-  if(d.progress && d.progress.task) return d.progress.task.replace(/\s+/g,' ').slice(0,88);
-  return 'New task';
+  const p=chatProgress(d);if(p&&p.task)return p.task.replace(/\s+/g,' ').slice(0,88);
+  return 'New chat';
 }
 function fileUrl(path){return '/api/file?t=' + encodeURIComponent(T) + '&path=' + encodeURIComponent(path);}
 function formatBytes(value){
@@ -1403,22 +1426,24 @@ function turn(m,d){
     + esc(m.summary) + '</div>' + artifactList(m.artifacts||m.files,auditStatus(d,m.sha)) + '</div></article>';
 }
 function runCard(d){
-  const p = d.progress;
-  const show = p || d.pipeline.some(s => s.state !== 'pending');
+  const p = chatProgress(d),cycles=chatCycles(d);
+  const latestCycle=cycles.length?cycles[cycles.length-1]:null;
+  const ownsPipeline=p||(latestCycle&&d.cycles.length&&latestCycle.sha===d.cycles[d.cycles.length-1].sha);
+  const pipeline=ownsPipeline?d.pipeline:[];
+  const show = p || pipeline.some(s => s.state !== 'pending');
   if(!show) return '';
   const outcome = p ? (p.finished ? p.outcome : 'running') : statusOf(d);
   const tone = String(outcome||'ready').toLowerCase();
   const pulse = outcome === 'passed' || outcome === 'PASSED' || outcome === 'CONSUMED' ? ' done'
     : outcome === 'escalated' || outcome === 'ESCALATED' ? ' warn'
     : outcome === 'running' ? '' : ' bad';
-  const reached = d.pipeline.filter(s => s.state !== 'pending').length;
-  const meter = d.pipeline.length ? Math.round(reached / d.pipeline.length * 100) : 0;
-  const latestCycle = d.cycles.length ? d.cycles[d.cycles.length-1] : null;
+  const reached = pipeline.filter(s => s.state !== 'pending').length;
+  const meter = pipeline.length ? Math.round(reached / pipeline.length * 100) : 0;
   const roundEvents = p && p.steps ? p.steps.filter(s => s.actor === 'loop' && s.text.startsWith('round ')) : [];
   const roundMatch = roundEvents.length ? roundEvents[roundEvents.length-1].text.match(/\d+/) : null;
   const round = roundMatch ? roundMatch[0] : latestCycle ? latestCycle.round : '—';
-  const focus = d.pipeline.find(s => s.state === 'current') || d.pipeline.find(s => s.state === 'failed')
-    || d.pipeline.find(s => s.state === 'pending') || d.pipeline[d.pipeline.length-1];
+  const focus = pipeline.find(s => s.state === 'current') || pipeline.find(s => s.state === 'failed')
+    || pipeline.find(s => s.state === 'pending') || pipeline[pipeline.length-1];
   const focusLabel = focus.state === 'current' ? 'Current gate' : focus.state === 'failed' ? 'Stopped at'
     : focus.state === 'pending' ? 'Next gate' : 'Completed gate';
   const stateNames = {done:'Complete',failed:'Blocked',current:'Active',pending:'Pending'};
@@ -1439,11 +1464,11 @@ function runCard(d){
     + '<span class="run-eyebrow">Audit loop</span><span class="status ' + esc(outcome) + '">'
     + esc(outcome) + '</span></div><div class="run-task">' + esc(task) + '</div><div class="run-meta">'
     + '<span>Round <strong>' + esc(round) + '</strong> of ' + esc(d.max_rounds) + '</span>'
-    + '<span><strong>' + reached + '</strong> of ' + d.pipeline.length + ' gates reached</span>'
+    + '<span><strong>' + reached + '</strong> of ' + pipeline.length + ' gates reached</span>'
     + '<span>' + (p ? p.elapsed + 's elapsed' : 'Ledger snapshot') + '</span></div>'
     + '<div class="run-meter" role="progressbar" aria-label="Audit gates reached" aria-valuemin="0" '
     + 'aria-valuemax="100" aria-valuenow="' + meter + '"><i style="width:' + meter + '%"></i></div></div>'
-    + '<div class="loop">' + d.pipeline.map((s,i) => '<div class="loop-step ' + esc(s.state) + '" '
+    + '<div class="loop">' + pipeline.map((s,i) => '<div class="loop-step ' + esc(s.state) + '" '
       + 'aria-label="' + esc(s.title + ': ' + stateNames[s.state]) + '"><div class="loop-track">'
       + '<div class="loop-mark">' + esc(MARK[s.state] || String(i+1)) + '</div></div>'
       + '<div class="loop-name"><span class="loop-index">0' + (i+1) + '</span>' + esc(s.title) + '</div>'
@@ -1464,6 +1489,7 @@ function allMessages(d){
   // Tasks is direct user input/output, never a raw audit log. Draft generator
   // rounds remain ledger evidence but do not become downloadable deliverables.
   const rows = [...d.generator_stream,...d.auditor_stream].filter(m=>{
+    if((m.chat_id||'history')!==activeChatId)return false;
     if(m.kind==='auditor') return false;
     if(m.kind!=='generator') return true;
     return ['passed','consumed'].includes(auditStatus(d,m.sha));
@@ -1473,7 +1499,7 @@ function allMessages(d){
     if(seen.has(key)) return false;seen.add(key);return true;}).sort((a,b) => a.t-b.t);
 }
 function deliveryStatus(d){
-  const p=d.progress;const cycle=d.cycles.length?d.cycles[d.cycles.length-1]:null;
+  const p=chatProgress(d),cycles=chatCycles(d),cycle=cycles.length?cycles[cycles.length-1]:null;
   const raw=p&&!p.finished?'running':p&&p.finished?p.outcome:cycle?cycle.status.toLowerCase():'';
   if(!raw)return'';const status=String(raw).toLowerCase();
   const copy=status==='running'?['Working','The result will appear here when it is ready.']
@@ -1481,14 +1507,14 @@ function deliveryStatus(d){
     :status==='blocked'?['Needs revision','The result did not pass review yet.']
     :status==='escalated'?['Needs your input','CrossAudit needs a decision before it can continue.']
     :['Stopped','The task did not complete.'];
-  const action=status==='passed'?'<button type="button" data-admit>Admit result</button>'
+  const action=status==='passed'?'<button type="button" data-admit data-admit-cycle="'+esc(cycle.id)+'">Admit result</button>'
     :'<button type="button" data-open-audits>View audit details</button>';
   return '<div class="delivery-status '+esc(status)+'"><span class="delivery-dot"></span><span><b>'
     +copy[0]+'</b> · '+copy[1]+'</span>'+action+'</div>';
 }
 function artifactRows(d){
   const files = new Map();
-  d.generator_stream.filter(m => m.kind === 'generator').forEach(m => (m.artifacts||m.files||[]).forEach(item => {
+  d.generator_stream.filter(m => m.kind === 'generator'&&(m.chat_id||'history')===activeChatId).forEach(m => (m.artifacts||m.files||[]).forEach(item => {
     const status=auditStatus(d,m.sha);if(!['passed','consumed'].includes(status))return;
     const artifact=artifactRecord(item);files.set(artifact.path,{artifact,t:m.t,round:m.round,summary:m.summary,status});
   }));
@@ -1502,7 +1528,7 @@ function artifactsView(d){
       : '<div class="empty">No audited deliverables yet.</div>');
 }
 function auditsView(d){
-  const audits = d.auditor_stream.filter(m => m.kind === 'auditor');
+  const audits = d.auditor_stream.filter(m => m.kind === 'auditor'&&(m.chat_id||'history')===activeChatId);
   return '<div class="view-heading"><h2>Audits</h2><p>Independent verdicts and findings reconstructed from the ledger.</p></div>'
     + runCard(d) + (audits.length ? '<div class="audit-evidence-head"><h3>Audit evidence</h3><span>'
       + audits.length + ' report' + (audits.length===1?'':'s') + '</span></div>'
@@ -1583,21 +1609,26 @@ function renderConversation(d){
   else thread.scrollTop = Math.min(previousTop,Math.max(0,thread.scrollHeight-thread.clientHeight));
 }
 function renderTasks(d){
-  const rows = [...d.cycles].reverse();
-  document.getElementById('task-list').innerHTML = rows.length ? rows.map((c,i) =>
-    '<div class="task' + (i === 0 ? ' active' : '') + '"><div class="task-title">'
-    + esc(c.sha.slice(0,12)) + '</div><div class="task-meta"><span class="state-dot '
-    + esc(c.status) + '"></span><span>' + esc(c.status.toLowerCase()) + '</span><span>· round '
-    + c.round + '</span></div></div>').join('') : '<div class="empty" style="padding:9px">No tasks yet</div>';
+  const rows=(d.chats&&d.chats.items)||[];
+  const chatRow=c=>'<div class="task'+(c.id===activeChatId?' active':'')+'" role="button" tabindex="0" data-chat-id="'+esc(c.id)+'">'
+    +'<div class="task-copy"><div class="task-title">'+esc(c.title)+'</div><div class="task-meta"><span class="state-dot '
+    +esc(c.status)+'"></span><span>'+esc(c.status)+'</span><span>· '+c.cycles+' cycle'+(c.cycles===1?'':'s')+'</span></div></div>'
+    +'<button type="button" class="pin-button'+(c.pinned?' pinned':'')+'" data-pin-chat="'+esc(c.id)+'" '
+    +'aria-label="'+(c.pinned?'Unpin':'Pin')+' chat" title="'+(c.pinned?'Unpin':'Pin')+' chat">'+(c.pinned?'★':'☆')+'</button></div>';
+  const pinned=rows.filter(c=>c.pinned),recent=rows.filter(c=>!c.pinned);
+  let html='';if(pinned.length)html+='<div class="side-label">Pinned</div>'+pinned.map(chatRow).join('');
+  if(recent.length)html+='<div class="side-label">Recent</div>'+recent.map(chatRow).join('');
+  document.getElementById('task-list').innerHTML=html||'<div class="empty" style="padding:9px">No chats yet</div>';
 }
 function renderInspector(d){
   document.getElementById('runtime-generator').textContent = d.generator;
   document.getElementById('runtime-auditor').textContent = d.auditor;
   document.getElementById('max-rounds').textContent = d.max_rounds;
-  const current = d.progress && d.progress.steps ? d.progress.steps.filter(s =>
+  const progress=chatProgress(d),cycles=chatCycles(d);
+  const current = progress && progress.steps ? progress.steps.filter(s =>
     s.actor === 'loop' && s.text.startsWith('round ')).slice(-1)[0] : null;
   document.getElementById('current-round').textContent = current ? current.text.replace('round ','')
-    : d.cycles.length ? d.cycles[d.cycles.length-1].round + ' / ' + d.max_rounds : '—';
+    : cycles.length ? cycles[cycles.length-1].round + ' / ' + d.max_rounds : '—';
   document.getElementById('rules-count').textContent = d.rules + ' blocker rules';
   document.getElementById('tier-value').textContent = d.tier.tier;
   const contracts = d.check_contracts || {};
@@ -1607,12 +1638,16 @@ function renderInspector(d){
   document.getElementById('mini-metrics').innerHTML = d.metrics.map(m => '<div class="mini-metric">'
     + '<div class="mini-value">' + esc(m.value ?? '—') + '</div><div class="mini-label">'
     + esc(m.label) + '</div></div>').join('');
-  document.getElementById('escalations').innerHTML = d.escalations.length ? d.escalations.map(e =>
+  const shas=new Set(cycles.map(c=>c.sha));const escalations=d.escalations.filter(e=>shas.has(e.sha));
+  document.getElementById('escalations').innerHTML = escalations.length ? escalations.map(e =>
     '<div class="escalation"><b>' + esc(e.sha) + ' · round ' + e.round + '</b><p>'
     + esc(e.why) + '</p></div>').join('') : '<div class="empty">Nothing needs attention.</div>';
 }
 function render(d){
   lastState = d;
+  const chatRows=(d.chats&&d.chats.items)||[];
+  if(activeChatId&&!chatRows.some(row=>row.id===activeChatId))activeChatId='';
+  if(!activeChatId&&chatRows.length&&!newTaskMode)activeChatId=chatRows[0].id;
   if(runtimeModal.classList.contains('on'))syncRuntimeBusy(d);
   document.querySelector('.composer-wrap').classList.toggle('view-hidden',activeView==='usage');
   const preview=document.getElementById('contract-preview');preview.className='contract-preview';preview.innerHTML='';
@@ -1622,8 +1657,8 @@ function render(d){
   document.getElementById('side-project').textContent = d.project;
   document.getElementById('tier-label').textContent = d.tier.tier + ' · local controller';
   const files = artifactRows(d);
-  const auditRows = d.auditor_stream.filter(m => m.kind === 'auditor');
-  const heading = newTaskMode ? 'New task' : activeView === 'artifacts' ? 'Artifacts'
+  const auditRows = d.auditor_stream.filter(m => m.kind === 'auditor'&&(m.chat_id||'history')===activeChatId);
+  const heading = newTaskMode ? 'New chat' : activeView === 'artifacts' ? 'Artifacts'
     : activeView === 'audits' ? 'Audits' : activeView === 'usage' ? 'Usage' : titleOf(d);
   const subtitle = newTaskMode ? 'Independent generation and audit'
     : activeView === 'artifacts' ? files.length + ' audited deliverables'
@@ -1637,9 +1672,12 @@ function render(d){
   const badge = document.getElementById('thread-status');
   badge.textContent = state;badge.className = 'status ' + state;
   document.getElementById('model-summary').textContent = d.generator + ' → ' + d.auditor;
+  const projectPin=document.getElementById('current-project-pin'),projectPinned=Boolean(d.chats&&d.chats.project_pinned);
+  projectPin.textContent=projectPinned?'★':'☆';projectPin.classList.toggle('pinned',projectPinned);
+  projectPin.title=projectPinned?'Unpin project':'Pin project';projectPin.setAttribute('aria-label',projectPin.title);
   renderTasks(d);renderInspector(d);renderConversation(d);
   const iv = document.getElementById('interrupted');
-  if(d.interrupted && !(d.progress && !d.progress.finished)){
+  if(d.interrupted&&(d.interrupted.chat_id||'history')===activeChatId && !(chatProgress(d) && !chatProgress(d).finished)){
     iv.className = 'interrupted on';iv.textContent = 'Interrupted run: "'
       + d.interrupted.task.replace(/\s+/g,' ').slice(0,72) + '". Send it again to continue.';
   }else iv.className = 'interrupted';
@@ -1773,9 +1811,26 @@ document.getElementById('conversation').onclick=ev=>{
   if(ev.target.closest('[data-open-artifacts]'))selectView('artifacts');
   if(ev.target.closest('[data-open-audits]'))selectView('audits');
   const admit=ev.target.closest('[data-admit]');if(admit){admit.disabled=true;admit.textContent='Verifying…';
-    api('/api/admit',{}).catch(e=>{route.className='route on';route.innerHTML='<b>Not admitted</b> — '+esc(e.message);});}
+    api('/api/admit',{cycle_id:admit.getAttribute('data-admit-cycle')}).catch(e=>{route.className='route on';route.innerHTML='<b>Not admitted</b> — '+esc(e.message);});}
 };
-document.getElementById('new-task').onclick=()=>{
+document.getElementById('task-list').onclick=async ev=>{
+  const pin=ev.target.closest('[data-pin-chat]'),row=ev.target.closest('[data-chat-id]');
+  if(pin){ev.preventDefault();ev.stopPropagation();const id=pin.getAttribute('data-pin-chat');
+    const chat=lastState&&lastState.chats.items.find(c=>c.id===id);if(!chat)return;
+    pin.disabled=true;try{await api('/api/chats/pin',{chat_id:id,pinned:!chat.pinned});chat.pinned=!chat.pinned;
+      render(lastState);}catch(e){pin.disabled=false;}return;}
+  if(row){activeChatId=row.getAttribute('data-chat-id');newTaskMode=false;activeView='tasks';
+    document.querySelectorAll('.nav-item').forEach(button=>button.classList.toggle('active',button.getAttribute('data-view')==='tasks'));
+    render(lastState);document.getElementById('thread').scrollTop=0;closePanels();}
+};
+document.getElementById('task-list').onkeydown=ev=>{if((ev.key==='Enter'||ev.key===' ')&&ev.target.matches('[data-chat-id]')){
+  ev.preventDefault();ev.target.click();}};
+document.getElementById('current-project-pin').onclick=async()=>{if(!lastState)return;const button=document.getElementById('current-project-pin');
+  const pinned=Boolean(lastState.chats&&lastState.chats.project_pinned);button.disabled=true;
+  try{await api('/api/projects/pin',{root:lastState.root,pinned:!pinned});lastState.chats.project_pinned=!pinned;render(lastState);}
+  catch(e){route.className='route on';route.innerHTML='<b>Could not pin project</b> — '+esc(e.message);}
+  finally{button.disabled=false;}};
+document.getElementById('new-task').onclick=async()=>{
   activeView='tasks';newTaskMode=true;say.value='';route.className='route';pendingFiles=[];
   uploadProgress=new Map();
   resetTaskChoices();
@@ -1785,7 +1840,10 @@ document.getElementById('new-task').onclick=()=>{
     const selected=button.getAttribute('data-view')==='tasks';button.classList.toggle('active',selected);
     button.setAttribute('aria-pressed',selected?'true':'false');
   });
-  if(lastState)render(lastState);document.getElementById('thread').scrollTop=0;closePanels();say.focus();
+  try{const result=await api('/api/chats/new',{title:'New chat'});activeChatId=result.chat.id;
+    if(lastState){lastState.chats.items.unshift({...result.chat,cycles:0,status:'ready'});render(lastState);}}
+  catch(e){route.className='route on';route.innerHTML='<b>Could not create chat</b> — '+esc(e.message);}
+  document.getElementById('thread').scrollTop=0;closePanels();say.focus();
 };
 document.getElementById('sidebar-toggle').onclick=toggleSidebar;
 document.getElementById('inspect-toggle').onclick=toggleInspector;
@@ -1801,9 +1859,9 @@ form.onsubmit=async ev=>{ev.preventDefault();const rawText=say.value.trim();if(!
   send.disabled=true;say.disabled=true;transferBusy=true;document.getElementById('attach').disabled=true;route.className='route on';
   route.textContent=pendingFiles.length?'Sending your files…':'Starting…';
   try{const uploadBatch=pendingFiles.length?await uploadFiles(pendingFiles):null;
-    const r=await api('/api/say',{text,upload_batch:uploadBatch,attachment_consent:attachmentConsent,
+    const r=await api('/api/say',{text,chat_id:activeChatId,upload_batch:uploadBatch,attachment_consent:attachmentConsent,
       delivery_choices:deliveryChoices});if(r.asked){route.innerHTML='<b class="ask">Needs clarification</b> — '
-    + esc(r.clarify);resetConsent();resetTaskChoices();}else{route.innerHTML=r.lane==='generator'
+    + esc(r.clarify);resetConsent();resetTaskChoices();}else{activeChatId=r.chat_id||activeChatId;route.innerHTML=r.lane==='generator'
       ?'<b>Task started.</b> The result will appear in this conversation.'
       :'<b>Message delivered.</b>';
     if(!pendingFiles.length||r.attachments_accepted){say.value='';pendingFiles=[];uploadProgress=new Map();fileInput.value='';drawFiles();syncAudience();resetTaskChoices();}

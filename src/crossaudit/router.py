@@ -72,6 +72,7 @@ class Routing:
     t: int = 0
     addressed_to: str = "auto"
     routing_mode: str = "automatic"
+    chat_id: str = ""
 
     @property
     def certain(self) -> bool:

@@ -346,11 +346,12 @@ def _zombie(pid: int) -> bool:
 
 
 # ------------------------------------------------------- interrupted builds
-def mark_build(cfg: Config, task: str) -> None:
+def mark_build(cfg: Config, task: str, chat_id: str = "") -> None:
     p = flag_path(cfg)
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps({"task": task, "started": int(time.time()),
-                             "pid": os.getpid()}), encoding="utf-8")
+    p.write_text(json.dumps({"task": task, "chat_id": chat_id,
+                             "started": int(time.time()), "pid": os.getpid()}),
+                 encoding="utf-8")
 
 
 def unmark_build(cfg: Config) -> None:
