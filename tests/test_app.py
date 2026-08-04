@@ -150,6 +150,24 @@ def test_native_shell_keeps_projects_running_after_the_window_closes():
     assert "guard let self, !self.isTerminating" in source
 
 
+def test_native_shell_routes_standard_edit_commands_to_the_focused_web_field():
+    source = (Path(__file__).parents[1] / "packaging" / "macos" /
+              "CrossAuditApp.swift").read_text()
+    assert 'NSMenu(title: "Edit")' in source
+    for title, selector, key in (
+        ("Undo", 'Selector(("undo:"))', "z"),
+        ("Redo", 'Selector(("redo:"))', "z"),
+        ("Cut", "#selector(NSText.cut(_:))", "x"),
+        ("Copy", "#selector(NSText.copy(_:))", "c"),
+        ("Paste", "#selector(NSText.paste(_:))", "v"),
+        ("Select All", "#selector(NSText.selectAll(_:))", "a"),
+    ):
+        assert f'"{title}"' in source
+        assert selector in source
+        assert f'keyEquivalent: "{key}"' in source
+    assert "redo.keyEquivalentModifierMask = [.command, .shift]" in source
+
+
 def test_app_project_creation_requires_both_selected_provider_keys(
         tmp_path, monkeypatch):
     monkeypatch.setenv("CROSSAUDIT_APP_MODE", "1")

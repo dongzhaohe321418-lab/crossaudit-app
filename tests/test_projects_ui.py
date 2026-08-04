@@ -207,6 +207,24 @@ def test_project_page_contains_the_control_plane_contract():
     assert "This dialog updates automatically after approval." in PAGE
 
 
+def test_every_workspace_exposes_a_persistent_bilingual_display_layer():
+    from crossaudit.console.page import PAGE
+
+    for text in ("id=\"hub-locale\"", "id=\"locale-toggle\"",
+                 "crossaudit-locale", "crossaudit_v4_locale", "MutationObserver", "zh-CN",
+                 "Switch to Chinese", "\u5207\u6362\u5230\u82f1\u6587"):
+        assert text in PAGE
+    # The language layer must span the portfolio, setup, credentials, audit,
+    # files, usage/compute navigation and the primary conversation—not just
+    # translate a landing-page label.
+    for chinese in ("项目", "创建受监督项目", "供应商凭据", "API key 以只写方式",
+                    "处理审计升级", "添加文件", "用量", "计算", "生成者", "独立审计者",
+                    "环境诊断", "提交远程任务"):
+        assert chinese in PAGE
+    assert "localStorage.setItem(LOCALE_KEY,currentLocale)" in PAGE
+    assert "Max-Age=31536000; SameSite=Strict" in PAGE
+
+
 def test_repository_check_preserves_editable_names_and_requires_explicit_adoption(
         monkeypatch):
     monkeypatch.setattr(projects, "github_status", lambda force=False: {

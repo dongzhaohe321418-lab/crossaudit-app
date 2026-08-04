@@ -1,14 +1,14 @@
-# CrossAudit 4.11.0 enterprise release assessment
+# CrossAudit 4.11.1 enterprise release assessment
 
 Date: 2026-08-04
 
 Target: Apple Silicon macOS 13 or later
 
-Release candidate: 4.11.0
+Release candidate: 4.11.1
 
 ## Executive result
 
-CrossAudit 4.11.0 is suitable for local evaluation and controlled pilot use. It
+CrossAudit 4.11.1 is suitable for local evaluation and controlled pilot use. It
 preserves the V3.2 audited protocol while adding a native AppKit/WebKit shell,
 Keychain credentials, UI-first project creation, independent background
 projects, GitHub connection, chunked file transfer, final-artifact downloads,
@@ -24,7 +24,7 @@ Policy rather than hidden behind an installation workaround.
 
 | Area | Release gate | Result |
 |---|---|---|
-| Python regression | Complete automated suite | Passed: 472, with 2 paid checks skipped |
+| Python regression | Complete automated suite | Passed: 474, with 2 paid checks skipped |
 | Provider compatibility | Protocol mocks plus opt-in live checks | Passed; paid API checks remain opt-in |
 | Native packaging | Swift typecheck, PyInstaller analysis, arm64 binaries | Passed |
 | App structure | `plutil` and deep strict `codesign` validation | Passed |
@@ -32,6 +32,8 @@ Policy rather than hidden behind an installation workaround.
 | Frozen runtime | Isolated first-launch bootstrap and API smoke test | Passed |
 | UI security | Missing token, wrong token, foreign Host, path traversal | Automated |
 | Credential boundary | Keychain write/read/delete; no secret in argv or response | Automated and local smoke |
+| Native editing | Responder-chain Edit menu; copy/paste in secure API-key fields | Automated and installed-app UI smoke |
+| Localization | English/Chinese across hub, workspaces, settings, setup, usage and compute; cross-port persistence | Automated, browser, and installed-app restart smoke |
 | Subscription boundary | Official ChatGPT browser flow; allowlisted state; text-only fail-closed turns | Automated and live smoke |
 | Live state | Same-process event latency below 250 ms; external fallback at 100 ms | Automated |
 | Usage metering | Provider/runtime counts, cache normalization, local-only ledger, unknown-price refusal | Automated and local smoke |
@@ -47,6 +49,37 @@ Policy rather than hidden behind an installation workaround.
 The final command outputs and artifact hashes are recorded in the GitHub release
 and CI logs. Tests that spend provider credits remain explicitly opt-in and use
 repository secrets in CI.
+
+## V4.11.1 release-candidate evidence
+
+- Automated suite: **474 passed, 2 skipped** with warnings treated as errors;
+  the final parallel run used independent workers plus a 60-second per-test
+  timeout. The skipped cases remain only explicitly opt-in paid-provider checks.
+- Native editing was exercised in the installed application, not inferred from
+  browser behavior: a harmless 16-character probe was copied from a normal
+  field with Command-C, pasted into a masked API-key field with Command-V, and
+  then cleared without saving. The AppKit Edit menu exposes Undo, Redo, Cut,
+  Copy, Paste, and Select All through the focused WebKit responder.
+- English and Simplified Chinese were exercised in the project portfolio,
+  provider settings, first-project wizard, and individual workspace. The test
+  crossed two independently running loopback ports, then quit and relaunched the
+  installed app on another random port; Chinese remained selected. Project
+  names, paths, model IDs, rule text, and provider errors remain untranslated
+  evidence rather than being rewritten.
+- Critical Ruff checks passed; Bandit reported **0 high and 0 medium** findings;
+  dependency audit found no known vulnerability. Swift compiled with warnings
+  treated as errors, the generated JavaScript passed `node --check`, and the
+  source tree compiled to Python bytecode.
+- Wheel and source distributions were built from the final source. The wheel
+  installed in a fresh environment, reported V4.11.1, and contained the global
+  cross-workspace locale persistence layer.
+- The final DMG passed repeat checksum verification, read-only mount/copy,
+  `plutil`, deep strict code-sign verification, arm64 inspection, and a frozen
+  controller/API smoke. `/Applications/CrossAudit.app` was replaced from that
+  verified copy and launched as one native shell plus one frozen core. Previous
+  app bundles were moved to the Trash and remain recoverable.
+- Distribution SHA-256:
+  `ed3aaaea15c40ca4d8a13cf9966ec47ec0918453d4867488eff3c19f9544c732`.
 
 ## V4.11.0 release-candidate evidence
 

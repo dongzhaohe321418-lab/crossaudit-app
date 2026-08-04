@@ -27,7 +27,7 @@ from urllib.parse import urlparse
 from ..errors import ConfigDenial, ProviderDenial
 from .base import Reply
 
-CLIENT = {"name": "crossaudit", "title": "CrossAudit", "version": "4.11.0"}
+CLIENT = {"name": "crossaudit", "title": "CrossAudit", "version": "4.11.1"}
 DEFAULT_TIMEOUT_S = 300.0
 FORBIDDEN_ITEM_TYPES = {
     "commandExecution", "fileChange", "mcpToolCall", "dynamicToolCall",
