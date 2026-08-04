@@ -194,11 +194,24 @@ def _safe_url(value: str, allow_private: bool) -> str:
     return raw
 
 
+def _stdio_environment() -> dict[str, str]:
+    """Return a minimal child environment without breaking platform startup.
+
+    Windows' Python runtime can require ``SystemRoot`` while initializing its
+    cryptographic random source.  Dropping that variable caused otherwise safe
+    MCP fixture processes to fail before user code ran on clean Windows hosts.
+    These values describe the operating system/runtime; they are not secrets.
+    """
+    names = (
+        "PATH", "HOME", "USER", "LOGNAME", "TMPDIR", "LANG", "LC_ALL",
+        "SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT", "TEMP", "TMP",
+    )
+    return {key: os.environ[key] for key in names if os.environ.get(key)}
+
+
 class _StdioSession:
     def __init__(self, row: dict) -> None:
-        env = {key: os.environ[key] for key in (
-            "PATH", "HOME", "USER", "LOGNAME", "TMPDIR", "LANG", "LC_ALL")
-               if os.environ.get(key)}
+        env = _stdio_environment()
         try:
             self.process = subprocess.Popen(
                 [row["command"], *row.get("args", [])], cwd=row["root"],

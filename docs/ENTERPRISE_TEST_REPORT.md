@@ -24,7 +24,7 @@ Policy rather than hidden behind an installation workaround.
 
 | Area | Release gate | Result |
 |---|---|---|
-| Python regression | Complete automated suite | Passed: 554, with 2 paid checks skipped |
+| Python regression | Complete automated suite | Passed: 557, with 2 paid checks skipped |
 | Provider compatibility | Protocol mocks plus opt-in live checks | Passed; paid API checks remain opt-in |
 | Native packaging | Swift typecheck, PyInstaller analysis, arm64 binaries | Passed |
 | App structure | `plutil` and deep strict `codesign` validation | Passed |
@@ -84,7 +84,7 @@ repository secrets in CI.
   global localization. Custom modals now trap keyboard focus, close with Escape
   and return focus to their trigger.
 - Final Apple Silicon DMG: `CrossAudit-4.14.0-arm64.dmg`, SHA-256
-  `ab78dd5545313191c75f9b28b09bbbd0d9f0c9ea4a27f0dad0086342ead7b052`.
+  `0f1998bc4b888542dc1089a61880660d1f2a95a70c13a7c0b5a0938b95f038bc`.
   The mounted 4.14.0 core repeated the document and loopback-security self-test;
   a final browser pass found no console errors or warnings.
 

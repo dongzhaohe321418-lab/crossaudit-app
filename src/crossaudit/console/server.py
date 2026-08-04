@@ -34,6 +34,7 @@ import subprocess
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from socketserver import TCPServer
 from urllib.parse import parse_qs, quote, urlparse
 
 from ..config import Config, load
@@ -167,6 +168,18 @@ class _ConsoleHTTPServer(ThreadingHTTPServer):
     # an explicit native-app quit or recovery restart from ending the core.
     daemon_threads = True
     block_on_close = False
+
+    def server_bind(self) -> None:
+        """Bind loopback without a reverse-DNS lookup.
+
+        ``HTTPServer.server_bind`` calls ``socket.getfqdn`` even when the
+        server is bound to a numeric loopback address. Misconfigured corporate
+        DNS can make first launch hang indefinitely, so the UI server records
+        the already-known numeric address instead.
+        """
+        TCPServer.server_bind(self)
+        self.server_name = str(self.server_address[0])
+        self.server_port = int(self.server_address[1])
 
     def __init__(self, *args, **kwargs) -> None:
         self.stop_event = threading.Event()

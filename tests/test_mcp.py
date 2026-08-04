@@ -45,6 +45,20 @@ def _stdio_payload(script, **extra):
             "allowed_tools": ["lookup"], "max_calls_per_task": 3, **extra}
 
 
+def test_stdio_child_environment_keeps_windows_runtime_bootstrap(monkeypatch):
+    monkeypatch.setenv("SYSTEMROOT", r"C:\\Windows")
+    monkeypatch.setenv("WINDIR", r"C:\\Windows")
+    monkeypatch.setenv("TEMP", r"C:\\Temp")
+    monkeypatch.setenv("CROSSAUDIT_AUDITOR_KEY", "must-not-cross-boundary")
+
+    env = mcp._stdio_environment()
+
+    assert env["SYSTEMROOT"] == r"C:\\Windows"
+    assert env["WINDIR"] == r"C:\\Windows"
+    assert env["TEMP"] == r"C:\\Temp"
+    assert "CROSSAUDIT_AUDITOR_KEY" not in env
+
+
 def test_stdio_server_is_initialized_listed_policy_gated_and_called(cfg, tmp_path):
     script = tmp_path / "fixture_mcp.py"
     script.write_text(SERVER)

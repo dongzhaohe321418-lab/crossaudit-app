@@ -14,6 +14,7 @@ import tempfile
 import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
+from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 
 import pytest
@@ -226,6 +227,22 @@ def test_console_health_is_tokened_and_constant_size(console):
     assert code == 403
 
 
+def test_console_bind_does_not_depend_on_reverse_dns(monkeypatch):
+    import socket
+    from crossaudit.console.server import _ConsoleHTTPServer
+
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("numeric loopback bind must not perform reverse DNS")
+
+    monkeypatch.setattr(socket, "getfqdn", forbidden)
+    httpd = _ConsoleHTTPServer(("127.0.0.1", 0), BaseHTTPRequestHandler)
+    try:
+        assert httpd.server_name == "127.0.0.1"
+        assert httpd.server_port > 0
+    finally:
+        httpd.server_close()
+
+
 def test_console_remains_fail_closed_under_parallel_authorised_and_hostile_load(
         console):
     state = console.replace("/?", "/api/state?")
@@ -242,6 +259,24 @@ def test_console_remains_fail_closed_under_parallel_authorised_and_hostile_load(
         statuses = list(pool.map(request, range(96)))
     assert statuses.count(200) == 32
     assert statuses.count(403) == 64
+
+
+def test_state_reads_retry_transient_windows_style_sharing_violation(
+        tmp_path, monkeypatch):
+    path = tmp_path / "state.json"
+    path.write_text('{"schema": 1, "cycles": {}, "history": []}')
+    original = Path.read_text
+    attempts = {"count": 0}
+
+    def transient(target, *args, **kwargs):
+        if target == path and attempts["count"] < 2:
+            attempts["count"] += 1
+            raise PermissionError("simulated sharing violation")
+        return original(target, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", transient)
+    assert StateStore(path).snapshot()["schema"] == 1
+    assert attempts["count"] == 2
 
 
 def test_console_creates_and_pins_individual_chats(console):

@@ -51,8 +51,22 @@ class StateStore:
     def _read(self) -> dict:
         if not self.path.exists():
             return {"schema": 1, "cycles": {}, "history": []}
+        text: str | None = None
+        # ``os.replace`` is atomic, but Windows virus scanners and indexers can
+        # briefly hold the destination between rename and open. Reads are much
+        # more frequent than writes in the live UI; retry that transient sharing
+        # violation without hiding a persistent permissions error.
+        for attempt in range(5):
+            try:
+                text = self.path.read_text(encoding="utf-8")
+                break
+            except PermissionError:
+                if attempt == 4:
+                    raise
+                time.sleep(0.01 * (attempt + 1))
+        assert text is not None
         try:
-            data = json.loads(self.path.read_text(encoding="utf-8"))
+            data = json.loads(text)
         except json.JSONDecodeError as exc:
             raise IntegrityDenial(f"state file is corrupt: {exc}", path=str(self.path)) from exc
         if not isinstance(data, dict) or "cycles" not in data:
