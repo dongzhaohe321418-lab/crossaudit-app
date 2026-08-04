@@ -250,6 +250,39 @@ def test_github_failures_explain_the_user_action(stderr, hint, monkeypatch):
         pair._gh("repo", "create", "owner/project")
 
 
+def test_github_auth_timeout_is_bounded_and_actionable(monkeypatch):
+    monkeypatch.setattr(pair.shutil, "which", lambda _name: "/usr/bin/gh")
+
+    def timeout(*_args, **_kwargs):
+        raise subprocess.TimeoutExpired("gh auth status", pair.GH_AUTH_TIMEOUT)
+
+    monkeypatch.setattr(pair.subprocess, "run", timeout)
+    with pytest.raises(ConfigDenial, match="did not respond") as caught:
+        pair.gh()
+    assert caught.value.detail == {
+        "issue": "command_timeout", "action": "retry",
+        "url": "https://www.githubstatus.com",
+    }
+
+
+def test_github_identity_uses_short_timeout(monkeypatch):
+    class Result:
+        returncode = 0
+        stdout = '{"login":"bounded-user"}'
+        stderr = ""
+
+    seen = []
+    monkeypatch.setattr(pair, "gh", lambda: "/usr/bin/gh")
+
+    def run(*_args, **kwargs):
+        seen.append(kwargs["timeout"])
+        return Result()
+
+    monkeypatch.setattr(pair.subprocess, "run", run)
+    assert pair._owner() == "bounded-user"
+    assert seen == [pair.GH_IDENTITY_TIMEOUT]
+
+
 def test_repository_availability_does_not_hide_network_failures(monkeypatch):
     class Result:
         returncode = 1

@@ -24,7 +24,7 @@ Policy rather than hidden behind an installation workaround.
 
 | Area | Release gate | Result |
 |---|---|---|
-| Python regression | Complete automated suite | Passed: 557, with 2 paid checks skipped |
+| Python regression | Complete automated suite | Passed: 559, with 2 paid checks skipped |
 | Provider compatibility | Protocol mocks plus opt-in live checks | Passed; paid API checks remain opt-in |
 | Native packaging | Swift typecheck, PyInstaller analysis, arm64 binaries | Passed |
 | App structure | `plutil` and deep strict `codesign` validation | Passed |

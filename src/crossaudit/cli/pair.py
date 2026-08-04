@@ -38,6 +38,23 @@ TIERS = {
     "enforced": "admission actually refused on a failed audit",
 }
 
+# External tools must never be allowed to freeze the desktop control plane.
+# Authentication and identity checks run while rendering the Projects page, so
+# keep those especially short.  Mutating network operations get a larger but
+# still finite budget and run in a background job in the app.
+GH_AUTH_TIMEOUT = 5
+GH_IDENTITY_TIMEOUT = 10
+GH_COMMAND_TIMEOUT = 120
+GIT_COMMAND_TIMEOUT = 120
+
+
+def _timed_out(tool: str, seconds: int) -> ConfigDenial:
+    return ConfigDenial(
+        f"{tool} did not respond within {seconds} seconds. Check the network or "
+        "close any hidden sign-in prompt, then retry.",
+        issue="command_timeout", action="retry",
+        url="https://www.githubstatus.com" if tool == "GitHub" else "")
+
 
 def gh() -> str:
     bundled = os.environ.get("CROSSAUDIT_BUNDLED_GH", "").strip()
@@ -49,7 +66,11 @@ def gh() -> str:
             "its own OAuth flow or handle your token",
             issue="github_cli", action="install_github_cli",
             url="https://cli.github.com")
-    proc = subprocess.run([path, "auth", "status"], capture_output=True, text=True)
+    try:
+        proc = subprocess.run([path, "auth", "status"], capture_output=True,
+                              text=True, timeout=GH_AUTH_TIMEOUT)
+    except subprocess.TimeoutExpired as exc:
+        raise _timed_out("GitHub", GH_AUTH_TIMEOUT) from exc
     if proc.returncode != 0:
         raise ConfigDenial(
             "GitHub is not connected. Connect the account in CrossAudit and retry.",
@@ -58,8 +79,13 @@ def gh() -> str:
     return path
 
 
-def _gh(*args: str, check: bool = True) -> str:
-    proc = subprocess.run([gh(), *args], capture_output=True, text=True)
+def _gh(*args: str, check: bool = True,
+        timeout: int = GH_COMMAND_TIMEOUT) -> str:
+    try:
+        proc = subprocess.run([gh(), *args], capture_output=True, text=True,
+                              timeout=timeout)
+    except subprocess.TimeoutExpired as exc:
+        raise _timed_out("GitHub", timeout) from exc
     if check and proc.returncode != 0:
         said = proc.stderr.strip()[:300]
         low = said.lower()
@@ -87,12 +113,15 @@ def _gh(*args: str, check: bool = True) -> str:
 
 
 def _owner() -> str:
-    return json.loads(_gh("api", "user"))["login"]
+    return json.loads(_gh("api", "user", timeout=GH_IDENTITY_TIMEOUT))["login"]
 
 
 def _exists(repo: str) -> bool:
-    proc = subprocess.run([gh(), "repo", "view", repo], capture_output=True,
-                          text=True)
+    try:
+        proc = subprocess.run([gh(), "repo", "view", repo], capture_output=True,
+                              text=True, timeout=GH_IDENTITY_TIMEOUT)
+    except subprocess.TimeoutExpired as exc:
+        raise _timed_out("GitHub", GH_IDENTITY_TIMEOUT) from exc
     if proc.returncode == 0:
         return True
     said = f"{proc.stdout}\n{proc.stderr}".casefold()
@@ -105,8 +134,11 @@ def _exists(repo: str) -> bool:
 
 
 def _git(root: Path, *args: str, check: bool = True) -> str:
-    proc = subprocess.run(["git", *args], cwd=str(root), capture_output=True,
-                          text=True)
+    try:
+        proc = subprocess.run(["git", *args], cwd=str(root), capture_output=True,
+                              text=True, timeout=GIT_COMMAND_TIMEOUT)
+    except subprocess.TimeoutExpired as exc:
+        raise _timed_out("Git", GIT_COMMAND_TIMEOUT) from exc
     if check and proc.returncode != 0:
         raise ConfigDenial(f"git {' '.join(args[:2])} failed: "
                            f"{proc.stderr.strip()[:240]}")
@@ -171,7 +203,11 @@ def apply_pair(cfg, science: str, audit: str, *, private: bool,
         if staged:
             args.append("--cached")
         args.extend(["--quiet", "--", config_rel])
-        clean = subprocess.run(args, cwd=str(cfg.root)).returncode
+        try:
+            clean = subprocess.run(args, cwd=str(cfg.root),
+                                   timeout=GIT_COMMAND_TIMEOUT).returncode
+        except subprocess.TimeoutExpired as exc:
+            raise _timed_out("Git", GIT_COMMAND_TIMEOUT) from exc
         if clean != 0:
             where = "staged " if staged else ""
             raise ConfigDenial(
@@ -198,9 +234,12 @@ def apply_pair(cfg, science: str, audit: str, *, private: bool,
     # them in the science history rather than leaving a local-only config edit.
     _write_pair_config(cfg, science, audit)
     _git(cfg.root, "add", "--", config_rel)
-    pending_config = subprocess.run(
-        ["git", "diff", "--cached", "--quiet", "--", config_rel],
-        cwd=str(cfg.root)).returncode
+    try:
+        pending_config = subprocess.run(
+            ["git", "diff", "--cached", "--quiet", "--", config_rel],
+            cwd=str(cfg.root), timeout=GIT_COMMAND_TIMEOUT).returncode
+    except subprocess.TimeoutExpired as exc:
+        raise _timed_out("Git", GIT_COMMAND_TIMEOUT) from exc
     if pending_config == 1:
         _git(cfg.root, "commit", "-q", "-m", "crossaudit: record repository pair",
              "--", config_rel)
@@ -232,8 +271,12 @@ def apply_pair(cfg, science: str, audit: str, *, private: bool,
         if not email:
             _git(staging, "config", "user.email", "crossaudit@local.invalid")
         _git(staging, "add", "-A")
-        pending = subprocess.run(["git", "diff", "--cached", "--quiet"],
-                                 cwd=str(staging)).returncode
+        try:
+            pending = subprocess.run(["git", "diff", "--cached", "--quiet"],
+                                     cwd=str(staging),
+                                     timeout=GIT_COMMAND_TIMEOUT).returncode
+        except subprocess.TimeoutExpired as exc:
+            raise _timed_out("Git", GIT_COMMAND_TIMEOUT) from exc
         if pending == 1:
             _git(staging, "commit", "-q", "-m", "seed: constitution and ledger")
             _git(staging, "push", "-q", "origin", "HEAD:main")
@@ -247,9 +290,12 @@ def apply_pair(cfg, science: str, audit: str, *, private: bool,
     secret_uploaded = False
     key = os.environ.get(cfg.auditor.key_env, "").strip()
     if key:
-        proc = subprocess.run([gh(), "secret", "set", cfg.auditor.key_env,
-                               "--repo", audit], input=key, text=True,
-                              capture_output=True)
+        try:
+            proc = subprocess.run([gh(), "secret", "set", cfg.auditor.key_env,
+                                  "--repo", audit], input=key, text=True,
+                                  capture_output=True, timeout=GH_COMMAND_TIMEOUT)
+        except subprocess.TimeoutExpired as exc:
+            raise _timed_out("GitHub", GH_COMMAND_TIMEOUT) from exc
         if proc.returncode != 0:
             raise ConfigDenial(f"could not upload {cfg.auditor.key_env}: "
                                f"{proc.stderr.strip()[:240]}",
