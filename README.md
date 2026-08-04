@@ -80,7 +80,14 @@ structured content.
 - Claude Science-style remote compute: register existing OpenSSH hosts, probe
   workstations or Slurm login nodes, submit detached jobs, follow scheduler
   state and logs in real time, cancel explicitly, and stream remote outputs
-  back without making the Mac the job owner.
+  back without making the Mac the job owner. An explicitly enabled host can
+  also act as the Generator's policy-bounded external calculator: the Generator
+  submits work, waits in the background, reads declared result data, and then
+  continues the same audited task automatically.
+- Project-scoped MCP tools over local stdio or Streamable HTTP, with exact
+  executable consent, HTTPS/private-network controls, write-only Keychain
+  bearer tokens, per-tool allowlists, call budgets, live progress, bounded
+  results, and content-free hashed call records.
 - Local token metering for every Generator and Auditor call, with a live Usage
   view, cache-aware counts, role/model breakdowns, and clearly labelled public
   API-value estimates.
@@ -96,8 +103,11 @@ structured content.
 - UI-managed generator guidance for house style, output shape, path-specific
   conventions, and reusable checklists. Guidance is committed with the Project,
   remains invisible to the independent auditor, and cannot relax the Constitution.
-- Explicit escalation decisions in the conversation: **Review decision** opens
-  the durable human ruling flow without exposing receipt IDs or requiring a CLI.
+- Explicit escalation decisions in the conversation: when the automatic round
+  limit is reached, the workspace opens a human handoff that summarizes the
+  rounds attempted and remaining blockers, then asks the user to **Revise and
+  continue** or **Stop this task**. The decision and explanation are durable;
+  receipt IDs and Terminal commands stay out of the user flow.
 - Correct OpenAI `max_completion_tokens` handling.
 - Deterministic schema, units, convergence, and provenance checks.
 - Git-backed reports and receipt verification.
@@ -207,6 +217,19 @@ in the top bar pins the whole Project in the Projects list. Chat message,
 deliverable, audit, and live-loop views are filtered to the selected Chat.
 Existing pre-4.7 evidence appears automatically as **Project history**.
 
+The delete controls keep those boundaries explicit. Deleting one Chat removes
+it from Project navigation but never rewrites shared Git commits, audit reports,
+receipts, or admitted files; a private tombstone prevents old ledger IDs from
+silently recreating the Chat. Deleting a whole Project is available from the
+main Projects view only when setup, audited work, and remote compute are idle.
+By default CrossAudit atomically moves the complete local folder—including
+uncommitted and unpushed work—into that workspace's hidden
+`.crossaudit-trash/` recovery directory and shows the exact recovery path.
+Connected GitHub repositories remain untouched. Permanent GitHub deletion is a
+separate opt-in that requires both the exact Project name and the phrase
+`DELETE GITHUB`; partial remote failures never remove the recoverable local
+archive.
+
 Closing the main CrossAudit window does **not** stop the application or an
 active loop. CrossAudit remains visible as a diamond in the macOS menu bar;
 choose **Open CrossAudit**, click its Dock icon, or open the application again
@@ -289,6 +312,27 @@ follows the same public remote-compute model documented for
 4. Run the read-only probe. It checks CPU, memory, GPU, Slurm, partitions,
    modules, conda, and Apptainer and installs nothing remotely.
 
+To make a host available to the Generator, enable **Allow Generator to use this
+host automatically** and set the hard per-task policy: job count, nodes, CPUs,
+GPUs, memory, wall time, and fixed scheduler partition/account/QoS. Disabled
+hosts are not included in the Generator prompt at all.
+
+During a normal task, the Generator can then request a remote calculation. The
+controller—not the model—validates the host ID and policy, stages only declared
+regular files from the Project's configured work directories, submits the job,
+tracks it in the existing Compute view, and returns bounded stdout, stderr, and
+declared text results to the Generator. The Generator uses that data to produce
+the normal project files; those files still go through deterministic checks and
+the independent Auditor before admission. Compute calls do not consume audit
+rounds, but the saved jobs-per-task policy and an application-wide safety cap
+prevent unbounded tool loops.
+
+Automatic input staging uses the same streaming rule as manual transfer: there
+is no CrossAudit file-count or file-size quota. Available storage, filesystem
+limits, SSH/scheduler policy, and provider context still apply. Returned files
+remain downloadable in full; only the text copied back into the model context is
+bounded so one remote result cannot exhaust the conversation.
+
 New host keys are refused by default. If the cluster administrator confirms a
 new hostname, **Trust a new host key once** asks OpenSSH to use standard
 trust-on-first-use. A changed saved key is always refused and cannot be replaced
@@ -318,11 +362,56 @@ Job cards update through the existing authenticated SSE stream and provide:
 - a validated remote output list and constant-memory download streaming.
 
 Remote scripts run outside the CrossAudit local sandbox as the configured SSH
-user. They can access everything that account can access. Use a dedicated HPC
-account, least-privilege filesystem permissions, scheduler limits, and the
-cluster's normal review policy. CrossAudit never opens an interactive shell to
-the WebView and never accepts a browser-supplied SSH command other than the
-reviewed job script.
+user. They can access everything that account can access. This is especially
+important for automatic Generator jobs, whose scripts are model-authored and do
+not receive per-job confirmation after the host policy is enabled. Use a
+dedicated HPC account, least-privilege filesystem permissions, scheduler limits,
+and the cluster's normal review policy. CrossAudit never gives the model SSH
+credentials, never opens an interactive shell to the WebView, and never lets a
+model widen the saved host policy.
+
+#### Connect MCP tools and Project Skills
+
+Open **Tools & Skills** inside a Project. CrossAudit implements the official
+[MCP lifecycle](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle)
+and tool protocol with both standard transports:
+
+- **Local stdio** starts one exact executable and argument vector without a
+  shell. The complete command is visible and requires explicit approval.
+- **Streamable HTTP** uses the single MCP endpoint, JSON-RPC POST requests,
+  JSON or SSE responses, negotiated protocol-version headers, and session IDs
+  described by the official
+  [transport specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports).
+  Public endpoints require HTTPS; loopback HTTP is allowed for local testing.
+
+Registration performs `initialize`, sends `notifications/initialized`, and
+reads the complete paginated `tools/list`. Connect a new server with Generator
+access disabled, inspect its tool names, descriptions, input schemas and
+untrusted annotations, then approve exact tool names and a calls-per-task cap.
+New tools advertised later remain blocked until reviewed. A server and all its
+tools are invisible to the Generator while disabled.
+
+During a task the Generator may emit one `tools/call` request at a time. The
+controller validates the server, exact tool name, JSON argument size and saved
+call budget. Progress appears immediately in the audit loop. Bounded text and
+structured results return to the same Generator turn as **untrusted external
+data**; they never become instructions to the Auditor or amendments to the
+Constitution. The private local call ledger retains only server/tool identity,
+timing, status, and hashes of arguments/results—not their contents.
+
+Remote bearer tokens are write-only macOS Keychain items and are never returned
+to the WebView. Servers requiring interactive OAuth report a clear authorization
+error; this build accepts a server-issued bearer token rather than implementing
+an unsafe partial OAuth flow. Local MCP processes receive a small sanitized
+environment, but they still run with the macOS user's filesystem permissions.
+Review the publisher and use least privilege, as recommended by the official
+[MCP security guidance](https://modelcontextprotocol.io/docs/tutorials/security/security_best_practices).
+
+**Skills** are committed, project-level Markdown guidance for the Generator.
+Create and edit them entirely in **Tools & Skills → Manage Skills**, optionally
+scoped to project-relative paths. Skill hashes are recorded in receipts; Skills
+cannot widen writable directories, override the Constitution, call the Auditor,
+or silently turn guidance into an admission rule.
 
 #### 3. Give CrossAudit a real task
 
@@ -595,8 +684,18 @@ the middle of a cycle.
 ## Human escalation
 
 CrossAudit stops and asks for a human decision when the round budget is spent or
-the models cannot safely resolve a conflict. View pending work with
-`crossaudit status`, then record a decision:
+the models cannot safely resolve a conflict. In the app, an explicit decision
+screen opens in the affected conversation. It shows the configured round limit,
+the verdict history, remaining audit findings, affected files, and concrete
+next-step guidance. Closing it with **Review later** does not clear the warning:
+the project remains visibly paused and no output can be admitted.
+
+Choose **Revise and continue** to record correction guidance and unlock another
+audited attempt, or **Stop this task** to retain the current output as unadmitted.
+Both actions require a written explanation and enter the durable ledger.
+
+The equivalent CLI flow is available for automation and advanced users. View
+pending work with `crossaudit status`, then record a decision:
 
 ```bash
 crossaudit resolve <cycle-id> --reopen --because "The source file is now available"

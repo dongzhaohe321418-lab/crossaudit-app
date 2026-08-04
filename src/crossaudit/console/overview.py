@@ -185,24 +185,58 @@ def top_rules(cycles: list[Cycle], limit: int = 5) -> list[dict]:
 
 
 def escalations(cfg: Config) -> list[dict]:
-    """What is waiting on a person, with the reason it stopped."""
+    """What is waiting on a person, with enough evidence to make a decision.
+
+    An escalation is not merely a yellow status.  The UI must be able to tell
+    the human how many automatic rounds ran, what the latest audit still
+    rejects, and what kind of intervention can move the work forward.  Every
+    field here is reconstructed from controller history and committed reports;
+    the view never asks a model to summarize its own failure.
+    """
     store = StateStore(cfg.root / cfg.state_dir / "state.json")
+    state = store.snapshot()
     cycles = read_cycles(cfg)
     out = []
-    for cid, s in sorted(store.snapshot().get("cycles", {}).items()):
+    history = state.get("history", [])
+    for cid, s in sorted(state.get("cycles", {}).items()):
         if s["status"] != "ESCALATED":
             continue
-        why = s.get("escalation_reason") or "the round budget ran out"
-        for c in reversed(cycles):
-            if s["active_sha"].startswith(c.sha):
-                if c.verdict == "DCL_ONLY":
-                    why = "no model audit ran, so it cannot pass"
-                elif c.findings:
-                    why = c.findings[0]["observation"][:140]
-                break
+        stop_reason = s.get("escalation_reason") or "the automatic audit loop stopped"
+        shas = {str(s.get("root_sha", "")), str(s.get("active_sha", ""))}
+        shas.update(str(row.get("sha", "")) for row in history
+                    if row.get("cycle") == cid and row.get("sha"))
+        related = [c for c in cycles if any(
+            sha.startswith(c.sha) or c.sha.startswith(sha) for sha in shas if sha)]
+        related.sort(key=lambda c: (c.round, c.at, c.directory))
+        latest = related[-1] if related else None
+        issues = list(latest.findings[:8]) if latest else []
+        why = stop_reason
+        if latest:
+            if latest.verdict == "DCL_ONLY":
+                why = "no model audit ran, so the result cannot pass"
+            elif issues:
+                why = issues[0]["observation"][:220]
+        if issues:
+            requested = (
+                "Tell the generator how to correct the remaining blockers, or stop "
+                "the task without admitting its output.")
+        elif "provider failure" in stop_reason.lower():
+            requested = (
+                "Fix the provider, model, or credential setting before allowing "
+                "another round, or stop the task.")
+        else:
+            requested = (
+                "Review why the loop stopped, then either give concrete guidance "
+                "for one more round or stop the task.")
         out.append({"cycle_id": cid, "sha": s["active_sha"],
                     "short_sha": s["active_sha"][:12],
-                    "round": s["round"], "why": why})
+                    "round": s["round"], "max_rounds": cfg.max_rounds,
+                    "limit_reached": s["round"] >= cfg.max_rounds,
+                    "chat_id": s.get("chat_id", ""), "why": why,
+                    "stop_reason": stop_reason, "issues": issues,
+                    "attempts": [{"round": c.round, "verdict": c.verdict,
+                                  "findings": len(c.findings)} for c in related],
+                    "requested": requested})
     return out
 
 

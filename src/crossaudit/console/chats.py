@@ -49,12 +49,12 @@ def _has_evidence(cfg: Config, chat_id: str) -> bool:
             pass
     result = subprocess.run(
         ["git", "log", "--format=%(trailers:key=CrossAudit-Chat,valueonly)"],
-        cwd=str(cfg.root), capture_output=True, text=True)
+        cwd=str(cfg.root), capture_output=True, text=True, check=False)
     return result.returncode == 0 and chat_id in result.stdout.split()
 
 
 def _default() -> dict:
-    return {"version": 1, "project_pinned": False, "chats": []}
+    return {"version": 2, "project_pinned": False, "chats": [], "deleted": []}
 
 
 def _read(cfg: Config) -> dict:
@@ -65,7 +65,8 @@ def _read(cfg: Config) -> dict:
         raw = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise ConfigDenial(f"chat navigation state is unreadable: {exc}") from exc
-    if not isinstance(raw, dict) or not isinstance(raw.get("chats", []), list):
+    if (not isinstance(raw, dict) or not isinstance(raw.get("chats", []), list)
+            or not isinstance(raw.get("deleted", []), list)):
         raise ConfigDenial("chat navigation state has an invalid structure")
     rows = []
     for row in raw.get("chats", []):
@@ -78,8 +79,11 @@ def _read(cfg: Config) -> dict:
             "created": int(row.get("created", 0) or 0),
             "updated": int(row.get("updated", 0) or 0),
         })
-    return {"version": 1, "project_pinned": bool(raw.get("project_pinned")),
-            "chats": rows}
+    deleted = list(dict.fromkeys(
+        str(item) for item in raw.get("deleted", [])
+        if CHAT_ID.fullmatch(str(item))))
+    return {"version": 2, "project_pinned": bool(raw.get("project_pinned")),
+            "chats": rows, "deleted": deleted}
 
 
 def _write(cfg: Config, state: dict) -> None:
@@ -127,6 +131,8 @@ def touch(cfg: Config, chat_id: str, message: str) -> dict:
             if not CHAT_ID.fullmatch(chat_id):
                 raise ConfigDenial("chat id is invalid")
             row = _find(state, chat_id)
+            if chat_id in state["deleted"]:
+                raise ConfigDenial("that chat was deleted; create a new chat")
             if row is None and ((chat_id == LEGACY_CHAT_ID and _legacy_exists(cfg))
                                 or _has_evidence(cfg, chat_id)):
                 row = {"id": chat_id,
@@ -152,6 +158,8 @@ def set_chat_pin(cfg: Config, chat_id: str, pinned: bool) -> dict:
         if not CHAT_ID.fullmatch(chat_id):
             raise ConfigDenial("chat id is invalid")
         state = _read(cfg)
+        if chat_id in state["deleted"]:
+            raise ConfigDenial("that chat was deleted")
         row = _find(state, chat_id)
         if row is None and ((chat_id == LEGACY_CHAT_ID and _legacy_exists(cfg))
                             or _has_evidence(cfg, chat_id)):
@@ -166,6 +174,33 @@ def set_chat_pin(cfg: Config, chat_id: str, pinned: bool) -> dict:
         row["pinned"] = bool(pinned)
         _write(cfg, state)
         return dict(row)
+
+
+def delete(cfg: Config, chat_id: str) -> dict:
+    """Remove one chat from navigation without rewriting audit evidence.
+
+    A chat can point at commits, reports and receipts shared by the project.
+    Rewriting that history would weaken the audit ledger, so deletion records a
+    private navigation tombstone. Empty chats disappear completely; chats with
+    evidence stay recoverable through Git while remaining absent from the UI.
+    """
+    with _LOCK:
+        if not CHAT_ID.fullmatch(chat_id):
+            raise ConfigDenial("chat id is invalid")
+        state = _read(cfg)
+        row = _find(state, chat_id)
+        evidence = ((chat_id == LEGACY_CHAT_ID and _legacy_exists(cfg))
+                    or _has_evidence(cfg, chat_id))
+        if row is None and chat_id not in state["deleted"] and not evidence:
+            raise ConfigDenial("that chat no longer exists")
+        title = (row or {}).get(
+            "title", "Project history" if chat_id == LEGACY_CHAT_ID else "Deleted chat")
+        state["chats"] = [item for item in state["chats"] if item["id"] != chat_id]
+        if chat_id not in state["deleted"]:
+            state["deleted"].append(chat_id)
+        _write(cfg, state)
+        return {"id": chat_id, "title": title,
+                "evidence_preserved": bool(evidence)}
 
 
 def set_project_pin(cfg: Config, pinned: bool) -> bool:
@@ -189,6 +224,8 @@ def snapshot(cfg: Config, known_chat_ids=()) -> dict:
         known = {str(item) for item in known_chat_ids if CHAT_ID.fullmatch(str(item))}
         if _legacy_exists(cfg):
             known.add(LEGACY_CHAT_ID)
+        known.difference_update(state["deleted"])
+        rows = [row for row in rows if row["id"] not in state["deleted"]]
         existing = {row["id"] for row in rows}
         now = int(time.time())
         for chat_id in sorted(known - existing):

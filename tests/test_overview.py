@@ -189,6 +189,31 @@ def test_an_escalation_carries_the_reason_it_stopped(cfg):
     assert len(rows) == 1 and "no model audit ran" in rows[0]["why"]
 
 
+def test_round_limit_escalation_explains_attempts_issues_and_human_action(cfg):
+    from crossaudit.controller import StateStore
+
+    sha = "b" * 40
+    store = StateStore(cfg.root / cfg.state_dir / "state.json")
+    cycle = store.open_or_advance(cfg.science_repo, sha, None)
+    for round_ in range(1, 4):
+        add_audit(cfg, sha[:12], "BLOCKED", BLOCKER, round_=round_)
+        status = store.record_verdict(cycle["cycle_id"], sha, "BLOCKED",
+                                      f"receipt-{round_}", 3)
+        if round_ < 3:
+            assert status == "BLOCKED"
+            cycle = store.open_or_advance(cfg.science_repo, sha, None)
+
+    rows = overview.escalations(cfg)
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["limit_reached"] is True
+    assert row["round"] == row["max_rounds"] == 3
+    assert [attempt["round"] for attempt in row["attempts"]] == [1, 2, 3]
+    assert all(attempt["verdict"] == "BLOCKED" for attempt in row["attempts"])
+    assert row["issues"][0]["rule"] == "CA-TXT-001"
+    assert "Tell the generator" in row["requested"]
+
+
 def test_a_quiet_project_has_nothing_waiting(cfg):
     assert overview.escalations(cfg) == []
 

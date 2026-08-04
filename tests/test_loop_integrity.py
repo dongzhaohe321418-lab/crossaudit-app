@@ -233,6 +233,23 @@ def test_a_named_build_continuation_keeps_one_cycle_and_advances_round(
     assert store.cycle(cycle["cycle_id"])["status"] == "ESCALATED"
 
 
+def test_a_human_reopened_escalation_accepts_exactly_the_next_build_revision(
+        science, cfg):
+    store = StateStore(cfg.root / cfg.state_dir / "state.json")
+    first_sha = write_increment(science, GOOD_RESULTS, "first", "first")
+    cycle = store.open_or_advance(cfg.science_repo, first_sha, None)
+    store.record_verdict(cycle["cycle_id"], first_sha, "BLOCKED", "r1", 1)
+    reopened = store.resolve_escalation(
+        cycle["cycle_id"], "reopen", "Correct the remaining source mismatch.")
+    assert reopened["status"] == "OPEN" and reopened["human_reopened"] is True
+
+    second_sha = write_increment(science, GOOD_RESULTS, "second", "human revision")
+    advanced = store.continue_cycle(cycle["cycle_id"], cfg.science_repo, second_sha)
+
+    assert advanced["round"] == 2 and advanced["active_sha"] == second_sha
+    assert "human_reopened" not in advanced
+
+
 def test_three_cli_build_revisions_remain_one_cycle_and_end_escalated(
         science, cfg, transcripts, monkeypatch):
     from types import SimpleNamespace
@@ -290,6 +307,115 @@ def test_build_loop_itself_passes_the_cycle_through_all_three_rounds(
     assert len(cycles) == 1
     cycle = next(iter(cycles.values()))
     assert cycle["round"] == 3 and cycle["status"] == "ESCALATED"
+
+
+def test_build_loop_returns_remote_compute_data_to_generator_before_audit(
+        science, cfg, monkeypatch):
+    from dataclasses import replace
+
+    from crossaudit import generator as generator_mod
+    from crossaudit.cli import build as build_mod
+    from crossaudit.errors import EXIT_ESCALATED
+
+    calls = []
+
+    def fake_generate(**kwargs):
+        calls.append(kwargs)
+        if len(calls) == 1:
+            return generator_mod.ComputeRequest({
+                "host_id": "a" * 16, "name": "calculate", "script": "true",
+                "inputs": [], "outputs": ["results/value.csv"],
+                "resources": {"nodes": 1, "cpus": 1, "gpus": 0,
+                              "memory": "1G", "walltime": "00:01:00"},
+            })
+        assert kwargs["compute_results"][0]["status"] == "completed"
+        assert kwargs["compute_results"][0]["outputs"][0]["content"] == "value\n42\n"
+        return generator_mod.Work(
+            summary="used remote result",
+            files={"experiments/demo/SUMMARY.md": "Remote value: 42\n"})
+
+    events = []
+    monkeypatch.setattr(build_mod, "_generator_complete", lambda *_a, **_k: object())
+    monkeypatch.setattr(build_mod.gen_mod, "generate", fake_generate)
+    monkeypatch.setattr(build_mod.hpc.MANAGER, "agent_context", lambda _cfg: [{
+        "host_id": "a" * 16, "policy": {"max_jobs_per_task": 1}}])
+    monkeypatch.setattr(build_mod.hpc.MANAGER, "run_agent", lambda *_a, **_k: {
+        "job_id": "b" * 16, "status": "completed",
+        "outputs": [{"path": "results/value.csv", "content": "value\n42\n"}],
+    })
+    def fake_audit(_args):
+        sha = git("rev-parse", "HEAD", cwd=science)
+        store = StateStore(cfg.root / cfg.state_dir / "state.json")
+        cycle = store.open_or_advance(cfg.science_repo, sha, None)
+        store.record_verdict(cycle["cycle_id"], sha, "BLOCKED", "receipt", 1)
+        return EXIT_ESCALATED
+
+    monkeypatch.setattr(build_mod, "cmd_run", fake_audit)
+    monkeypatch.chdir(science)
+    cfg = replace(cfg, scope_dirs=["experiments"], max_rounds=1)
+
+    code = build_mod.run_loop(
+        cfg, "calculate and report", on_step=lambda actor, text, detail: events.append(
+            (actor, text, detail)))
+
+    assert code == EXIT_ESCALATED
+    assert len(calls) == 2
+    assert any(actor == "compute" and text == "requesting remote calculation"
+               for actor, text, _detail in events)
+
+
+def test_build_loop_returns_mcp_tool_data_to_generator_before_audit(
+        science, cfg, monkeypatch):
+    from dataclasses import replace
+
+    from crossaudit import generator as generator_mod
+    from crossaudit.cli import build as build_mod
+    from crossaudit.errors import EXIT_ESCALATED
+
+    calls = []
+
+    def fake_generate(**kwargs):
+        calls.append(kwargs)
+        if len(calls) == 1:
+            return generator_mod.ToolRequest({
+                "server_id": "c" * 16, "tool": "lookup",
+                "arguments": {"query": "evidence"},
+            })
+        assert kwargs["tool_results"][0]["status"] == "completed"
+        assert kwargs["tool_results"][0]["content"][0]["text"] == "value: 42"
+        return generator_mod.Work(
+            summary="used MCP evidence",
+            files={"experiments/demo/SUMMARY.md": "Tool value: 42\n"})
+
+    events = []
+    monkeypatch.setattr(build_mod, "_generator_complete", lambda *_a, **_k: object())
+    monkeypatch.setattr(build_mod.gen_mod, "generate", fake_generate)
+    monkeypatch.setattr(build_mod.mcp.MANAGER, "agent_context", lambda _cfg: [{
+        "server_id": "c" * 16, "tools": [{"name": "lookup"}]}])
+    monkeypatch.setattr(build_mod.mcp.MANAGER, "call_agent", lambda *_a, **_k: {
+        "call_id": "d" * 16, "status": "completed", "tool": "lookup",
+        "content": [{"type": "text", "text": "value: 42"}],
+    })
+
+    def fake_audit(_args):
+        sha = git("rev-parse", "HEAD", cwd=science)
+        store = StateStore(cfg.root / cfg.state_dir / "state.json")
+        cycle = store.open_or_advance(cfg.science_repo, sha, None)
+        store.record_verdict(cycle["cycle_id"], sha, "BLOCKED", "receipt", 1)
+        return EXIT_ESCALATED
+
+    monkeypatch.setattr(build_mod, "cmd_run", fake_audit)
+    monkeypatch.chdir(science)
+    cfg = replace(cfg, scope_dirs=["experiments"], max_rounds=1)
+
+    code = build_mod.run_loop(
+        cfg, "use the approved lookup tool", on_step=lambda actor, text, detail:
+        events.append((actor, text, detail)))
+
+    assert code == EXIT_ESCALATED
+    assert len(calls) == 2
+    assert any(actor == "tool" and text == "calling MCP tool"
+               for actor, text, _detail in events)
 
 
 def test_generator_provider_refusals_still_create_a_resolvable_ui_cycle(

@@ -234,6 +234,20 @@ def test_console_creates_and_pins_individual_chats(console):
     assert row["pinned"] is True and row["cycles"] == 0
 
 
+def test_console_deletes_one_chat_without_resurrecting_navigation(console):
+    status, created, _headers = post_json_to(
+        console, "/api/chats/new", {"title": "Disposable chat"})
+    chat = created["chat"]
+    assert status == 200
+
+    status, deleted, _headers = post_json_to(
+        console, "/api/chats/delete", {"chat_id": chat["id"]})
+    assert status == 200 and deleted["chat"]["id"] == chat["id"]
+    state_url = console.replace("/?t=", "/api/state?t=")
+    _, body, _ = fetch(state_url)
+    assert chat["id"] not in {row["id"] for row in json.loads(body)["chats"]["items"]}
+
+
 def test_console_can_pin_the_current_project_folder(console):
     state_url = console.replace("/?t=", "/api/state?t=")
     _, body, _ = fetch(state_url)
@@ -484,6 +498,30 @@ def test_app_settings_write_is_tokened_app_only_and_never_echoes_secret(
     assert code == 403
     assert headers["connection"] == "close"
     assert body == b"forbidden"
+
+
+def test_mcp_settings_endpoint_is_tokened_and_never_echoes_bearer_token(
+        console, monkeypatch):
+    from crossaudit.console import server as server_mod
+
+    secret = "mcp-secret-that-must-not-return"
+    seen = {}
+
+    def register(_cfg, payload):
+        seen.update(payload)
+        return {"id": "a" * 16, "name": "Tools", "transport": "http",
+                "token_present": True, "tools": [], "enabled": False}
+
+    monkeypatch.setattr(server_mod.mcp.MANAGER, "register", register)
+    status, body, headers = post_json_to(console, "/api/mcp", {
+        "action": "register", "name": "Tools", "transport": "http",
+        "url": "secure endpoint", "bearer_token": secret,
+    })
+
+    assert status == 200 and seen["bearer_token"] == secret
+    assert secret not in json.dumps(body)
+    assert body["token_present"] is True
+    assert headers["content-security-policy"].startswith("default-src 'none'")
 
 
 def test_admit_endpoint_is_tokened_and_returns_only_receipt_identity(

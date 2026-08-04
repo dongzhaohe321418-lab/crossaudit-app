@@ -27,6 +27,8 @@ import re
 from pathlib import Path
 
 from .. import generator as gen_mod
+from .. import hpc
+from .. import mcp
 from .. import skills as skills_mod
 from ..config import Config, heterogeneity, load
 from ..controller import StateStore
@@ -41,6 +43,8 @@ from .main import cmd_run
 from .talk import _routing_path
 
 TASK_FILE = "TASK.md"
+MAX_AGENT_JOBS_PER_BUILD = 20
+MAX_MCP_CALLS_PER_BUILD = 40
 
 
 def _generator_complete(cfg: Config, allow_custom: bool):
@@ -138,7 +142,7 @@ class _Args:
 
 
 def run_loop(cfg, task: str, *, on_step=None, attachments: str = "",
-             chat_id: str = "") -> int:
+             chat_id: str = "", continuation_cycle: str = "") -> int:
     """The build loop itself. `on_step(actor, text, detail)` narrates it.
 
     Kept separate from cmd_build so the console can watch the same loop the CLI
@@ -158,7 +162,15 @@ def run_loop(cfg, task: str, *, on_step=None, attachments: str = "",
     house = skills_mod.load(cfg.root)
     findings = ""
     deterministic_contract = describe_checks(cfg.checks)
-    build_cycle_id: str | None = None
+    compute_hosts = hpc.MANAGER.agent_context(cfg)
+    compute_results: list[dict] = []
+    compute_counts: dict[str, int] = {}
+    total_compute_jobs = 0
+    mcp_servers = mcp.MANAGER.agent_context(cfg)
+    tool_results: list[dict] = []
+    tool_counts: dict[str, int] = {}
+    total_tool_calls = 0
+    build_cycle_id: str | None = continuation_cycle or None
     termination_reason = f"build round budget spent ({cfg.max_rounds})"
     last_round = 0
 
@@ -169,12 +181,60 @@ def run_loop(cfg, task: str, *, on_step=None, attachments: str = "",
         current = _current_work(cfg)
         in_force = skills_mod.select(house, list(current) or cfg.scope_dirs)
         try:
-            work = gen_mod.generate(task=task, constitution=constitution,
-                                    current=current, complete=complete,
-                                    findings=findings, allowed_dirs=cfg.scope_dirs,
-                                    skills=skills_mod.render(in_force),
-                                    deterministic_contract=deterministic_contract,
-                                    attachments=attachments)
+            while True:
+                outcome = gen_mod.generate(
+                    task=task, constitution=constitution, current=current,
+                    complete=complete, findings=findings,
+                    allowed_dirs=cfg.scope_dirs,
+                    skills=skills_mod.render(in_force),
+                    deterministic_contract=deterministic_contract,
+                    attachments=attachments, compute_hosts=compute_hosts,
+                    compute_results=compute_results, mcp_servers=mcp_servers,
+                    tool_results=tool_results)
+                if isinstance(outcome, gen_mod.Work):
+                    work = outcome
+                    break
+                if isinstance(outcome, gen_mod.ToolRequest):
+                    total_tool_calls += 1
+                    if total_tool_calls > MAX_MCP_CALLS_PER_BUILD:
+                        raise ProviderDenial(
+                            "the Generator exceeded the automatic MCP call limit")
+                    server_id = str(outcome.request.get("server_id", ""))
+                    tool_counts[server_id] = tool_counts.get(server_id, 0) + 1
+                    tool_name = str(outcome.request.get("tool", "MCP tool"))
+                    report("tool", "calling MCP tool", tool_name[:200])
+                    try:
+                        result = mcp.MANAGER.call_agent(
+                            cfg, outcome.request, chat_id=chat_id,
+                            ordinal=tool_counts[server_id],
+                            notify=lambda state, detail: report("tool", state, detail))
+                    except Denial as exc:
+                        result = {"status": "refused", "message": exc.reason,
+                                  "server_id": server_id, "tool": tool_name}
+                        report("tool", "refused", exc.reason[:300])
+                    tool_results.append(result)
+                    current = _current_work(cfg)
+                    continue
+                total_compute_jobs += 1
+                if total_compute_jobs > MAX_AGENT_JOBS_PER_BUILD:
+                    raise ProviderDenial(
+                        "the Generator exceeded the automatic remote-compute call limit")
+                host_id = str(outcome.request.get("host_id", ""))
+                compute_counts[host_id] = compute_counts.get(host_id, 0) + 1
+                report("compute", "requesting remote calculation",
+                       str(outcome.request.get("name", "Generator compute"))[:200])
+                try:
+                    result = hpc.MANAGER.run_agent(
+                        cfg, outcome.request, chat_id=chat_id,
+                        ordinal=compute_counts[host_id],
+                        notify=lambda state, detail: report(
+                            "compute", state, detail))
+                except Denial as exc:
+                    result = {"status": "refused", "message": exc.reason,
+                              "host_id": host_id}
+                    report("compute", "refused", exc.reason[:300])
+                compute_results.append(result)
+                current = _current_work(cfg)
         except ProviderDenial as exc:
             # An overreaching or malformed round is a refused round, not a
             # crashed loop: the generator is told what the guard refused and

@@ -179,9 +179,11 @@ class StateStore:
             if c["repo"] != repo:
                 raise IntegrityDenial("continuation cycle belongs to another repository",
                                       cycle_id=cycle_id)
-            if c["status"] != BLOCKED:
+            human_reopened = c["status"] == OPEN and c.get("human_reopened") is True
+            if c["status"] != BLOCKED and not human_reopened:
                 raise IntegrityDenial(
-                    f"cycle is {c['status']}, not BLOCKED; it cannot accept a build revision",
+                    f"cycle is {c['status']}, not BLOCKED or human-reopened; it "
+                    f"cannot accept a build revision",
                     cycle_id=cycle_id, status=c["status"])
             if c["active_sha"] == sha:
                 raise IntegrityDenial("a build revision must create a new commit",
@@ -191,6 +193,7 @@ class StateStore:
             c["active_sha"] = sha
             c["status"] = OPEN
             c["awaiting_verdict"] = True
+            c.pop("human_reopened", None)
             self._log(state, "continue_build", cycle=cycle_id, sha=sha,
                       parent_active_sha=previous, round=c["round"])
             return dict(c, cycle_id=cycle_id)
@@ -319,9 +322,11 @@ class StateStore:
             if action == "reopen":
                 c["status"] = OPEN
                 c["awaiting_verdict"] = True
+                c["human_reopened"] = True
             else:
                 c["status"] = BLOCKED
                 c["closed_by_human"] = True
+                c.pop("human_reopened", None)
             self._log(state, "human_resolution", cycle=cycle_id, action=action,
                       reason=reason[:400])
             return dict(c, cycle_id=cycle_id)

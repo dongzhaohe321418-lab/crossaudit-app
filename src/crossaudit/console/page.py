@@ -83,9 +83,11 @@ button{cursor:pointer}
 .task.active{background:var(--surface);box-shadow:inset 0 0 0 1px var(--line)}
 .task-copy{min-width:0;flex:1}.task-title{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12.5px}
 .task-meta{display:flex;align-items:center;gap:6px;margin-top:3px;color:var(--faint);font-size:10.5px}
-.pin-button{width:24px;height:24px;border:0;border-radius:6px;background:transparent;color:var(--faint);
-  opacity:0;flex:none}.task:hover .pin-button,.task.active .pin-button,.pin-button.pinned{opacity:1}
+.pin-button,.task-delete{width:24px;height:24px;border:0;border-radius:6px;background:transparent;color:var(--faint);
+  opacity:0;flex:none}.task:hover .pin-button,.task.active .pin-button,.pin-button.pinned,
+  .task:hover .task-delete,.task.active .task-delete{opacity:1}
 .pin-button:hover{background:var(--hover);color:var(--text)}.pin-button.pinned{color:var(--violet)}
+.task-delete:hover{background:var(--red-bg);color:var(--red)}
 .state-dot{width:6px;height:6px;border-radius:50%;background:var(--faint)}
 .state-dot.PASSED,.state-dot.CONSUMED,.state-dot.passed,.state-dot.consumed{background:var(--green)}
 .state-dot.BLOCKED,.state-dot.blocked{background:var(--red)}
@@ -258,7 +260,7 @@ button{cursor:pointer}
 .audit-event:hover{background:var(--hover)}.event-mark{width:22px;height:22px;border-radius:7px;display:grid;
   place-items:center;background:var(--surface-2);color:var(--muted);font-size:8.5px;font-weight:760}
 .event-mark.generator{background:var(--blue-bg);color:var(--blue)}.event-mark.auditor{background:var(--violet-bg);
-  color:var(--violet)}.event-mark.done{background:var(--green-bg);color:var(--green)}
+  color:var(--violet)}.event-mark.compute{background:var(--amber-bg);color:var(--amber)}.event-mark.tool{background:var(--green-bg);color:var(--green)}.event-mark.done{background:var(--green-bg);color:var(--green)}
 .event-main{min-width:0}.event-line{font-size:10.8px;line-height:1.35}.event-line b{font-weight:650;
   margin-right:6px}.event-detail{color:var(--faint);font-size:9.8px;line-height:1.4;margin-top:2px;
   white-space:pre-wrap;overflow-wrap:anywhere}.event-time{color:var(--faint);font-size:9px;padding-top:2px}
@@ -352,6 +354,29 @@ textarea::placeholder{color:var(--faint)}.compose-button{border:0;background:tra
 .escalation{padding:8px 9px;background:var(--amber-bg);border-radius:8px;margin-bottom:6px}
 .escalation b{font-size:11px;color:var(--amber)}.escalation p{font-size:10.5px;color:var(--muted);margin:3px 0 0}
 .escalation-actions{display:flex;gap:5px;margin-top:8px}.escalation-actions button{height:25px;font-size:9px}
+.decision-wizard{width:min(760px,100%)}.decision-flag{display:inline-flex;align-items:center;gap:6px;
+  color:var(--amber);font-size:9px;font-weight:750;letter-spacing:.08em;text-transform:uppercase;margin-bottom:7px}
+.decision-flag:before{content:'!';display:grid;place-items:center;width:17px;height:17px;border-radius:50%;
+  background:var(--amber-bg);font-size:10px}.decision-limit{display:flex;gap:12px;align-items:flex-start;padding:13px 14px;
+  border:1px solid color-mix(in srgb,var(--amber) 42%,var(--line));background:var(--amber-bg);border-radius:10px}
+.decision-limit-mark{display:grid;place-items:center;flex:none;width:29px;height:29px;border-radius:9px;
+  background:var(--surface);color:var(--amber);font-weight:750}.decision-limit b{display:block;font-size:12px}
+.decision-limit p{margin:3px 0 0;color:var(--muted);font-size:10.5px;line-height:1.45}
+.decision-section{margin-top:20px}.decision-title{display:flex;align-items:center;gap:8px;font-size:11px;
+  font-weight:700;margin-bottom:9px}.decision-count{border-radius:9px;background:var(--red-bg);color:var(--red);
+  padding:2px 6px;font-size:9px}.decision-issues{display:grid;gap:7px}.decision-issue{border:1px solid var(--line);
+  border-radius:9px;padding:10px 11px;background:var(--panel)}.decision-issue-head{display:flex;gap:7px;
+  align-items:center;font-size:9.5px;color:var(--faint)}.decision-issue-head b{color:var(--red);font-size:9.5px}
+.decision-issue p{margin:5px 0 0;font-size:11px;line-height:1.5;color:var(--text)}
+.decision-empty{border:1px solid var(--line);border-radius:9px;padding:11px;color:var(--muted);
+  font-size:10.5px;line-height:1.5}.decision-request{color:var(--muted);font-size:10.5px;line-height:1.5;margin:0 0 10px}
+.decision-options{display:grid;grid-template-columns:1fr 1fr;gap:9px}.decision-option{position:relative;
+  display:flex;gap:10px;padding:12px;border:1px solid var(--line-strong);border-radius:10px;background:var(--surface);
+  cursor:pointer}.decision-option:hover{background:var(--hover)}.decision-option:has(input:checked){border-color:var(--blue);
+  box-shadow:0 0 0 2px var(--blue-bg)}.decision-option input{margin-top:2px}.decision-option b{display:block;font-size:11.5px}
+.decision-option small{display:block;margin-top:3px;color:var(--muted);font-size:10px;line-height:1.45}
+.decision-guidance{margin-top:13px}.decision-guidance textarea{min-height:86px}.decision-ledger-note{display:flex;
+  gap:6px;align-items:center;color:var(--muted);font-size:10px;margin-top:8px}.decision-ledger-note b{color:var(--text)}
 .empty{color:var(--faint);font-style:italic;font-size:11.5px;padding:5px 0}
 .files{white-space:pre-wrap;word-break:break-word}.mobile-sidebar{display:none}.mobile-inspector{display:grid}
 #inspect-close{display:grid}.scrim{display:none;position:fixed;inset:48px 0 0;
@@ -394,6 +419,7 @@ textarea::placeholder{color:var(--faint)}.compose-button{border:0;background:tra
   .loop-focus{margin:0 12px 12px;grid-template-columns:1fr;gap:3px}.activity{padding:11px 12px 13px}
   .audit-event{grid-template-columns:24px minmax(0,1fr)}.event-time{grid-column:2;margin-top:-2px}
   .choice-group{grid-template-columns:1fr}.choice-label{padding-top:0}.choice-note{margin-left:0}
+  .decision-options{grid-template-columns:1fr}
   .usage-roles{grid-template-columns:1fr}.usage-cards{grid-template-columns:1fr 1fr}.usage-card-value{font-size:18px}
   .usage-bars{gap:4px;padding-left:6px;padding-right:6px}.usage-day-value{display:none}
 }
@@ -425,10 +451,12 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
 .project-table{border:1px solid var(--line);border-radius:12px;background:var(--surface);overflow:hidden;
   box-shadow:var(--shadow)}.project-row{width:100%;border:0;border-bottom:1px solid var(--line);
   background:transparent;display:grid;grid-template-columns:minmax(220px,1.5fr) minmax(220px,1fr)
-  92px 100px 116px 28px 28px;align-items:center;gap:14px;padding:15px 18px;text-align:left;cursor:pointer}
+  92px 100px 116px 28px 28px 28px;align-items:center;gap:14px;padding:15px 18px;text-align:left;cursor:pointer}
 .project-row:last-child{border-bottom:0}.project-row:hover{background:var(--surface-2)}
 .project-pin{width:27px;height:27px;border:0;border-radius:7px;background:transparent;color:var(--faint);
   font-size:15px}.project-pin:hover{background:var(--hover);color:var(--text)}.project-pin.pinned{color:var(--violet)}
+.project-delete{width:27px;height:27px;border:0;border-radius:7px;background:transparent;color:var(--faint);
+  font-size:14px}.project-delete:hover{background:var(--red-bg);color:var(--red)}
 .project-name{display:block;font-weight:630;font-size:13.5px}.project-path{display:block;font-size:10.5px;color:var(--faint);
   margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.project-models{font-size:11px;
   color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.project-stat{font-size:11px;
@@ -461,6 +489,15 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
 
 .project-modal{display:none;position:fixed;inset:0;z-index:30;background:rgba(15,15,14,.42);
   backdrop-filter:blur(2px);padding:28px;align-items:center;justify-content:center}.project-modal.on{display:flex}
+.delete-summary{border:1px solid var(--line);border-radius:10px;background:var(--surface-2);
+  padding:12px 13px;display:grid;gap:5px;font-size:11px}.delete-summary b{font-size:12px}
+.delete-summary code{font-family:ui-monospace,SFMono-Regular,monospace;color:var(--muted);overflow-wrap:anywhere}
+.delete-warning{border:1px solid color-mix(in srgb,var(--red) 32%,var(--line));background:var(--red-bg);
+  color:var(--red);border-radius:10px;padding:11px 12px;font-size:11px;line-height:1.5}
+.delete-detail{color:var(--muted);font-size:10.5px;line-height:1.5}.danger-button{height:34px;border:0;
+  border-radius:8px;padding:0 13px;background:var(--red);color:#fff;font-weight:650}
+.danger-button:hover{filter:brightness(.94)}.danger-button:disabled{opacity:.4;cursor:not-allowed}
+.conditional-field.off{display:none}
 .wizard{width:min(720px,100%);max-height:calc(100vh - 40px);overflow:auto;background:var(--surface);
   border:1px solid var(--line);border-radius:15px;box-shadow:0 24px 80px rgba(0,0,0,.22)}
 .wizard-head{padding:21px 24px 17px;display:flex;gap:12px;align-items:flex-start;border-bottom:1px solid var(--line)}
@@ -584,9 +621,17 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
 .hpc-input b{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)}
 .hpc-input button{border:0;background:transparent;color:var(--faint);cursor:pointer;padding:0 2px;font-size:12px}
 .hpc-script{min-height:180px!important;font:10.5px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace!important}
+.mcp-transport-fields.off{display:none}.mcp-tool-list{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}
+.mcp-tool{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);border-radius:6px;
+  padding:4px 6px;font-size:9px;color:var(--muted)}.mcp-tool.approved{border-color:color-mix(in srgb,var(--green) 45%,var(--line));
+  color:var(--green)}.mcp-call{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;padding:10px 12px;
+  border-bottom:1px solid var(--line)}.mcp-call:last-child{border-bottom:0}.mcp-call b{font-size:10.5px}
+.mcp-call small{color:var(--faint);font-size:9px}.skill-row{padding:11px 12px;border-bottom:1px solid var(--line)}
+.skill-row:last-child{border-bottom:0}.skill-row b{font-size:11px}.skill-row p{margin:4px 0 0;color:var(--muted);font-size:9.5px}
+.tools-grid .compute-section:last-child{grid-column:1/-1}
 @media(max-width:840px){.compute-grid{grid-template-columns:1fr}.compute-toolbar{flex-wrap:wrap}}
 @media(max-width:760px){.hub-bar{padding:0 14px}.hub-main{width:calc(100% - 24px);padding-top:26px}
-  .hub-heading{align-items:flex-start;flex-direction:column}.hub-summary{margin-left:0}.project-row{grid-template-columns:minmax(0,1fr) 58px 62px 28px 16px;gap:8px}
+  .hub-heading{align-items:flex-start;flex-direction:column}.hub-summary{margin-left:0}.project-row{grid-template-columns:minmax(0,1fr) 58px 62px 28px 28px 16px;gap:8px}
   .project-models,.project-tier{display:none}.form-grid{grid-template-columns:1fr}
   .field.full{grid-column:auto}.project-modal{padding:8px}.wizard{max-height:calc(100vh - 16px)}
   #provider-credentials{grid-template-columns:1fr}
@@ -675,6 +720,41 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
   </form>
 </div>
 
+<div class="project-modal" id="delete-project-modal" role="dialog" aria-modal="true" aria-labelledby="delete-project-title">
+  <form class="wizard" id="delete-project-form"><div class="wizard-head"><div><h2 id="delete-project-title">Delete project</h2>
+    <p>Review the local and GitHub impact before anything is changed.</p></div><span class="spacer"></span>
+    <button type="button" class="icon-button" id="close-delete-project" aria-label="Close">×</button></div>
+    <div class="wizard-body"><input type="hidden" id="delete-project-root">
+      <div class="delete-summary"><b id="delete-project-name">Project</b><code id="delete-project-path"></code>
+        <span id="delete-project-impact" class="delete-detail">Checking project state…</span></div>
+      <div class="delete-warning" style="margin-top:12px">The local folder will move to CrossAudit Trash and can be recovered. GitHub repositories remain untouched unless you explicitly select permanent deletion below.</div>
+      <label class="field" style="margin-top:14px"><span>Type the project name to confirm</span>
+        <input id="delete-project-confirmation" autocomplete="off" required></label>
+      <label class="toggle-line" style="margin-top:14px"><input type="checkbox" id="delete-project-github"><span><b>Also permanently delete the connected GitHub repositories</b>
+        <small id="delete-project-repositories">No GitHub repositories detected.</small></span></label>
+      <label class="field conditional-field off" id="delete-github-confirm-wrap" style="margin-top:12px"><span>Type DELETE GITHUB</span>
+        <input id="delete-github-confirmation" autocomplete="off" placeholder="DELETE GITHUB"></label>
+      <div class="wizard-error" id="delete-project-error"></div></div>
+    <div class="wizard-foot"><span>Running tasks and remote compute block deletion.</span>
+      <button type="button" class="secondary" id="cancel-delete-project">Cancel</button>
+      <button class="danger-button" id="confirm-delete-project" disabled>Move project to Trash</button></div>
+  </form>
+</div>
+
+<div class="project-modal" id="delete-chat-modal" role="dialog" aria-modal="true" aria-labelledby="delete-chat-title">
+  <form class="wizard" id="delete-chat-form"><div class="wizard-head"><div><h2 id="delete-chat-title">Delete chat?</h2>
+    <p id="delete-chat-name">This chat will disappear from the project sidebar.</p></div><span class="spacer"></span>
+    <button type="button" class="icon-button" id="close-delete-chat" aria-label="Close">×</button></div>
+    <div class="wizard-body"><input type="hidden" id="delete-chat-id">
+      <div class="delete-warning">Audit reports, receipts, commits and delivered files are preserved in the project ledger. Deleting a chat never rewrites evidence that may already have admitted a result.</div>
+      <p class="delete-detail" id="delete-chat-impact" style="margin:12px 0 0"></p>
+      <div class="wizard-error" id="delete-chat-error"></div></div>
+    <div class="wizard-foot"><span>This only removes the individual chat from navigation.</span>
+      <button type="button" class="secondary" id="cancel-delete-chat">Cancel</button>
+      <button class="danger-button" id="confirm-delete-chat">Delete chat</button></div>
+  </form>
+</div>
+
 <div class="project-modal" id="runtime-modal" role="dialog" aria-modal="true" aria-labelledby="runtime-title">
   <form class="wizard" id="runtime-form"><div class="wizard-head"><div><h2 id="runtime-title">Models, reasoning & audit loop</h2>
     <p>Change project controls for the next provider call without restarting this workspace.</p></div>
@@ -708,14 +788,27 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
 </div>
 
 <div class="project-modal" id="resolution-modal" role="dialog" aria-modal="true" aria-labelledby="resolution-title">
-  <form class="wizard" id="resolution-form"><div class="wizard-head"><div><h2 id="resolution-title">Resolve audit escalation</h2>
-    <p id="resolution-summary">Record a human decision before the loop can continue.</p></div>
-    <span class="spacer"></span><button type="button" class="icon-button" id="close-resolution" aria-label="Close">×</button></div>
+  <form class="wizard decision-wizard" id="resolution-form"><div class="wizard-head"><div>
+    <div class="decision-flag" id="resolution-flag">Automatic loop paused</div>
+    <h2 id="resolution-title">The audit needs your decision</h2>
+    <p id="resolution-summary">CrossAudit stopped safely. Nothing will continue or be admitted until you decide.</p></div>
+    <span class="spacer"></span><button type="button" class="icon-button" id="close-resolution" aria-label="Review later" title="Review later">×</button></div>
     <div class="wizard-body"><input type="hidden" id="resolution-cycle"><input type="hidden" id="resolution-action">
-      <label class="field"><span>Reason for this decision</span><textarea id="resolution-reason" maxlength="400" required placeholder="Explain why this task should get another round, or why it should stop."></textarea><small class="field-help">This explanation becomes part of the durable audit ledger.</small></label>
-      <div class="wizard-error" id="resolution-error"></div></div>
-    <div class="wizard-foot"><span>The models cannot take this action. It requires this explicit human UI confirmation.</span>
-      <button type="button" class="secondary" id="cancel-resolution">Cancel</button><button class="primary" id="submit-resolution">Record decision</button></div>
+      <div class="decision-limit"><span class="decision-limit-mark">!</span><div><b id="resolution-limit-title">Automatic audit limit reached</b>
+        <p id="resolution-limit-copy">The configured rounds were used without a passing result.</p></div></div>
+      <section class="decision-section"><div class="decision-title">What is still blocking the result <span class="decision-count" id="resolution-issue-count">0</span></div>
+        <div class="decision-issues" id="resolution-issues"></div></section>
+      <section class="decision-section"><div class="decision-title">What CrossAudit needs from you</div>
+        <p class="decision-request" id="resolution-request">Choose whether to provide concrete correction guidance for one more round or stop this task.</p>
+        <div class="decision-options">
+          <label class="decision-option"><input type="radio" name="resolution-choice" value="reopen" required><span><b>Revise and continue</b><small>Give the generator specific correction guidance and unlock one additional audited round.</small></span></label>
+          <label class="decision-option"><input type="radio" name="resolution-choice" value="close" required><span><b>Stop this task</b><small>Keep the current output unadmitted and close the audit cycle with your reason.</small></span></label>
+        </div>
+        <label class="field decision-guidance"><span id="resolution-reason-label">Your guidance or reason</span><textarea id="resolution-reason" maxlength="400" required placeholder="Select an action, then explain what CrossAudit should do."></textarea></label>
+        <div class="decision-ledger-note"><b>Human decision required.</b> Your action and explanation become part of the durable audit ledger.</div>
+      </section><div class="wizard-error" id="resolution-error"></div></div>
+    <div class="wizard-foot"><span>The models cannot approve their own result or bypass this pause.</span>
+      <button type="button" class="secondary" id="cancel-resolution">Review later</button><button class="primary" id="submit-resolution">Record human decision</button></div>
   </form>
 </div>
 
@@ -752,6 +845,17 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
       <label class="field"><span>Shared scratch directory</span><input name="scratch" maxlength="500" required placeholder="/scratch/your-user/crossaudit"><small class="field-help">For Slurm this must be visible from login and compute nodes.</small></label>
       <label class="field"><span>Concurrent job limit</span><input name="concurrency" type="number" min="1" max="100" value="4" required></label>
       <label class="field full"><span>Host instructions</span><textarea name="details" maxlength="4000" placeholder="Account code, approved partitions, module loads, environment activation, and local cluster policy."></textarea></label>
+      <label class="hpc-confirm field full"><input name="agent_enabled" type="checkbox"><span><b>Allow Generator to use this host automatically</b>The Generator may author and submit scripts without per-job confirmation, but only inside the resource and file policy below. Use a dedicated least-privilege SSH account.</span></label>
+      <div class="field full"><span>Generator compute policy</span><small class="field-help">These are hard ceilings. SSH identity, scheduler policy and filesystem permissions remain the final boundary.</small></div>
+      <label class="field"><span>Jobs per task</span><input name="agent_max_jobs" type="number" min="1" max="10" value="2" required></label>
+      <label class="field"><span>Maximum nodes</span><input name="agent_max_nodes" type="number" min="1" max="64" value="1" required></label>
+      <label class="field"><span>Maximum CPUs</span><input name="agent_max_cpus" type="number" min="1" max="4096" value="8" required></label>
+      <label class="field"><span>Maximum GPUs</span><input name="agent_max_gpus" type="number" min="0" max="64" value="0" required></label>
+      <label class="field"><span>Maximum memory</span><input name="agent_max_memory" value="16G" required></label>
+      <label class="field"><span>Maximum wall time</span><input name="agent_max_walltime" value="01:00:00" required></label>
+      <label class="field"><span>Fixed partition</span><input name="agent_partition" maxlength="128" placeholder="cpu"></label>
+      <label class="field"><span>Fixed account</span><input name="agent_account" maxlength="128" placeholder="lab-account"></label>
+      <label class="field"><span>Fixed QoS</span><input name="agent_qos" maxlength="128"></label>
       <label class="hpc-confirm field full"><input name="trust_first_key" type="checkbox"><span><b>Trust a new host key once</b>Use only after verifying the hostname with your cluster administrator. Existing or changed keys are never replaced.</span></label>
     </div><div class="wizard-error" id="compute-host-error"></div></div>
     <div class="wizard-foot"><span>Registration runs a read-only probe for CPU, memory, GPU, Slurm, modules, conda and Apptainer.</span>
@@ -783,6 +887,35 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
     </div><div class="wizard-error" id="compute-job-error"></div></div>
     <div class="wizard-foot"><span>Slurm jobs use sbatch; workstations use a detached nohup process. Both survive connection loss.</span>
       <button type="button" class="secondary" id="cancel-compute-job">Cancel</button><button class="primary" id="submit-compute-job">Submit job</button></div>
+  </form>
+</div>
+
+<div class="project-modal" id="mcp-modal" role="dialog" aria-modal="true" aria-labelledby="mcp-title">
+  <form class="wizard" id="mcp-form"><div class="wizard-head"><div><h2 id="mcp-title">Add MCP server</h2>
+    <p>Connect project tools through the official Model Context Protocol lifecycle.</p></div>
+    <span class="spacer"></span><button type="button" class="icon-button" id="close-mcp" aria-label="Close">×</button></div>
+    <div class="wizard-body"><input type="hidden" name="server_id" id="mcp-server-id"><div class="form-grid">
+      <label class="field"><span>Server name</span><input name="name" id="mcp-name" maxlength="80" required placeholder="Research tools"></label>
+      <label class="field"><span>Transport</span><select name="transport" id="mcp-transport"><option value="stdio">Local stdio</option><option value="http">Streamable HTTP</option></select></label>
+      <div class="field full mcp-transport-fields" id="mcp-stdio-fields"><div class="form-grid">
+        <label class="field"><span>Executable</span><input name="command" id="mcp-command" maxlength="1000" placeholder="npx" autocomplete="off"></label>
+        <label class="field"><span>Arguments</span><textarea name="args_text" id="mcp-args" maxlength="32000" placeholder="-y&#10;@example/mcp-server"></textarea><small class="field-help">One argument per line. CrossAudit never invokes a shell.</small></label>
+        <label class="hpc-confirm field full"><input name="approve_local_code" type="checkbox"><span><b>I approve this exact local command</b>A local MCP server runs with this app's user permissions and may access files or the network. Verify its publisher and arguments.</span></label>
+      </div></div>
+      <div class="field full mcp-transport-fields off" id="mcp-http-fields"><div class="form-grid">
+        <label class="field full"><span>MCP endpoint</span><input name="url" id="mcp-url" maxlength="2000" placeholder="Secure MCP endpoint URL"></label>
+        <label class="field"><span>Bearer token (optional)</span><input name="bearer_token" id="mcp-token" type="password" maxlength="16384" autocomplete="off" placeholder="Leave blank to keep saved token"></label>
+        <label class="hpc-confirm field"><input name="allow_private_network" type="checkbox"><span><b>Allow a verified private-network server</b>Use only for an enterprise hostname you control. Public remote servers must use HTTPS.</span></label>
+      </div></div>
+      <label class="field"><span>Request timeout</span><input name="timeout" type="number" min="1" max="300" value="30" required></label>
+      <label class="field"><span>Calls per task</span><input name="max_calls_per_task" type="number" min="1" max="20" value="5" required></label>
+      <label class="field full"><span>Approved tool names</span><input name="allowed_tools_text" id="mcp-allowed-tools" maxlength="12000" placeholder="search, fetch_record"><small class="field-help">Comma-separated exact names. Save once without enabling to inspect advertised tools first.</small></label>
+      <label class="hpc-confirm field full"><input name="allow_all_tools" type="checkbox"><span><b>Approve all tools advertised during this connection</b>Only the current list is approved. Tools added by the server later remain blocked until you review them.</span></label>
+      <label class="hpc-confirm field full"><input name="enabled" type="checkbox"><span><b>Allow Generator to call the approved tools automatically</b>Calls appear live in the task loop. Tool output is treated as untrusted external data and never becomes an audit rule.</span></label>
+      <div class="field full"><span>Advertised tools</span><div class="mcp-tool-list" id="mcp-tool-preview"><span class="field-help">Connect the server to discover tools.</span></div></div>
+    </div><div class="wizard-error" id="mcp-error"></div></div>
+    <div class="wizard-foot"><span>Bearer tokens are write-only Keychain items. Local commands are stored without secrets.</span>
+      <button type="button" class="secondary" id="cancel-mcp">Cancel</button><button class="primary" id="save-mcp">Connect & save</button></div>
   </form>
 </div>
 
@@ -818,7 +951,8 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
       <button type="button" class="nav-item" data-view="artifacts" aria-pressed="false"><span class="nav-icon">▱</span>Artifacts</button>
       <button type="button" class="nav-item" data-view="audits" aria-pressed="false"><span class="nav-icon">◇</span>Audits</button>
       <button type="button" class="nav-item" data-view="usage" aria-pressed="false"><span class="nav-icon">◒</span>Usage</button>
-      <button type="button" class="nav-item" data-view="compute" aria-pressed="false"><span class="nav-icon">⌁</span>Compute</button></nav>
+      <button type="button" class="nav-item" data-view="compute" aria-pressed="false"><span class="nav-icon">⌁</span>Compute</button>
+      <button type="button" class="nav-item" data-view="tools" aria-pressed="false"><span class="nav-icon">⌘</span>Tools & Skills</button></nav>
     <div class="task-list" id="task-list"></div>
     <div class="sidebar-foot"><b id="side-project">…</b><span id="tier-label">local controller</span></div>
   </aside>
@@ -941,10 +1075,21 @@ const ZH={
   "Save guidance":"保存指导","Committed project controls.":"已提交的项目控制。",
   "Models and loop limits update crossaudit.yml; generator guidance is versioned in the project. A running audit keeps the controls it started with.":"模型和循环上限会更新 crossaudit.yml；生成者指导在项目中进行版本控制。运行中的审计保持启动时的控制设置。",
   "Automatic means the provider chooses its documented default.":"自动表示由供应商采用其文档规定的默认值。","Save for next call":"保存供下次调用使用",
-  "Resolve audit escalation":"处理审计升级","Record a human decision before the loop can continue.":"循环继续前需要记录人工决定。",
-  "Reason for this decision":"作出此决定的原因","Explain why this task should get another round, or why it should stop.":"说明为什么应再给此任务一轮，或为什么应停止。",
-  "This explanation becomes part of the durable audit ledger.":"该说明会成为持久审计账本的一部分。",
-  "The models cannot take this action. It requires this explicit human UI confirmation.":"模型无法执行此操作，必须由用户在 UI 中明确确认。","Record decision":"记录决定",
+  "Automatic loop paused":"自动循环已暂停","The audit needs your decision":"审计需要你作出决定",
+  "CrossAudit stopped safely. Nothing will continue or be admitted until you decide.":"CrossAudit 已安全暂停。在你作出决定前，不会继续执行，也不会准入任何结果。",
+  "Automatic audit limit reached":"已达自动审计轮数上限","The configured rounds were used without a passing result.":"已用完设定的轮数，但仍未获得通过结果。",
+  "What is still blocking the result":"当前仍在阻止结果通过的问题","What CrossAudit needs from you":"CrossAudit 需要你处理什么",
+  "Choose whether to provide concrete correction guidance for one more round or stop this task.":"请选择：提供具体修正指导并再进行一轮，或停止此任务。",
+  "Revise and continue":"修订并继续","Give the generator specific correction guidance and unlock one additional audited round.":"向生成者提供具体修正指导，并解锁额外一轮受审计执行。",
+  "Stop this task":"停止此任务","Keep the current output unadmitted and close the audit cycle with your reason.":"保持当前输出不准入，并附上原因关闭审计循环。",
+  "Your guidance or reason":"你的指导或原因","Select an action, then explain what CrossAudit should do.":"先选择一项操作，再说明 CrossAudit 应该如何处理。",
+  "Human decision required.":"需要人工决定。","Your action and explanation become part of the durable audit ledger.":"你的操作和说明会成为持久审计账本的一部分。",
+  "The models cannot approve their own result or bypass this pause.":"模型无法自行批准结果，也无法绕过此暂停。","Review later":"稍后处理","Record human decision":"记录人工决定",
+  "Correction guidance for the next round":"下一轮的修正指导","Describe exactly what should change before the next audit.":"具体说明下一次审计前应修改什么。",
+  "Record guidance & unlock round":"记录指导并解锁一轮","Reason for stopping":"停止原因","Explain why this task should stop without admitting its current output.":"说明为什么应停止任务且不准入当前输出。",
+  "Stop without admission":"停止且不准入","The automatic loop could not continue safely":"自动循环无法安全继续",
+  "No structured findings were recorded. Review the stop reason above before continuing.":"未记录结构化问题。继续前请检查上方的停止原因。",
+  "Choose whether to revise and continue, or stop this task.":"请选择修订并继续，或停止此任务。","Review issues & decide":"查看问题并决定",
   "CrossAudit settings":"CrossAudit 设置","Check this Mac, repair setup issues, and connect model providers without using Terminal.":"检查此 Mac、修复设置问题并连接模型供应商，全程无需终端。",
   "Application readiness":"应用就绪状态","Git":"Git","GitHub connection tool":"GitHub 连接工具","Application build":"应用构建","Code identity":"代码身份",
   "Environment Doctor":"环境诊断","Preparing checks…":"正在准备检查…","Run check":"运行检查","Checking required software…":"正在检查所需软件…",
@@ -958,6 +1103,10 @@ const ZH={
   "Shared scratch directory":"共享临时目录","For Slurm this must be visible from login and compute nodes.":"使用 Slurm 时，该目录必须同时对登录节点和计算节点可见。",
   "Concurrent job limit":"并发任务上限","Host instructions":"主机说明",
   "Account code, approved partitions, module loads, environment activation, and local cluster policy.":"账户代码、获准分区、模块加载、环境激活和本地集群政策。",
+  "Allow Generator to use this host automatically":"允许生成者自动使用此主机","The Generator may author and submit scripts without per-job confirmation, but only inside the resource and file policy below. Use a dedicated least-privilege SSH account.":"生成者可无需逐个确认即编写并提交脚本，但必须遵守下方资源和文件政策。请使用专用的最小权限 SSH 账户。",
+  "Generator compute policy":"生成者计算政策","These are hard ceilings. SSH identity, scheduler policy and filesystem permissions remain the final boundary.":"以下是不可突破的上限；SSH 身份、调度器政策和文件系统权限仍是最终边界。",
+  "Jobs per task":"每个任务的作业数","Maximum nodes":"最大节点数","Maximum CPUs":"最大 CPU 数","Maximum GPUs":"最大 GPU 数","Maximum memory":"最大内存","Maximum wall time":"最长运行时间",
+  "Fixed partition":"固定分区","Fixed account":"固定账户","Fixed QoS":"固定 QoS",
   "Trust a new host key once":"仅一次信任新主机密钥","Use only after verifying the hostname with your cluster administrator. Existing or changed keys are never replaced.":"仅在与集群管理员核实主机名后使用。已有或发生变化的密钥绝不会被替换。",
   "Registration runs a read-only probe for CPU, memory, GPU, Slurm, modules, conda and Apptainer.":"注册过程会对 CPU、内存、GPU、Slurm、模块、conda 和 Apptainer 进行只读探测。","Probe & add":"探测并添加",
   "Submit remote job":"提交远程任务","Review the exact script and requested resources. The job runs as your SSH user outside the local sandbox.":"检查准确脚本和资源请求。任务会以你的 SSH 用户身份在本地沙箱之外运行。",
@@ -965,7 +1114,7 @@ const ZH={
   "Input files":"输入文件","Optional. Files are streamed to inputs/ on the remote host with no CrossAudit size or count quota.":"可选。文件会流式传输到远端主机的 inputs/，CrossAudit 不限制数量或大小。",
   "Job script":"任务脚本","I approve this remote execution":"我批准此次远程执行",
   "The script can access anything my account can read or write on this host. Closing CrossAudit will not stop it.":"脚本可访问我的账户在该主机上有权读写的所有内容。关闭 CrossAudit 不会停止它。","Submit job":"提交任务",
-  "Tasks":"任务","New chat":"新对话","＋ New chat":"＋ 新对话","Workspace views":"工作区视图","Chat":"对话","Artifacts":"交付文件","Audits":"审计","Usage":"用量","Compute":"计算",
+  "Tasks":"任务","New chat":"新对话","＋ New chat":"＋ 新对话","Workspace views":"工作区视图","Chat":"对话","Artifacts":"交付文件","Audits":"审计","Usage":"用量","Compute":"计算","Tools & Skills":"工具与技能",
   "Back to projects":"返回项目列表","Pin project":"置顶项目","Settings":"设置","Switch theme":"切换主题","Toggle audit context":"切换审计上下文","Open navigation":"打开导航","Close open panel":"关闭面板",
   "Conversation participants":"对话参与者","You":"你","Auditor":"审计者","New task":"新任务","Independent generation and audit":"独立生成与审计","Project controls":"项目控制",
   "Message recipient":"消息接收方","To":"发送给","Auto":"自动","@ Generator":"@ 生成者","@ Auditor":"@ 审计者","Add files":"添加文件","＋ Add files":"＋ 添加文件",
@@ -975,6 +1124,14 @@ const ZH={
   "Confirm file transfer":"确认文件传输","Drop files to add them":"拖放文件以添加","No CrossAudit file-count or file-size quota. Available storage, filesystem limits and provider context still apply.":"CrossAudit 不限制文件数量或大小，但仍受可用存储、文件系统和供应商上下文限制。","Send files":"发送文件",
   "Binary export is not yet receipt-auditable":"二进制导出暂不支持 receipt 审计","ready":"就绪","connecting":"正在连接","Connected":"已连接","Not connected":"未连接","Checking…":"正在检查…","Loading projects…":"正在加载项目…","Something went wrong":"发生了错误","Open help ↗":"打开帮助 ↗",
   "Close":"关闭","Close settings":"关闭设置","No matching projects.":"没有匹配的项目。","Switch to dark theme":"切换到深色主题","Switch to light theme":"切换到浅色主题",
+  "Delete project":"删除项目","Review the local and GitHub impact before anything is changed.":"更改任何内容前，请检查本地与 GitHub 影响。",
+  "Checking project state…":"正在检查项目状态…","The local folder will move to CrossAudit Trash and can be recovered. GitHub repositories remain untouched unless you explicitly select permanent deletion below.":"本地文件夹会移到 CrossAudit 废纸篓并可恢复。除非你在下方明确选择永久删除，否则 GitHub 仓库保持不变。",
+  "Type the project name to confirm":"输入项目名称以确认","Also permanently delete the connected GitHub repositories":"同时永久删除已连接的 GitHub 仓库",
+  "No GitHub repositories detected.":"未检测到 GitHub 仓库。","Type DELETE GITHUB":"输入 DELETE GITHUB","Running tasks and remote compute block deletion.":"运行中的任务和远程计算会阻止删除。",
+  "Move project to Trash":"将项目移到废纸篓","Delete chat?":"删除对话？","This chat will disappear from the project sidebar.":"此对话将从项目侧栏消失。",
+  "Audit reports, receipts, commits and delivered files are preserved in the project ledger. Deleting a chat never rewrites evidence that may already have admitted a result.":"审计报告、收据、提交和交付文件会保留在项目账本中。删除对话绝不会重写可能已经准入结果的证据。",
+  "This only removes the individual chat from navigation.":"此操作只会从导航中移除该独立对话。","Delete chat":"删除对话","Delete chat from project":"从项目中删除对话","Delete project from CrossAudit":"从 CrossAudit 删除项目",
+  "Return to the main Projects window to delete this open project":"请返回主项目窗口后删除当前打开的项目","Move to Trash & delete GitHub repositories":"移到废纸篓并删除 GitHub 仓库","Deleting…":"正在删除…","Project moved to Trash":"项目已移到废纸篓",
   "ChatGPT subscription":"ChatGPT 订阅","Default":"默认","Enter a custom model ID…":"输入自定义模型 ID…",
   "highest capability":"最高能力","balanced · recommended":"均衡 · 推荐","fastest, lowest cost":"最快、成本最低",
   "API access.":"API 访问。","Use an official developer API key.":"请使用官方开发者 API key。",
@@ -997,12 +1154,22 @@ const ZH={
   "Automatic · provider default":"自动 · 供应商默认","Not applicable":"不适用","Human-written changes":"人工编写的修改","Create reusable project guidance":"创建可复用的项目指导",
   "Editing committed guidance":"正在编辑已提交的指导","Saved and committed":"已保存并提交","Already up to date":"已是最新状态",
   "Allow another round":"再给一轮","Stop task":"停止任务","Review decision":"审查决定","Admit result":"准入结果","Nothing needs attention.":"没有需要处理的事项。"
+  ,"Another audited attempt is unlocked.":"已解锁另一次受审计尝试。","Your guidance is in the composer. Review it, then press Run task.":"你的指导已放入输入框。检查后按“运行任务”。",
+  "Task stopped.":"任务已停止。","The current output remains unadmitted and your reason was recorded.":"当前输出仍未准入，你的原因已记录。",
+  "Add concrete guidance or a reason so the decision is auditable.":"请添加具体指导或原因，以便对该决定进行审计。",
+  "The automatic audit loop stopped.":"自动审计循环已停止。","Review why the loop stopped, then decide whether to revise or stop.":"检查循环停止原因，再决定修订或停止。",
+  "The audit controller paused this task.":"审计控制器已暂停此任务。","No explanation was recorded.":"未记录说明。","A human decision is required.":"需要人工决定。",
+  "Tell the generator how to correct the remaining blockers, or stop the task without admitting its output.":"请告诉生成者如何修复剩余阻断问题，或停止任务且不准入其输出。",
+  "Fix the provider, model, or credential setting before allowing another round, or stop the task.":"再给一轮前，请先修复供应商、模型或凭据设置；否则停止任务。",
+  "Review why the loop stopped, then either give concrete guidance for one more round or stop the task.":"检查循环停止原因，然后提供具体指导再进行一轮，或停止任务。",
+  "no model audit ran, so the result cannot pass":"没有运行模型审计，因此结果无法通过","the automatic audit loop stopped":"自动审计循环已停止"
   ,"/ project folder":"/ 项目文件夹","local controller":"本地控制器","No chats yet":"尚无对话",
   "What should CrossAudit work on?":"CrossAudit 应该处理什么？",
   "Describe a task in plain language. A generator will make the change, deterministic checks will run, and an independent model will audit every round before admission.":"用自然语言描述任务。生成者完成修改，系统运行确定性检查，并由独立模型在准入前审计每一轮。",
   "Working":"处理中","The result will appear here when it is ready.":"结果就绪后会显示在这里。",
   "The delivered files passed the independent review.":"交付文件已通过独立审查。","Needs revision":"需要修订",
   "The result did not pass review yet.":"结果尚未通过审查。","Needs your input":"需要你决定",
+  "Ready for your correction":"已准备接收你的修正","Send the approved guidance to start the human-authorized audited attempt.":"发送已确认的指导，以启动由你授权的受审计尝试。",
   "CrossAudit needs a decision before it can continue.":"CrossAudit 需要你作出决定才能继续。","Stopped":"已停止",
   "The task did not complete.":"任务未完成。","View audit details":"查看审计详情",
   "Delivered files":"交付文件","Only final files that passed independent review.":"仅显示已通过独立审查的最终文件。",
@@ -1014,13 +1181,27 @@ const ZH={
   "Recent calls":"最近调用","counts only · no prompt content":"仅统计数量 · 不包含提示词内容","No model calls this month.":"本月尚无模型调用。",
   "Usage will appear after the first model completion.":"第一次模型调用完成后会显示用量。","No calls recorded yet.":"尚无调用记录。",
   "Reported":"已报告","Estimated":"估算","Unpriced":"未计价","Remote compute":"远程计算",
-  "SSH workstations and Slurm clusters, detached from this Mac.":"与此 Mac 解耦运行的 SSH 工作站和 Slurm 集群。",
+  "SSH workstations and Slurm clusters, detached from this Mac.":"与此 Mac 解耦运行的 SSH 工作站和 Slurm 集群。","SSH workstations and Slurm clusters for manual jobs or Generator calculations.":"用于手动作业或生成者计算的 SSH 工作站和 Slurm 集群。",
   "Remote-owned execution.":"远程主机负责执行。","＋ Add SSH host":"＋ 添加 SSH 主机","Refresh now":"立即刷新",
+  "CrossAudit stores only host aliases and job identifiers. Keys remain with OpenSSH; remote work continues if the app closes, the Mac sleeps, or the network drops. A host marked as a Generator tool can receive model-authored jobs automatically within its saved policy.":"CrossAudit 只保存主机别名和任务标识；密钥始终由 OpenSSH 管理。即使应用关闭、Mac 休眠或网络中断，远程任务也会继续运行。标记为生成者工具的主机可在已保存政策范围内自动接收模型编写的任务。",
+  "Remote compute":"远程计算","Generator tool":"生成者工具","Generator calculations":"生成者计算",
   "Compute hosts":"计算主机","Remote jobs":"远程任务","No SSH compute hosts yet.":"尚未添加 SSH 计算主机。",
   "No jobs submitted from this project.":"此项目尚未提交任务。","Probe":"探测","Run job":"运行任务","Live logs":"实时日志","Outputs":"输出",
   "Cancel job":"取消任务","Remote outputs":"远程输出","Updating…":"正在更新…","No remote output files found.":"未找到远程输出文件。",
+  "Add MCP server":"添加 MCP 服务器","Configure MCP server":"配置 MCP 服务器","Connect project tools through the official Model Context Protocol lifecycle.":"通过官方 Model Context Protocol 生命周期连接项目工具。",
+  "Server name":"服务器名称","Transport":"传输方式","Local stdio":"本地 stdio","Streamable HTTP":"Streamable HTTP","Executable":"可执行文件","Arguments":"参数",
+  "One argument per line. CrossAudit never invokes a shell.":"每行一个参数。CrossAudit 绝不会调用 shell。","I approve this exact local command":"我批准此准确的本地命令","A local MCP server runs with this app's user permissions and may access files or the network. Verify its publisher and arguments.":"本地 MCP 服务器使用本应用的用户权限运行，可能访问文件或网络。请核实发布者和参数。",
+  "MCP endpoint":"MCP 端点","Secure MCP endpoint URL":"安全的 MCP 端点 URL","Bearer token (optional)":"Bearer token（可选）","Leave blank to keep saved token":"留空以保留已保存的 token","Allow a verified private-network server":"允许已核实的专用网络服务器","Use only for an enterprise hostname you control. Public remote servers must use HTTPS.":"仅用于你所控制的企业主机名。公共远程服务器必须使用 HTTPS。",
+  "Request timeout":"请求超时","Calls per task":"每个任务的调用次数","Approved tool names":"已批准的工具名称","Comma-separated exact names. Save once without enabling to inspect advertised tools first.":"使用逗号分隔准确名称。可先不启用并保存一次，以查看服务器公布的工具。",
+  "Approve all tools advertised during this connection":"批准本次连接中公布的所有工具","Only the current list is approved. Tools added by the server later remain blocked until you review them.":"只批准当前列表。服务器以后新增的工具在你审核前仍保持阻止状态。",
+  "Allow Generator to call the approved tools automatically":"允许生成者自动调用已批准的工具","Calls appear live in the task loop. Tool output is treated as untrusted external data and never becomes an audit rule.":"调用会实时显示在任务循环中。工具输出被视为不可信外部数据，绝不会成为审计规则。",
+  "Advertised tools":"公布的工具","Connect the server to discover tools.":"连接服务器以发现工具。","Bearer tokens are write-only Keychain items. Local commands are stored without secrets.":"Bearer token 以只写方式存入钥匙串；本地命令不含秘密信息。","Connect & save":"连接并保存",
+  "Project-scoped MCP capabilities and committed Generator guidance.":"项目级 MCP 能力与已提交的生成者指导。","Explicit capability boundaries.":"明确的能力边界。","MCP servers and Skills are invisible until you configure them. Approved MCP output remains untrusted data; Skills guide only the Generator and never change the Constitution.":"MCP 服务器和技能在你配置前不可见。已批准的 MCP 输出仍是不可信数据；技能只指导生成者，绝不会修改审计章程。",
+  "＋ Add MCP server":"＋ 添加 MCP 服务器","Manage Skills":"管理技能","MCP servers":"MCP 服务器","Recent tool calls":"最近工具调用","Skills":"技能","No MCP servers connected to this project.":"此项目尚未连接 MCP 服务器。","No MCP tools called in this project.":"此项目尚未调用 MCP 工具。","No project Skills yet.":"此项目尚无技能。",
+  "Generator enabled":"已为生成者启用","Manual only":"仅手动","Configure":"配置","Refresh tools":"刷新工具","No tools advertised.":"未公布工具。","Applies to every task":"适用于每个任务","MCP tool":"MCP 工具","calling MCP tool":"正在调用 MCP 工具","policy":"政策",
+  "Last 64 KB · stdout + stderr":"最近 64 KB · 标准输出 + 标准错误","Remote process finished":"远程进程已完成","Submitted to Slurm":"已提交至 Slurm","Detached on host":"已在远程主机后台启动","Preparing remote job":"正在准备远程任务",
   "Passed":"已通过","Blocked":"已阻止","Waiting on you":"等待你决定","Admitted":"已准入","Complete":"已完成","Active":"正在进行","Pending":"等待中"
-  ,"live":"实时","complete":"完成","declared":"已声明","internal":"内部","parseable":"可解析",
+  ,"live":"实时","complete":"完成","completed":"已完成","failed":"失败","cancelled":"已取消","timeout":"超时","out_of_memory":"内存不足","queued":"排队中","running":"运行中","submitting":"提交中","unknown":"未知","declared":"已声明","internal":"内部","parseable":"可解析",
   "Use light theme":"使用亮色主题","Use dark theme":"使用暗色主题",
   "Switch models, reasoning effort and audit loop settings":"切换模型、推理强度和审计循环设置"
 };
@@ -1046,7 +1227,22 @@ const ZH_PATTERNS=[
   [/^Connect (.+) in Settings first$/i,m=>'请先在设置中连接 '+m[1]],
   [/^(.+) — highest capability$/i,m=>m[1]+' — 最高能力'],
   [/^(.+) — balanced · recommended$/i,m=>m[1]+' — 均衡 · 推荐'],
-  [/^(.+) — fastest, lowest cost$/i,m=>m[1]+' — 最快、成本最低']
+  [/^(.+) — fastest, lowest cost$/i,m=>m[1]+' — 最快、成本最低'],
+  [/^CrossAudit used all (\d+) of (\d+) automatic rounds without a passing result\. Nothing will continue or be admitted until you decide\.$/i,m=>'CrossAudit 已用完 '+m[1]+' / '+m[2]+' 轮自动审计，但仍未通过。在你决定前，不会继续执行或准入任何结果。'],
+  [/^Automatic rounds used: (\d+) \/ (\d+)$/i,m=>'已用自动轮数：'+m[1]+' / '+m[2]],
+  [/^Round history: (.+)$/i,m=>'轮次记录：'+m[1].replace(/Round (\d+):/gi,'第 $1 轮：').replace(/BLOCKED/gi,'未通过').replace(/PASS/gi,'通过').replace(/(\d+) issues?/gi,'$1 个问题')],[/^Affects (.+)$/i,m=>'影响 '+m[1]],
+  [/^(\d+) remaining issues?$/i,m=>'剩余 '+m[1]+' 个问题'],
+  [/^Automatic limit reached · (\d+) \/ (\d+) rounds$/i,m=>'已达自动上限 · '+m[1]+' / '+m[2]+' 轮'],
+  [/^(·\s*)?CrossAudit paused after (\d+) of (\d+) rounds with (\d+) issues? remaining\.$/i,m=>(m[1]?'· ':'')+'CrossAudit 在第 '+m[2]+' / '+m[3]+' 轮后暂停，仍有 '+m[4]+' 个问题。']
+  ,[/^(\d+) remote jobs active$/i,m=>m[1]+' 个远程任务正在运行']
+  ,[/^Generator tool · (\d+) jobs\/task · (\d+) CPU · (\d+) GPU$/i,m=>'生成者工具 · 每任务 '+m[1]+' 个作业 · '+m[2]+' CPU · '+m[3]+' GPU']
+  ,[/^Offline view · (.+) · the remote job continues independently$/i,m=>'离线视图 · '+m[1]+' · 远程任务仍在独立运行']
+  ,[/^(\d+) MCP servers · (\d+) Skills$/i,m=>m[1]+' 个 MCP 服务器 · '+m[2]+' 个技能']
+  ,[/^(\d+) calls\/task$/i,m=>'每任务 '+m[1]+' 次调用']
+  ,[/^(\d+) recorded$/i,m=>'已记录 '+m[1]+' 次']
+  ,[/^(\d+) committed$/i,m=>'已提交 '+m[1]+' 个']
+  ,[/^Applies to (.+)$/i,m=>'适用于 '+m[1]]
+  ,[/^(.+) · server annotations are untrusted$/i,m=>m[1]+' · 服务器标注不可信']
 ];
 let currentLocale='en';
 const textSources=new WeakMap(),attributeSources=new WeakMap();
@@ -1082,6 +1278,7 @@ const esc = s => String(s ?? '').replace(/[&<>"]/g, c =>
 const at = t => t ? new Date(t*1000).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
 const MARK = {done:'✓',failed:'×',current:'·',pending:''};
 let lastState = null;
+let pendingContinuation={cycle:'',chat:''};
 let pendingFiles = [];
 let uploadProgress = new Map();
 let transferBusy = false;
@@ -1384,26 +1581,86 @@ runtimeForm.onsubmit=async ev=>{ev.preventDefault();const save=document.getEleme
 
 const resolutionModal=document.getElementById('resolution-modal');
 const resolutionForm=document.getElementById('resolution-form');
-function openResolution(cycle,action,sha){
-  document.getElementById('resolution-cycle').value=cycle;
-  document.getElementById('resolution-action').value=action;
-  document.getElementById('resolution-reason').value='';
-  document.getElementById('resolution-summary').textContent=action==='reopen'
-    ?'Return '+sha+' to the audit loop for another generator → auditor round.'
-    :'Stop '+sha+' without admitting its output.';
-  document.getElementById('submit-resolution').textContent=action==='reopen'?'Allow another round':'Stop without admission';
-  document.getElementById('resolution-error').className='wizard-error';
-  resolutionModal.className='project-modal on';setTimeout(()=>document.getElementById('resolution-reason').focus(),0);
+let activeResolution=null;
+const promptedEscalations=new Set();
+function currentEscalations(d){
+  const rows=(d&&d.escalations)||[];
+  const direct=rows.filter(row=>(row.chat_id||'history')===activeChatId);
+  if(direct.length)return direct;
+  const shas=new Set(chatCycles(d).map(row=>row.sha));
+  return rows.filter(row=>shas.has(row.sha));
 }
-function closeResolution(){resolutionModal.className='project-modal';resolutionForm.reset();}
+function resolutionChoice(action){
+  document.getElementById('resolution-action').value=action||'';
+  resolutionForm.querySelectorAll('input[name="resolution-choice"]').forEach(input=>input.checked=input.value===action);
+  const label=document.getElementById('resolution-reason-label'),reason=document.getElementById('resolution-reason');
+  const submit=document.getElementById('submit-resolution');
+  if(action==='reopen'){
+    label.textContent='Correction guidance for the next round';
+    reason.placeholder='Describe exactly what should change before the next audit.';
+    submit.textContent='Record guidance & unlock round';
+  }else if(action==='close'){
+    label.textContent='Reason for stopping';
+    reason.placeholder='Explain why this task should stop without admitting its current output.';
+    submit.textContent='Stop without admission';
+  }else{
+    label.textContent='Your guidance or reason';
+    reason.placeholder='Select an action, then explain what CrossAudit should do.';
+    submit.textContent='Record human decision';
+  }
+}
+function openResolution(value,action='',sha=''){
+  let row=typeof value==='object'&&value?value:null;
+  if(!row&&lastState)row=(lastState.escalations||[]).find(item=>item.cycle_id===value);
+  row=row||{cycle_id:value,short_sha:sha,sha,round:1,max_rounds:lastState&&lastState.max_rounds||3,
+    limit_reached:false,why:'The automatic audit loop stopped.',issues:[],attempts:[],
+    requested:'Review why the loop stopped, then decide whether to revise or stop.'};
+  activeResolution=row;promptedEscalations.add(row.cycle_id);
+  document.getElementById('resolution-cycle').value=row.cycle_id||'';
+  document.getElementById('resolution-reason').value='';resolutionChoice(action);
+  const used=Number(row.round||0),maximum=Number(row.max_rounds||(lastState&&lastState.max_rounds)||0);
+  document.getElementById('resolution-flag').textContent=row.limit_reached?'Automatic audit limit reached':'Automatic loop paused';
+  document.getElementById('resolution-title').textContent='The audit needs your decision';
+  document.getElementById('resolution-summary').textContent=row.limit_reached
+    ?'CrossAudit used all '+used+' of '+maximum+' automatic rounds without a passing result. Nothing will continue or be admitted until you decide.'
+    :'CrossAudit stopped safely. Nothing will continue or be admitted until you decide.';
+  document.getElementById('resolution-limit-title').textContent=row.limit_reached
+    ?'Automatic rounds used: '+used+' / '+maximum:'The automatic loop could not continue safely';
+  const attempts=(row.attempts||[]).map(item=>'Round '+item.round+': '+item.verdict+' · '+item.findings+' issue'+(item.findings===1?'':'s')).join(' → ');
+  document.getElementById('resolution-limit-copy').textContent=attempts
+    ?'Round history: '+attempts
+    :String(row.stop_reason||row.why||'The audit controller paused this task.');
+  const issues=row.issues||[];
+  document.getElementById('resolution-issue-count').textContent=String(issues.length);
+  document.getElementById('resolution-issues').innerHTML=issues.length?issues.map((issue,index)=>
+    '<article class="decision-issue"><div class="decision-issue-head"><span>'+esc(issue.severity||'BLOCKER')+'</span><b>'
+    +esc(issue.rule||'Issue '+(index+1))+'</b></div><p>'+esc(issue.observation||'No explanation was recorded.')+'</p>'
+    +(issue.artifact?'<small>Affects '+esc(issue.artifact)+'</small>':'')+'</article>').join('')
+    :'<div class="decision-empty">No structured findings were recorded. Review the stop reason above before continuing.</div>';
+  document.getElementById('resolution-request').textContent=row.requested||'Choose whether to revise and continue, or stop this task.';
+  document.getElementById('resolution-error').className='wizard-error';
+  resolutionModal.className='project-modal on';
+  setTimeout(()=>{const target=action?document.getElementById('resolution-reason')
+    :resolutionForm.querySelector('input[name="resolution-choice"]');if(target)target.focus();},0);
+}
+function closeResolution(){resolutionModal.className='project-modal';resolutionForm.reset();activeResolution=null;resolutionChoice('');}
+resolutionForm.querySelectorAll('input[name="resolution-choice"]').forEach(input=>input.onchange=()=>resolutionChoice(input.value));
 document.getElementById('close-resolution').onclick=closeResolution;
 document.getElementById('cancel-resolution').onclick=closeResolution;
 resolutionModal.addEventListener('click',ev=>{if(ev.target===resolutionModal)closeResolution();});
 resolutionForm.onsubmit=async ev=>{ev.preventDefault();const button=document.getElementById('submit-resolution');
+  const cycleId=document.getElementById('resolution-cycle').value;
+  const action=document.getElementById('resolution-action').value,reason=document.getElementById('resolution-reason').value.trim();
+  if(!action){showInlineError('resolution-error','Choose whether to revise and continue, or stop this task.');return;}
+  if(!reason){showInlineError('resolution-error','Add concrete guidance or a reason so the decision is auditable.');return;}
   button.disabled=true;document.getElementById('resolution-error').className='wizard-error';
-  try{await api('/api/escalation',{cycle_id:document.getElementById('resolution-cycle').value,
-      action:document.getElementById('resolution-action').value,reason:document.getElementById('resolution-reason').value.trim()});
-    closeResolution();route.className='route on';route.innerHTML='<b>Decision recorded.</b> The audit ledger and live status were updated.';}
+  try{await api('/api/escalation',{cycle_id:cycleId,action,reason});
+    closeResolution();route.className='route on';
+    if(action==='reopen'){
+      pendingContinuation={cycle:cycleId,chat:activeChatId};
+      say.value=reason;route.innerHTML='<b>Another audited attempt is unlocked.</b> Your guidance is in the composer. Review it, then press Run task.';
+      setTimeout(()=>say.focus(),0);
+    }else route.innerHTML='<b>Task stopped.</b> The current output remains unadmitted and your reason was recorded.';}
   catch(e){showInlineError('resolution-error',e);}finally{button.disabled=false;}};
 
 let projectState=null;
@@ -1416,6 +1673,9 @@ const projectModal=document.getElementById('project-modal');
 const projectForm=document.getElementById('project-form');
 const recoveryModal=document.getElementById('recovery-modal');
 const recoveryForm=document.getElementById('recovery-form');
+const deleteProjectModal=document.getElementById('delete-project-modal');
+const deleteProjectForm=document.getElementById('delete-project-form');
+let deleteProjectPreview=null;
 const auditorVendor=document.getElementById('auditor-vendor');
 const generatorVendor=document.getElementById('generator-vendor');
 const auditorConnection=document.getElementById('auditor-connection');
@@ -1596,6 +1856,9 @@ function renderProjects(d){
     +(p.paired?'<span class="paired-mark project-tier">GitHub paired</span>':'<span class="project-stat project-tier">Local</span>')
     +'<button type="button" class="project-pin'+(p.pinned?' pinned':'')+'" data-pin-project="'+esc(p.root)+'" '
       +'aria-label="'+(p.pinned?'Unpin':'Pin')+' project" title="'+(p.pinned?'Unpin':'Pin')+' project">'+(p.pinned?'★':'☆')+'</button>'
+    +'<button type="button" class="project-delete" data-delete-project="'+esc(p.root)+'" '
+      +(p.current?'disabled ':'')+'aria-label="Delete project from CrossAudit" title="'
+      +(p.current?'Return to the main Projects window to delete this open project':'Delete project from CrossAudit')+'">⌫</button>'
     +'<span class="project-arrow">›</span></div>').join(''):'<div class="hub-empty">No matching projects.</div>';
   renderProjectJob(d.jobs);configureProjectForm();
 }
@@ -1608,14 +1871,66 @@ function startProjectStream(){if(projectSource)return;try{
 }catch(e){}}
 function showProjects(){document.body.classList.add('hub-mode');closePanels();refreshProjects();startProjectStream();
   history.replaceState(null,'',location.pathname+'?t='+encodeURIComponent(T)+'#projects');}
+function returnToProjects(){try{const target=new URL(window.name);if(target.protocol==='http:'&&target.hostname==='127.0.0.1'
+    &&target.hash==='#projects'&&target.origin!==location.origin){window.name='';location.href=target.href;return;}}catch(e){}
+  showProjects();}
 function hideProjects(){document.body.classList.remove('hub-mode');projectModal.className='project-modal';
   history.replaceState(null,'',location.pathname+'?t='+encodeURIComponent(T));}
 async function openProject(root,current){
   if(current){hideProjects();return;}
-  try{const r=await api('/api/projects/open',{root});location.href=r.url;}catch(e){
+  try{const r=await api('/api/projects/open',{root});window.name=location.href;location.href=r.url;}catch(e){
     const panel=document.getElementById('project-job');panel.className='job-panel on failed';
     document.getElementById('job-title').textContent='Could not open project';document.getElementById('job-detail').textContent=e.message;}
 }
+function closeDeleteProject(){deleteProjectModal.className='project-modal';deleteProjectForm.reset();
+  deleteProjectPreview=null;document.getElementById('delete-project-error').className='wizard-error';}
+function syncDeleteProject(){const github=document.getElementById('delete-project-github').checked;
+  document.getElementById('delete-github-confirm-wrap').className='field conditional-field'+(github?'':' off');
+  const localReady=Boolean(deleteProjectPreview)&&document.getElementById('delete-project-confirmation').value===deleteProjectPreview.name;
+  const remoteReady=!github||document.getElementById('delete-github-confirmation').value==='DELETE GITHUB';
+  const button=document.getElementById('confirm-delete-project');button.disabled=!(localReady&&remoteReady&&deleteProjectPreview.can_delete);
+  button.textContent=github?(currentLocale==='zh'?'移到废纸篓并永久删除 GitHub 仓库':'Move to Trash & delete GitHub repositories')
+    :(currentLocale==='zh'?'将项目移到废纸篓':'Move project to Trash');}
+async function openDeleteProject(root){deleteProjectForm.reset();deleteProjectPreview=null;
+  document.getElementById('delete-project-root').value=root;document.getElementById('delete-project-name').textContent='Project';
+  document.getElementById('delete-project-path').textContent=root;document.getElementById('delete-project-impact').textContent='Checking project state…';
+  document.getElementById('delete-project-error').className='wizard-error';document.getElementById('confirm-delete-project').disabled=true;
+  deleteProjectModal.className='project-modal on';
+  try{const preview=await api('/api/projects/delete',{action:'preview',root});deleteProjectPreview=preview;
+    document.getElementById('delete-project-name').textContent=preview.name;
+    document.getElementById('delete-project-path').textContent=preview.root;
+    const impact=[];
+    impact.push(currentLocale==='zh'?'恢复位置：'+preview.trash:'Recovery location: '+preview.trash);
+    if(preview.dirty_count)impact.push(currentLocale==='zh'?preview.dirty_count+' 个未提交改动会一同归档':preview.dirty_count+' uncommitted changes will be archived');
+    if(preview.unpushed_commits)impact.push(currentLocale==='zh'?preview.unpushed_commits+' 个未推送提交会一同归档':preview.unpushed_commits+' unpushed commits will be archived');
+    if(preview.activity.length)impact.push((currentLocale==='zh'?'目前不能删除：':'Cannot delete now: ')+preview.activity.join('; '));
+    document.getElementById('delete-project-impact').textContent=impact.join(' · ');
+    const repos=preview.repositories||[],remote=document.getElementById('delete-project-github');remote.disabled=!repos.length;
+    document.getElementById('delete-project-repositories').textContent=repos.length
+      ?(currentLocale==='zh'?'永久删除：':'Permanently delete: ')+repos.join(', ')
+      :(currentLocale==='zh'?'未检测到 GitHub 仓库。':'No GitHub repositories detected.');
+    document.getElementById('delete-project-confirmation').placeholder=preview.name;syncDeleteProject();
+  }catch(e){showInlineError('delete-project-error',e);}}
+document.getElementById('delete-project-confirmation').oninput=syncDeleteProject;
+document.getElementById('delete-github-confirmation').oninput=syncDeleteProject;
+document.getElementById('delete-project-github').onchange=syncDeleteProject;
+document.getElementById('close-delete-project').onclick=closeDeleteProject;
+document.getElementById('cancel-delete-project').onclick=closeDeleteProject;
+deleteProjectModal.addEventListener('click',ev=>{if(ev.target===deleteProjectModal)closeDeleteProject();});
+deleteProjectForm.onsubmit=async ev=>{ev.preventDefault();if(!deleteProjectPreview)return;
+  const button=document.getElementById('confirm-delete-project');button.disabled=true;button.textContent=currentLocale==='zh'?'正在删除…':'Deleting…';
+  try{const result=await api('/api/projects/delete',{action:'delete',root:deleteProjectPreview.root,
+      confirmation:document.getElementById('delete-project-confirmation').value,
+      delete_github:document.getElementById('delete-project-github').checked,
+      github_confirmation:document.getElementById('delete-github-confirmation').value});
+    closeDeleteProject();await refreshProjects();const panel=document.getElementById('project-job');panel.className='job-panel on complete';
+    document.getElementById('open-created').hidden=true;
+    document.getElementById('job-title').textContent=currentLocale==='zh'?'项目已移到废纸篓':'Project moved to Trash';
+    const failed=(result.github||[]).filter(row=>row.status==='failed');
+    document.getElementById('job-detail').textContent=(currentLocale==='zh'?'可从以下位置恢复：':'Recover from: ')+result.archive
+      +(failed.length?(currentLocale==='zh'?' · GitHub 删除未完全成功：':' · GitHub deletion incomplete: ')+failed.map(row=>row.repo).join(', '):'');
+    document.getElementById('job-steps').innerHTML='';document.getElementById('job-guidance').className='job-guidance';
+  }catch(e){showInlineError('delete-project-error',e);syncDeleteProject();}};
 function openProjectModal(){projectForm.reset();document.getElementById('wizard-error').className='wizard-error';
   if(settingsState&&settingsState.doctor&&settingsState.doctor.status==='blocked'){
     openSettings();doctorMessage('Fix the required Environment Doctor items before creating a project.',true);return;}
@@ -1669,17 +1984,19 @@ document.getElementById('create-project').onclick=openProjectModal;
 document.getElementById('close-project-modal').onclick=closeProjectModal;
 document.getElementById('cancel-project').onclick=closeProjectModal;
 document.getElementById('projects-home').onclick=showProjects;
-document.getElementById('back-projects').onclick=showProjects;
+document.getElementById('back-projects').onclick=returnToProjects;
 document.getElementById('project-switcher').onclick=showProjects;
 document.getElementById('hub-brand').onclick=hideProjects;
 document.getElementById('project-search').oninput=()=>projectState&&renderProjects(projectState);
 document.getElementById('project-list').onclick=async ev=>{const row=ev.target.closest('[data-root]');
   const pin=ev.target.closest('[data-pin-project]');
+  const remove=ev.target.closest('[data-delete-project]');
   const retry=ev.target.closest('[data-resume-root]');
   if(pin){ev.preventDefault();ev.stopPropagation();const root=pin.getAttribute('data-pin-project');
     const project=projectState&&projectState.items.find(p=>p.root===root);if(!project)return;
     pin.disabled=true;try{await api('/api/projects/pin',{root,pinned:!project.pinned});project.pinned=!project.pinned;
       renderProjects(projectState);}catch(e){pin.disabled=false;}return;}
+  if(remove){ev.preventDefault();ev.stopPropagation();if(!remove.disabled)openDeleteProject(remove.getAttribute('data-delete-project'));return;}
   if(retry){ev.preventDefault();ev.stopPropagation();openRecovery(retry.getAttribute('data-resume-root'));return;}
   if(row)openProject(row.getAttribute('data-root'),row.getAttribute('data-current')==='1');};
 document.getElementById('project-list').onkeydown=ev=>{
@@ -1851,8 +2168,8 @@ function runCard(d){
   const focusLabel = focus.state === 'current' ? 'Current gate' : focus.state === 'failed' ? 'Stopped at'
     : focus.state === 'pending' ? 'Next gate' : 'Completed gate';
   const stateNames = {done:'Complete',failed:'Blocked',current:'Active',pending:'Pending'};
-  const actorNames = {generator:'Generator',auditor:'Auditor',loop:'Controller',done:'Result'};
-  const actorMarks = {generator:'G',auditor:'A',loop:'↻',done:'✓'};
+  const actorNames = {generator:'Generator',auditor:'Auditor',compute:'Remote compute',tool:'MCP tool',loop:'Controller',done:'Result'};
+  const actorMarks = {generator:'G',auditor:'A',compute:'H',tool:'M',loop:'↻',done:'✓'};
   const eventRows = p && p.steps ? p.steps.slice(-12).map(s => '<div class="audit-event">'
     + '<span class="event-mark ' + esc(s.actor) + '">' + esc(actorMarks[s.actor]||'·') + '</span>'
     + '<div class="event-main"><div class="event-line"><b>' + esc(actorNames[s.actor]||s.actor)
@@ -1906,13 +2223,18 @@ function deliveryStatus(d){
   const p=chatProgress(d),cycles=chatCycles(d),cycle=cycles.length?cycles[cycles.length-1]:null;
   const raw=p&&!p.finished?'running':p&&p.finished?p.outcome:cycle?cycle.status.toLowerCase():'';
   if(!raw)return'';const status=String(raw).toLowerCase();
+  const escalation=status==='escalated'?currentEscalations(d).slice(-1)[0]:null;
   const copy=status==='running'?['Working','The result will appear here when it is ready.']
     :status==='passed'||status==='consumed'?['Ready','The delivered files passed the independent review.']
     :status==='blocked'?['Needs revision','The result did not pass review yet.']
+    :status==='open'?['Ready for your correction','Send the approved guidance to start the human-authorized audited attempt.']
+    :status==='escalated'&&escalation&&escalation.limit_reached?['Automatic audit limit reached',
+      'CrossAudit paused after '+escalation.round+' of '+escalation.max_rounds+' rounds with '+(escalation.issues||[]).length+' issue'+((escalation.issues||[]).length===1?'':'s')+' remaining.']
     :status==='escalated'?['Needs your input','CrossAudit needs a decision before it can continue.']
     :['Stopped','The task did not complete.'];
   const action=status==='passed'?'<button type="button" data-admit data-admit-cycle="'+esc(cycle.id)+'">Admit result</button>'
-    :status==='escalated'?'<button type="button" data-open-decisions>Review decision</button>'
+    :status==='escalated'?'<button type="button" data-open-decisions>Review issues & decide</button>'
+    :status==='open'?''
     :'<button type="button" data-open-audits>View audit details</button>';
   return '<div class="delivery-status '+esc(status)+'"><span class="delivery-dot"></span><span><b>'
     +copy[0]+'</b> · '+copy[1]+'</span>'+action+'</div>';
@@ -2003,6 +2325,7 @@ function computeView(d){
   const hosts=(c.hosts||[]).map(host=>{const probe=host.probe||{};const resources=[];
     if(probe.cpus)resources.push(probe.cpus+' CPU');if(probe.memory_kb)resources.push(formatBytes(probe.memory_kb*1000));
     if((probe.gpus||[]).length)resources.push(probe.gpus.length+' GPU');if((probe.partitions||[]).length)resources.push(probe.partitions.join(', '));
+    const agent=host.agent_policy||{};if(agent.enabled)resources.push('Generator tool · '+agent.max_jobs_per_task+' jobs/task · '+agent.max_cpus+' CPU · '+agent.max_gpus+' GPU');
     return '<div class="host-row"><div class="host-top"><span class="host-dot"></span><b>'+esc(host.alias)+'</b>'
       +'<span class="host-kind">'+esc(probe.scheduler||'workstation')+'</span></div><div class="host-detail">'
       +esc((host.user?host.user+'@':'')+host.hostname+':'+host.port+(host.proxy_jump?' · ProxyJump':'')+' · '+host.scratch)
@@ -2017,7 +2340,7 @@ function computeView(d){
       ?'<div class="hpc-output-list">'+(outputs||'<div class="compute-empty">No remote output files found.</div>')+'</div>'
       :'<pre>'+esc(((cache.logs||{}).stdout||'')+(((cache.logs||{}).stderr)?'\n[stderr]\n'+cache.logs.stderr:''))+'</pre>';
     const terminal=['completed','failed','cancelled','timeout','out_of_memory'].includes(job.status);
-    return '<div class="hpc-job"><div class="hpc-job-top"><b>'+esc(job.name)+'</b><span class="status '+esc(job.status)+'">'
+    return '<div class="hpc-job"><div class="hpc-job-top"><b>'+esc(job.name)+'</b>'+(job.origin==='generator'?'<span class="host-kind">Generator</span>':'')+'<span class="status '+esc(job.status)+'">'
       +esc(job.status)+'</span></div><div class="hpc-job-meta"><span>'+esc(job.host)+'</span><span>'+esc(job.scheduler)+' #'
       +esc(job.remote_id)+'</span><span>'+esc(job.elapsed||'')+'</span><span>'+new Date(job.submitted*1000).toLocaleString()+'</span></div>'
       +'<div class="hpc-job-detail">'+esc(job.detail||'')+'</div>'+(job.connection_error?'<div class="hpc-connection-error">Offline view · '
@@ -2029,9 +2352,9 @@ function computeView(d){
       +(cache.mode==='outputs'?'Remote outputs':'Last 64 KB · stdout + stderr')+'<span class="spacer"></span>'
       +(cache.loading?'Updating…':cache.error?'<span style="color:var(--red)">'+esc(cache.error)+'</span>':'')
       +'</div>'+consoleBody+'</div></div>';}).join('');
-  return '<div class="view-heading"><h2>Remote compute</h2><p>SSH workstations and Slurm clusters, detached from this Mac.</p></div>'
+  return '<div class="view-heading"><h2>Remote compute</h2><p>SSH workstations and Slurm clusters for manual jobs or Generator calculations.</p></div>'
     +'<div class="compute-note"><span>ⓘ</span><div><b>Remote-owned execution.</b> CrossAudit stores only host aliases and job identifiers. '
-    +'Keys remain with OpenSSH; remote work continues if the app closes, the Mac sleeps, or the network drops.</div></div>'
+    +'Keys remain with OpenSSH; remote work continues if the app closes, the Mac sleeps, or the network drops. A host marked as a Generator tool can receive model-authored jobs automatically within its saved policy.</div></div>'
     +'<div class="compute-message" id="compute-message" role="alert"></div>'
     +'<div class="compute-toolbar"><button type="button" class="primary" data-hpc-add>＋ Add SSH host</button>'
     +'<button type="button" class="secondary" data-hpc-run="">Submit job</button><span class="spacer"></span>'
@@ -2040,6 +2363,37 @@ function computeView(d){
     +(c.hosts||[]).length+' connected</span></div>'+(hosts||'<div class="compute-empty">No SSH compute hosts yet.</div>')+'</section>'
     +'<section class="compute-section"><div class="compute-section-head"><b>Remote jobs</b><span>'+c.active+' active</span></div>'
     +(jobs||'<div class="compute-empty">No jobs submitted from this project.</div>')+'</section></div>';
+}
+function toolsView(d){
+  const state=d.mcp||{servers:[],calls:[]},skills=((d.runtime_config||{}).skills||[]);
+  const servers=(state.servers||[]).map(server=>{const approved=new Set(server.allowed_tools||[]);
+    const tools=(server.tools||[]).map(tool=>{const note=tool.annotations||{},risk=note.destructiveHint?' ⚠':note.readOnlyHint?' ◉':'';
+      return '<span class="mcp-tool'+(approved.has(tool.name)?' approved':'')+'" title="'+esc((tool.description||'')
+        +' · server annotations are untrusted')+'">'+(approved.has(tool.name)?'✓ ':'')+esc(tool.name+risk)+'</span>';}).join('');
+    const endpoint=server.transport==='stdio'?[server.command,...(server.args||[])].join(' '):server.url;
+    return '<div class="host-row"><div class="host-top"><span class="host-dot"></span><b>'+esc(server.name)+'</b>'
+      +'<span class="host-kind">'+esc(server.transport)+'</span></div><div class="host-detail">'+esc(endpoint||'')+'</div>'
+      +'<div class="host-resources"><span class="host-resource">MCP '+esc(server.protocol_version||'')+'</span><span class="host-resource">'
+      +(server.enabled?'Generator enabled':'Manual only')+'</span><span class="host-resource">'+esc(server.max_calls_per_task)+' calls/task</span></div>'
+      +'<div class="mcp-tool-list">'+(tools||'<span class="field-help">No tools advertised.</span>')+'</div><div class="host-actions">'
+      +'<button type="button" class="secondary" data-mcp-configure="'+esc(server.id)+'">Configure</button>'
+      +'<button type="button" class="secondary" data-mcp-probe="'+esc(server.id)+'">Refresh tools</button>'
+      +'<button type="button" class="secondary" data-mcp-remove="'+esc(server.id)+'">Remove</button></div></div>';}).join('');
+  const calls=(state.calls||[]).map(call=>'<div class="mcp-call"><b>'+esc(call.tool)+' · '+esc(call.server)+'</b><span class="status '
+    +esc(call.status)+'">'+esc(call.status)+'</span><small>'+new Date(call.started*1000).toLocaleString()+'</small><small>'
+    +Math.round(Number(call.duration_ms||0))+' ms</small></div>').join('');
+  const skillRows=skills.map(skill=>'<div class="skill-row"><b>'+esc(skill.name)+'</b><p>'
+    +esc((skill.applies_to||[]).length?'Applies to '+skill.applies_to.join(', '):'Applies to every task')+'</p></div>').join('');
+  return '<div class="view-heading"><h2>Tools & Skills</h2><p>Project-scoped MCP capabilities and committed Generator guidance.</p></div>'
+    +'<div class="compute-note"><span>ⓘ</span><div><b>Explicit capability boundaries.</b> MCP servers and Skills are invisible until you configure them. Approved MCP output remains untrusted data; Skills guide only the Generator and never change the Constitution.</div></div>'
+    +'<div class="compute-message" id="mcp-message" role="alert"></div><div class="compute-toolbar">'
+    +'<button type="button" class="primary" data-mcp-add>＋ Add MCP server</button><button type="button" class="secondary" data-manage-skills>Manage Skills</button></div>'
+    +'<div class="compute-grid tools-grid"><section class="compute-section"><div class="compute-section-head"><b>MCP servers</b><span>'
+    +(state.servers||[]).length+' connected</span></div>'+(servers||'<div class="compute-empty">No MCP servers connected to this project.</div>')+'</section>'
+    +'<section class="compute-section"><div class="compute-section-head"><b>Recent tool calls</b><span>'+(state.calls||[]).length+' recorded</span></div>'
+    +(calls||'<div class="compute-empty">No MCP tools called in this project.</div>')+'</section>'
+    +'<section class="compute-section"><div class="compute-section-head"><b>Skills</b><span>'+skills.length+' committed</span></div>'
+    +(skillRows||'<div class="compute-empty">No project Skills yet.</div>')+'</section></div>';
 }
 function renderConversation(d){
   const thread = document.getElementById('thread');
@@ -2052,6 +2406,7 @@ function renderConversation(d){
   else if(activeView === 'audits') html = auditsView(d);
   else if(activeView === 'usage') html = usageView(d);
   else if(activeView === 'compute') html = computeView(d);
+  else if(activeView === 'tools') html = toolsView(d);
   else{
     const messages = allMessages(d);
     html = (messages.length ? messages.map(m=>turn(m,d)).join('') : welcome()) + deliveryStatus(d);
@@ -2066,7 +2421,9 @@ function renderTasks(d){
     +'<div class="task-copy"><div class="task-title">'+esc(c.title)+'</div><div class="task-meta"><span class="state-dot '
     +esc(c.status)+'"></span><span>'+esc(c.status)+'</span><span>· '+c.cycles+' cycle'+(c.cycles===1?'':'s')+'</span></div></div>'
     +'<button type="button" class="pin-button'+(c.pinned?' pinned':'')+'" data-pin-chat="'+esc(c.id)+'" '
-    +'aria-label="'+(c.pinned?'Unpin':'Pin')+' chat" title="'+(c.pinned?'Unpin':'Pin')+' chat">'+(c.pinned?'★':'☆')+'</button></div>';
+    +'aria-label="'+(c.pinned?'Unpin':'Pin')+' chat" title="'+(c.pinned?'Unpin':'Pin')+' chat">'+(c.pinned?'★':'☆')+'</button>'
+    +'<button type="button" class="task-delete" data-delete-chat="'+esc(c.id)+'" '
+    +'aria-label="Delete chat from project" title="Delete chat from project">⌫</button></div>';
   const pinned=rows.filter(c=>c.pinned),recent=rows.filter(c=>!c.pinned);
   let html='';if(pinned.length)html+='<div class="side-label">Pinned</div>'+pinned.map(chatRow).join('');
   if(recent.length)html+='<div class="side-label">Recent</div>'+recent.map(chatRow).join('');
@@ -2090,12 +2447,20 @@ function renderInspector(d){
   document.getElementById('mini-metrics').innerHTML = d.metrics.map(m => '<div class="mini-metric">'
     + '<div class="mini-value">' + esc(m.value ?? '—') + '</div><div class="mini-label">'
     + esc(m.label) + '</div></div>').join('');
-  const shas=new Set(cycles.map(c=>c.sha));const escalations=d.escalations.filter(e=>shas.has(e.sha));
+  const escalations=currentEscalations(d);
   document.getElementById('escalations').innerHTML = escalations.length ? escalations.map(e =>
-    '<div class="escalation"><b>' + esc(e.short_sha||String(e.sha).slice(0,12)) + ' · round ' + e.round + '</b><p>'
-    + esc(e.why) + '</p><div class="escalation-actions"><button type="button" class="secondary" data-resolve="reopen" data-cycle="'
+    '<div class="escalation"><b>' +(e.limit_reached?'Automatic limit reached · ':'')+esc(e.round)+' / '+esc(e.max_rounds)+' rounds</b><p>'
+    + esc(e.why) + '</p><small>'+(e.issues||[]).length+' remaining issue'+((e.issues||[]).length===1?'':'s')+'</small>'
+    +'<p>'+esc(e.requested||'A human decision is required.')+'</p><div class="escalation-actions"><button type="button" class="secondary" data-resolve="reopen" data-cycle="'
     +esc(e.cycle_id)+'" data-sha="'+esc(e.short_sha||String(e.sha).slice(0,12))+'">Allow another round</button><button type="button" class="secondary" data-resolve="close" data-cycle="'
     +esc(e.cycle_id)+'" data-sha="'+esc(e.short_sha||String(e.sha).slice(0,12))+'">Stop task</button></div></div>').join('') : '<div class="empty">Nothing needs attention.</div>';
+}
+function maybePromptForHuman(d){
+  if(document.body.classList.contains('hub-mode')||resolutionModal.classList.contains('on')||newTaskMode)return;
+  const row=currentEscalations(d).slice(-1)[0];
+  if(row&&!promptedEscalations.has(row.cycle_id))setTimeout(()=>{
+    if(lastState===d&&!resolutionModal.classList.contains('on'))openResolution(row);
+  },0);
 }
 function render(d){
   lastState = d;
@@ -2103,7 +2468,7 @@ function render(d){
   if(activeChatId&&!chatRows.some(row=>row.id===activeChatId))activeChatId='';
   if(!activeChatId&&chatRows.length&&!newTaskMode)activeChatId=chatRows[0].id;
   if(runtimeModal.classList.contains('on'))syncRuntimeBusy(d);
-  document.querySelector('.composer-wrap').classList.toggle('view-hidden',['usage','compute'].includes(activeView));
+  document.querySelector('.composer-wrap').classList.toggle('view-hidden',['usage','compute','tools'].includes(activeView));
   const preview=document.getElementById('contract-preview');preview.className='contract-preview';preview.innerHTML='';
   document.getElementById('version-badge').textContent = 'V' + d.version;
   document.getElementById('hub-version').textContent = 'V' + d.version;
@@ -2113,17 +2478,18 @@ function render(d){
   const files = artifactRows(d);
   const auditRows = d.auditor_stream.filter(m => m.kind === 'auditor'&&(m.chat_id||'history')===activeChatId);
   const heading = newTaskMode ? 'New chat' : activeView === 'artifacts' ? 'Artifacts'
-    : activeView === 'audits' ? 'Audits' : activeView === 'usage' ? 'Usage' : activeView === 'compute' ? 'Compute' : titleOf(d);
+    : activeView === 'audits' ? 'Audits' : activeView === 'usage' ? 'Usage' : activeView === 'compute' ? 'Compute' : activeView === 'tools' ? 'Tools & Skills' : titleOf(d);
   const subtitle = newTaskMode ? 'Independent generation and audit'
     : activeView === 'artifacts' ? files.length + ' audited deliverables'
     : activeView === 'audits' ? auditRows.length + ' independent audit reports'
     : activeView === 'usage' ? formatTokens((d.usage&&d.usage.month&&d.usage.month.tokens)||0) + ' tokens this month'
     : activeView === 'compute' ? ((d.compute&&d.compute.active)||0)+' remote jobs active'
+    : activeView === 'tools' ? ((d.mcp&&d.mcp.servers)||[]).length+' MCP servers · '+((d.runtime_config&&d.runtime_config.skills)||[]).length+' Skills'
     : d.generator + ' → ' + d.auditor;
   document.getElementById('thread-title').textContent = heading;
   document.getElementById('thread-subtitle').textContent = subtitle;
   const state = activeView === 'audits' && auditRows.length ? auditRows[auditRows.length-1].verdict
-    : activeView === 'artifacts' ? 'ledger' : activeView === 'usage' ? 'local' : activeView === 'compute' ? 'remote' : newTaskMode ? 'ready' : statusOf(d);
+    : activeView === 'artifacts' ? 'ledger' : activeView === 'usage' ? 'local' : activeView === 'compute' ? 'remote' : activeView === 'tools' ? 'policy' : newTaskMode ? 'ready' : statusOf(d);
   const badge = document.getElementById('thread-status');
   badge.textContent = state;badge.className = 'status ' + state;
   document.getElementById('model-summary').textContent = d.generator + ' → ' + d.auditor;
@@ -2136,9 +2502,10 @@ function render(d){
     iv.className = 'interrupted on';iv.textContent = 'Interrupted run: "'
       + d.interrupted.task.replace(/\s+/g,' ').slice(0,72) + '". Send it again to continue.';
   }else iv.className = 'interrupted';
+  maybePromptForHuman(d);
 }
 function selectView(view){
-  activeView = ['tasks','artifacts','audits','usage','compute'].includes(view) ? view : 'tasks';
+  activeView = ['tasks','artifacts','audits','usage','compute','tools'].includes(view) ? view : 'tasks';
   if(activeView!=='compute')stopComputeTimers();
   newTaskMode = false;
   document.querySelectorAll('.nav-item').forEach(button => {
@@ -2268,10 +2635,12 @@ const computeHostModal=document.getElementById('compute-host-modal');
 const computeHostForm=document.getElementById('compute-host-form');
 const computeJobModal=document.getElementById('compute-job-modal');
 const computeJobForm=document.getElementById('compute-job-form');
+const mcpModal=document.getElementById('mcp-modal');
+const mcpForm=document.getElementById('mcp-form');
 const computeLogTimers=new Map();
 let computeInputFiles=[];
 function computeError(id,error){showInlineError(id,error);}
-function computeSurfaceError(error){const box=document.getElementById('compute-message');if(!box)return;
+function computeSurfaceError(error){const box=document.getElementById(activeView==='tools'?'mcp-message':'compute-message');if(!box)return;
   box.textContent=error&&error.message?error.message:String(error);box.className='compute-message on';}
 function closeComputeHost(){computeHostModal.className='project-modal';computeHostForm.reset();}
 function openComputeHost(){computeHostForm.reset();document.getElementById('compute-host-error').className='wizard-error';
@@ -2309,7 +2678,8 @@ computeJobModal.addEventListener('click',ev=>{if(ev.target===computeJobModal)clo
 computeHostForm.onsubmit=async ev=>{ev.preventDefault();const button=document.getElementById('save-compute-host');
   button.disabled=true;button.textContent='Connecting…';document.getElementById('compute-host-error').className='wizard-error';
   const fd=new FormData(computeHostForm);const payload=Object.fromEntries(fd.entries());payload.action='register';
-  payload.concurrency=Number(payload.concurrency);payload.trust_first_key=fd.has('trust_first_key');
+  for(const key of ['concurrency','agent_max_jobs','agent_max_nodes','agent_max_cpus','agent_max_gpus'])payload[key]=Number(payload[key]);
+  payload.trust_first_key=fd.has('trust_first_key');payload.agent_enabled=fd.has('agent_enabled');
   try{await api('/api/hpc',payload);closeComputeHost();if(lastState)lastState.compute=await api('/api/state').then(s=>s.compute);render(lastState);}
   catch(e){computeError('compute-host-error',e);}finally{button.disabled=false;button.textContent='Probe & add';}};
 computeJobForm.onsubmit=async ev=>{ev.preventDefault();const button=document.getElementById('submit-compute-job');
@@ -2319,6 +2689,37 @@ computeJobForm.onsubmit=async ev=>{ev.preventDefault();const button=document.get
   try{if(computeInputFiles.length){button.textContent='Uploading inputs…';payload.upload_batch=await uploadFiles(computeInputFiles);button.textContent='Submitting…';}
     await api('/api/hpc',payload);closeComputeJob();}
   catch(e){computeError('compute-job-error',e);}finally{button.disabled=false;button.textContent='Submit job';}};
+function syncMcpTransport(){const stdio=document.getElementById('mcp-transport').value==='stdio';
+  document.getElementById('mcp-stdio-fields').classList.toggle('off',!stdio);
+  document.getElementById('mcp-http-fields').classList.toggle('off',stdio);
+  document.getElementById('mcp-command').required=stdio;document.getElementById('mcp-url').required=!stdio;}
+function renderMcpPreview(server){const approved=new Set((server&&server.allowed_tools)||[]),tools=(server&&server.tools)||[];
+  document.getElementById('mcp-tool-preview').innerHTML=tools.length?tools.map(tool=>{const note=tool.annotations||{},risk=note.destructiveHint?' ⚠':note.readOnlyHint?' ◉':'';
+    return '<span class="mcp-tool'+(approved.has(tool.name)?' approved':'')+'" title="'+esc((tool.description||'')
+      +' · server annotations are untrusted')+'">'+(approved.has(tool.name)?'✓ ':'')+esc(tool.name+risk)+'</span>';}).join(''):'<span class="field-help">Connect the server to discover tools.</span>';}
+function openMcp(serverId=''){mcpForm.reset();document.getElementById('mcp-error').className='wizard-error';
+  const server=((lastState&&lastState.mcp&&lastState.mcp.servers)||[]).find(row=>row.id===serverId);
+  document.getElementById('mcp-title').textContent=server?'Configure MCP server':'Add MCP server';
+  document.getElementById('mcp-server-id').value=server?server.id:'';
+  if(server){document.getElementById('mcp-name').value=server.name||'';document.getElementById('mcp-transport').value=server.transport||'stdio';
+    document.getElementById('mcp-command').value=server.command||'';document.getElementById('mcp-args').value=(server.args||[]).join('\n');
+    document.getElementById('mcp-url').value=server.url||'';mcpForm.elements.timeout.value=server.timeout||30;
+    mcpForm.elements.max_calls_per_task.value=server.max_calls_per_task||5;mcpForm.elements.allowed_tools_text.value=(server.allowed_tools||[]).join(', ');
+    mcpForm.elements.enabled.checked=Boolean(server.enabled);mcpForm.elements.allow_private_network.checked=Boolean(server.allow_private_network);}
+  syncMcpTransport();renderMcpPreview(server);mcpModal.className='project-modal on';setTimeout(()=>document.getElementById('mcp-name').focus(),0);}
+function closeMcp(){mcpModal.className='project-modal';mcpForm.reset();}
+document.getElementById('mcp-transport').onchange=syncMcpTransport;
+document.getElementById('close-mcp').onclick=closeMcp;document.getElementById('cancel-mcp').onclick=closeMcp;
+mcpModal.addEventListener('click',ev=>{if(ev.target===mcpModal)closeMcp();});
+mcpForm.onsubmit=async ev=>{ev.preventDefault();const button=document.getElementById('save-mcp');button.disabled=true;
+  button.textContent='Connecting…';document.getElementById('mcp-error').className='wizard-error';const fd=new FormData(mcpForm);
+  const payload=Object.fromEntries(fd.entries());payload.action='register';payload.args=document.getElementById('mcp-args').value.split('\n').map(value=>value.trim()).filter(Boolean);
+  payload.allowed_tools=document.getElementById('mcp-allowed-tools').value.split(',').map(value=>value.trim()).filter(Boolean);
+  payload.timeout=Number(payload.timeout);payload.max_calls_per_task=Number(payload.max_calls_per_task);
+  for(const name of ['approve_local_code','allow_private_network','allow_all_tools','enabled'])payload[name]=fd.has(name);
+  delete payload.args_text;delete payload.allowed_tools_text;
+  try{await api('/api/mcp',payload);closeMcp();if(lastState){lastState.mcp=await api('/api/state').then(state=>state.mcp);render(lastState);}}
+  catch(e){computeError('mcp-error',e);}finally{button.disabled=false;button.textContent='Connect & save';}};
 function stopComputeTimers(except=''){for(const [id,timer] of computeLogTimers){if(id!==except){clearInterval(timer);computeLogTimers.delete(id);}}}
 async function loadComputePanel(jobId,mode){const current=computePanels.get(jobId)||{};computePanels.set(jobId,{...current,open:true,mode,loading:true,error:''});
   if(lastState)render(lastState);try{const result=await api('/api/hpc',{action:mode==='outputs'?'outputs':'logs',job_id:jobId});
@@ -2332,8 +2733,19 @@ document.querySelectorAll('.nav-item').forEach(button => button.onclick=()=>sele
 document.getElementById('conversation').onclick=ev=>{
   if(ev.target.closest('[data-open-artifacts]'))selectView('artifacts');
   if(ev.target.closest('[data-open-audits]'))selectView('audits');
-  if(ev.target.closest('[data-open-decisions]'))openInspector();
+  if(ev.target.closest('[data-open-decisions]')){
+    const row=lastState&&currentEscalations(lastState).slice(-1)[0];if(row)openResolution(row);else openInspector();
+  }
   if(ev.target.closest('[data-hpc-add]'))openComputeHost();
+  if(ev.target.closest('[data-mcp-add]'))openMcp();
+  if(ev.target.closest('[data-manage-skills]'))openRuntime();
+  const configureMcp=ev.target.closest('[data-mcp-configure]');if(configureMcp)openMcp(configureMcp.getAttribute('data-mcp-configure'));
+  const probeMcp=ev.target.closest('[data-mcp-probe]');if(probeMcp){probeMcp.disabled=true;probeMcp.textContent='Refreshing…';
+    api('/api/mcp',{action:'probe',server_id:probeMcp.getAttribute('data-mcp-probe')}).catch(computeSurfaceError)
+      .finally(()=>{probeMcp.disabled=false;probeMcp.textContent='Refresh tools';});}
+  const removeMcp=ev.target.closest('[data-mcp-remove]');if(removeMcp&&confirm(currentLocale==='zh'?'从此项目移除这个 MCP 服务器？':'Remove this MCP server from this project?')){
+    removeMcp.disabled=true;api('/api/mcp',{action:'remove',server_id:removeMcp.getAttribute('data-mcp-remove')})
+      .catch(computeSurfaceError).finally(()=>{removeMcp.disabled=false;});}
   const run=ev.target.closest('[data-hpc-run]');if(run)openComputeJob(run.getAttribute('data-hpc-run'));
   const probe=ev.target.closest('[data-hpc-probe]');if(probe){probe.disabled=true;probe.textContent='Probing…';
     api('/api/hpc',{action:'probe',host_id:probe.getAttribute('data-hpc-probe')}).catch(computeSurfaceError)
@@ -2345,19 +2757,41 @@ document.getElementById('conversation').onclick=ev=>{
     api('/api/hpc',{action:'refresh'}).catch(computeSurfaceError).finally(()=>{refresh.disabled=false;refresh.textContent='Refresh now';});}
   const logs=ev.target.closest('[data-hpc-logs]');if(logs){const id=logs.getAttribute('data-hpc-logs');loadComputePanel(id,'logs');followComputeLogs(id);}
   const outputs=ev.target.closest('[data-hpc-outputs]');if(outputs){const id=outputs.getAttribute('data-hpc-outputs');stopComputeTimers();loadComputePanel(id,'outputs');}
-  const cancel=ev.target.closest('[data-hpc-cancel]');if(cancel&&confirm('Cancel this remote job? This cannot be undone.')){
+  const cancel=ev.target.closest('[data-hpc-cancel]');if(cancel&&confirm(currentLocale==='zh'?'取消这个远程任务？此操作无法撤销。':'Cancel this remote job? This cannot be undone.')){
     cancel.disabled=true;cancel.textContent='Cancelling…';api('/api/hpc',{action:'cancel',job_id:cancel.getAttribute('data-hpc-cancel')})
       .catch(computeSurfaceError).finally(()=>{cancel.disabled=false;cancel.textContent='Cancel job';});}
   const admit=ev.target.closest('[data-admit]');if(admit){admit.disabled=true;admit.textContent='Verifying…';
     api('/api/admit',{cycle_id:admit.getAttribute('data-admit-cycle')}).catch(e=>{route.className='route on';route.innerHTML='<b>Not admitted</b> — '+esc(e.message);});}
 };
+const deleteChatModal=document.getElementById('delete-chat-modal');
+const deleteChatForm=document.getElementById('delete-chat-form');
+function closeDeleteChat(){deleteChatModal.className='project-modal';deleteChatForm.reset();
+  document.getElementById('delete-chat-error').className='wizard-error';}
+function openDeleteChat(id){const chat=lastState&&lastState.chats.items.find(row=>row.id===id);if(!chat)return;
+  document.getElementById('delete-chat-id').value=id;document.getElementById('delete-chat-name').textContent=chat.title;
+  document.getElementById('delete-chat-impact').textContent=chat.cycles
+    ?(currentLocale==='zh'?'此对话有 '+chat.cycles+' 个审计循环；导航会删除，但审计证据会保留。':'This chat has '+chat.cycles+' audit cycle'+(chat.cycles===1?'':'s')+'; navigation is removed while audit evidence remains.')
+    :(currentLocale==='zh'?'这是一个空对话，将直接从侧栏移除。':'This is an empty chat and will be removed from the sidebar.');
+  document.getElementById('delete-chat-error').className='wizard-error';deleteChatModal.className='project-modal on';}
+document.getElementById('close-delete-chat').onclick=closeDeleteChat;
+document.getElementById('cancel-delete-chat').onclick=closeDeleteChat;
+deleteChatModal.addEventListener('click',ev=>{if(ev.target===deleteChatModal)closeDeleteChat();});
+deleteChatForm.onsubmit=async ev=>{ev.preventDefault();const id=document.getElementById('delete-chat-id').value;
+  const button=document.getElementById('confirm-delete-chat');button.disabled=true;button.textContent=currentLocale==='zh'?'正在删除…':'Deleting…';
+  try{await api('/api/chats/delete',{chat_id:id});closeDeleteChat();
+    if(lastState){lastState.chats.items=lastState.chats.items.filter(row=>row.id!==id);
+      if(activeChatId===id){activeChatId=lastState.chats.items[0]&&lastState.chats.items[0].id||'';newTaskMode=!activeChatId;}
+      render(lastState);}}
+  catch(e){showInlineError('delete-chat-error',e);}finally{button.disabled=false;button.textContent=currentLocale==='zh'?'删除对话':'Delete chat';}};
 document.getElementById('task-list').onclick=async ev=>{
-  const pin=ev.target.closest('[data-pin-chat]'),row=ev.target.closest('[data-chat-id]');
+  const pin=ev.target.closest('[data-pin-chat]'),remove=ev.target.closest('[data-delete-chat]'),row=ev.target.closest('[data-chat-id]');
+  if(remove){ev.preventDefault();ev.stopPropagation();openDeleteChat(remove.getAttribute('data-delete-chat'));return;}
   if(pin){ev.preventDefault();ev.stopPropagation();const id=pin.getAttribute('data-pin-chat');
     const chat=lastState&&lastState.chats.items.find(c=>c.id===id);if(!chat)return;
     pin.disabled=true;try{await api('/api/chats/pin',{chat_id:id,pinned:!chat.pinned});chat.pinned=!chat.pinned;
       render(lastState);}catch(e){pin.disabled=false;}return;}
   if(row){activeChatId=row.getAttribute('data-chat-id');newTaskMode=false;activeView='tasks';
+    if(pendingContinuation.chat&&pendingContinuation.chat!==activeChatId)pendingContinuation={cycle:'',chat:''};
     document.querySelectorAll('.nav-item').forEach(button=>button.classList.toggle('active',button.getAttribute('data-view')==='tasks'));
     render(lastState);document.getElementById('thread').scrollTop=0;closePanels();}
 };
@@ -2370,6 +2804,7 @@ document.getElementById('current-project-pin').onclick=async()=>{if(!lastState)r
   finally{button.disabled=false;}};
 document.getElementById('new-task').onclick=async()=>{
   activeView='tasks';newTaskMode=true;say.value='';route.className='route';pendingFiles=[];
+  pendingContinuation={cycle:'',chat:''};
   uploadProgress=new Map();
   resetTaskChoices();
   syncAudience();
@@ -2387,12 +2822,14 @@ document.getElementById('sidebar-toggle').onclick=toggleSidebar;
 document.getElementById('inspect-toggle').onclick=toggleInspector;
 document.getElementById('inspect-close').onclick=closePanels;
 document.getElementById('escalations').onclick=ev=>{const button=ev.target.closest('[data-resolve]');if(!button)return;
-  openResolution(button.getAttribute('data-cycle'),button.getAttribute('data-resolve'),button.getAttribute('data-sha'));};
+  const cycle=button.getAttribute('data-cycle');const row=lastState&&(lastState.escalations||[]).find(item=>item.cycle_id===cycle);
+  openResolution(row||cycle,button.getAttribute('data-resolve'),button.getAttribute('data-sha'));};
 scrim.onclick=closePanels;
 document.addEventListener('keydown',ev=>{if(ev.key==='Escape')closePanels();});
 window.addEventListener('resize',()=>{if(innerWidth>1120)closePanels();});
 form.onsubmit=async ev=>{ev.preventDefault();const rawText=say.value.trim();if(!rawText)return;
-  if(needsTaskChoices(rawText)&&!taskChoiceMode){pendingChoiceTask=rawText;taskChoices.className='task-choices on';return;}
+  const continuing=pendingContinuation.chat===activeChatId&&Boolean(pendingContinuation.cycle);
+  if(needsTaskChoices(rawText)&&!taskChoiceMode&&!continuing){pendingChoiceTask=rawText;taskChoices.className='task-choices on';return;}
   const text=rawText;const deliveryChoices=taskChoiceMode&&pendingChoiceTask===rawText?taskChoicePayload():null;
   if(pendingFiles.length&&!attachmentConsent){showTransferConsent();return;}
   newTaskMode=false;activeView='tasks';if(lastState)render(lastState);
@@ -2400,10 +2837,11 @@ form.onsubmit=async ev=>{ev.preventDefault();const rawText=say.value.trim();if(!
   route.textContent=pendingFiles.length?'Sending your files…':'Starting…';
   try{const uploadBatch=pendingFiles.length?await uploadFiles(pendingFiles):null;
     const r=await api('/api/say',{text,chat_id:activeChatId,upload_batch:uploadBatch,attachment_consent:attachmentConsent,
-      delivery_choices:deliveryChoices});if(r.asked){route.innerHTML='<b class="ask">Needs clarification</b> — '
+      delivery_choices:continuing?null:deliveryChoices,continuation_cycle:continuing?pendingContinuation.cycle:''});if(r.asked){route.innerHTML='<b class="ask">Needs clarification</b> — '
     + esc(r.clarify);resetConsent();resetTaskChoices();}else{activeChatId=r.chat_id||activeChatId;route.innerHTML=r.lane==='generator'
       ?'<b>Task started.</b> The result will appear in this conversation.'
       :'<b>Message delivered.</b>';
+    if(r.lane==='generator')pendingContinuation={cycle:'',chat:''};
     if(!pendingFiles.length||r.attachments_accepted){say.value='';pendingFiles=[];uploadProgress=new Map();fileInput.value='';drawFiles();syncAudience();resetTaskChoices();}
     resetConsent();}}
   catch(e){resetConsent();route.innerHTML='<b>Refused</b> — '+esc(e.message);}

@@ -43,6 +43,7 @@ from . import chats, daemon
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,79}")
 MODEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,119}")
 SKILL_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,59}")
+GITHUB_REPO = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 SETUP_FILE = "project-setup.json"
 _RUNTIME_CONFIG_LOCK = threading.Lock()
 
@@ -234,6 +235,15 @@ class ProjectJobs:
         with self._lock:
             return [dict(v, steps=[dict(s) for s in v["steps"]])
                     for v in self._jobs.values()]
+
+    def running_for(self, root: Path) -> bool:
+        """Whether project creation/recovery still owns this exact folder."""
+        resolved = str(root.resolve())
+        with self._lock:
+            return any(row.get("status") == "running" and
+                       (row.get("root") == resolved or
+                        (not row.get("root") and row.get("project") == root.name))
+                       for row in self._jobs.values())
 
 
 JOBS = ProjectJobs()
@@ -1153,6 +1163,132 @@ def open_project(current: Config, root: str) -> dict:
     cfg = load(path / CONFIG_NAME)
     info = daemon.live(cfg) or daemon.spawn(cfg, 0)
     return {"url": daemon.url_for(info), "project": cfg.science_repo}
+
+
+def _deletion_target(current: Config, root: str) -> tuple[Path, Config]:
+    path = Path(root).resolve()
+    if not _trusted_project(current, path) or not (path / CONFIG_NAME).is_file():
+        raise ConfigDenial("that project is outside your selected workspaces")
+    if path == current.root:
+        raise ConfigDenial(
+            "return to the main Projects window before deleting the project that is open")
+    if path.name == ".crossaudit-home":
+        raise ConfigDenial("the CrossAudit application controller cannot be deleted")
+    return path, load(path / CONFIG_NAME)
+
+
+def _remote_repositories(cfg: Config) -> list[str]:
+    # A lone science_repo is also the human-readable project identity in local
+    # projects. Only a configured audit_repo proves that the two-repository
+    # pairing flow supplied GitHub repository names.
+    if not cfg.audit_repo:
+        return []
+    return list(dict.fromkeys(
+        value for value in (cfg.science_repo, cfg.audit_repo or "")
+        if GITHUB_REPO.fullmatch(value)))
+
+
+def _project_activity(cfg: Config) -> list[str]:
+    reasons = []
+    if JOBS.running_for(cfg.root):
+        reasons.append("project setup is still running")
+    info = daemon.live(cfg)
+    state = daemon.fetch_state(info) if info else None
+    progress = state.get("progress") if isinstance(state, dict) else None
+    if isinstance(progress, dict) and not progress.get("finished"):
+        reasons.append("a Generator/Auditor task is running")
+    compute = state.get("compute") if isinstance(state, dict) else None
+    if isinstance(compute, dict) and int(compute.get("active", 0) or 0):
+        reasons.append(f"{int(compute['active'])} remote compute job(s) are active")
+    return reasons
+
+
+def project_deletion_preview(current: Config, root: str) -> dict:
+    """Describe exactly what deletion would affect, without mutating anything."""
+    path, cfg = _deletion_target(current, root)
+    activity = _project_activity(cfg)
+    dirty_lines = [line for line in git("status", "--porcelain", cwd=path,
+                                        check=False).splitlines() if line.strip()]
+    ahead = 0
+    upstream = subprocess.run(
+        ["git", "rev-list", "--count", "@{upstream}..HEAD"], cwd=str(path),
+        capture_output=True, text=True, check=False)
+    if upstream.returncode == 0 and upstream.stdout.strip().isdigit():
+        ahead = int(upstream.stdout.strip())
+    trash = path.parent / ".crossaudit-trash"
+    return {
+        "root": str(path), "name": path.name,
+        "trash": str(trash), "recoverable": True,
+        "activity": activity, "can_delete": not activity,
+        "dirty_count": len(dirty_lines),
+        "dirty_sample": [line[3:][:120] for line in dirty_lines[:6]],
+        "unpushed_commits": ahead,
+        "repositories": _remote_repositories(cfg),
+    }
+
+
+def delete_project(current: Config, root: str, payload: dict) -> dict:
+    """Atomically move one trusted project into a hidden, recoverable archive.
+
+    GitHub repositories are deliberately a separate, opt-in irreversible act.
+    The local folder is archived first so a partial remote failure never loses
+    the only recoverable copy of the project metadata.
+    """
+    path, cfg = _deletion_target(current, root)
+    if str(payload.get("confirmation", "")) != path.name:
+        raise ConfigDenial(f"type {path.name!r} exactly to confirm project deletion")
+    activity = _project_activity(cfg)
+    if activity:
+        raise ConfigDenial("project cannot be deleted while " + "; ".join(activity))
+    delete_github = payload.get("delete_github") is True
+    repositories = _remote_repositories(cfg)
+    existing_repositories = {repo: True for repo in repositories}
+    if delete_github:
+        if str(payload.get("github_confirmation", "")) != "DELETE GITHUB":
+            raise ConfigDenial("type DELETE GITHUB to confirm permanent repository deletion")
+        if not repositories:
+            raise ConfigDenial("this project has no configured GitHub repositories")
+        # Complete every read-only remote preflight before touching local data.
+        pair_mod.gh()
+        existing_repositories = {repo: pair_mod._exists(repo) for repo in repositories}
+
+    info = daemon.live(cfg)
+    if info:
+        stopped = daemon.stop(cfg)
+        if "did not stop" in stopped:
+            raise ConfigDenial(stopped)
+
+    trash = path.parent / ".crossaudit-trash"
+    trash.mkdir(mode=0o700, exist_ok=True)
+    try:
+        trash.chmod(0o700)
+    except OSError:
+        pass
+    destination = trash / (
+        f"{time.strftime('%Y%m%d-%H%M%S')}-{path.name}-{uuid.uuid4().hex[:8]}")
+    path.replace(destination)
+    _invalidate_runtime(path)
+
+    remote_results = []
+    if delete_github:
+        for repo in repositories:
+            if not existing_repositories[repo]:
+                remote_results.append({"repo": repo, "status": "already_absent"})
+                continue
+            try:
+                pair_mod._gh("repo", "delete", repo, "--yes")
+                remote_results.append({"repo": repo, "status": "deleted"})
+            except Denial as exc:
+                remote_results.append({"repo": repo, "status": "failed",
+                                       "detail": exc.reason[:300]})
+    return {
+        "deleted": True, "name": path.name, "root": str(path),
+        "archive": str(destination), "recoverable": True,
+        "github": remote_results,
+        "github_complete": (not delete_github or
+                            all(row["status"] in {"deleted", "already_absent"}
+                                for row in remote_results)),
+    }
 
 
 def set_project_pin(current: Config, root: str, pinned: bool) -> dict:

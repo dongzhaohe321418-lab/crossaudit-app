@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 
+from crossaudit import workspace
 from crossaudit.cli import pair
 from crossaudit.config import load
-from crossaudit import workspace
-from crossaudit.console import daemon, projects
+from crossaudit.console import chats, daemon, projects
 from crossaudit.errors import ConfigDenial
 
 
@@ -65,6 +65,92 @@ def test_browser_creation_can_explicitly_choose_the_science_contract(tmp_path,
     assert cfg.checks == ["schema", "units", "convergence", "provenance"]
     assert (root / "experiments" / "TEMPLATE" / "results.json").is_file()
     assert "metadata.yml" in (root / "AUDIT_RULES.md").read_text()
+
+
+def test_project_delete_archives_locally_and_never_touches_github_by_default(
+        tmp_path, monkeypatch):
+    monkeypatch.delenv("CROSSAUDIT_AUDITOR_KEY", raising=False)
+    control = Path(projects.create_project(
+        tmp_path, payload(name="control"), lambda *_: None)["root"])
+    victim = Path(projects.create_project(
+        tmp_path, payload(name="victim"), lambda *_: None)["root"])
+    current = load(control / "crossaudit.yml")
+    (victim / "private-notes.txt").write_text("uncommitted but recoverable")
+    monkeypatch.setattr(pair, "_gh", lambda *_a, **_k: pytest.fail(
+        "GitHub must not be touched unless permanent deletion is selected"))
+
+    preview = projects.project_deletion_preview(current, str(victim))
+    assert preview["can_delete"] is True and preview["dirty_count"] == 1
+    result = projects.delete_project(
+        current, str(victim), {"confirmation": "victim", "delete_github": False})
+
+    archive = Path(result["archive"])
+    assert result["recoverable"] is True and not victim.exists()
+    assert (archive / "private-notes.txt").read_text() == "uncommitted but recoverable"
+    assert archive.parent == tmp_path / ".crossaudit-trash"
+
+
+def test_project_delete_refuses_current_wrong_confirmation_and_running_work(
+        tmp_path, monkeypatch):
+    monkeypatch.delenv("CROSSAUDIT_AUDITOR_KEY", raising=False)
+    control = Path(projects.create_project(
+        tmp_path, payload(name="control"), lambda *_: None)["root"])
+    victim = Path(projects.create_project(
+        tmp_path, payload(name="victim"), lambda *_: None)["root"])
+    current = load(control / "crossaudit.yml")
+    with pytest.raises(ConfigDenial, match="main Projects"):
+        projects.project_deletion_preview(current, str(control))
+    with pytest.raises(ConfigDenial, match="type 'victim'"):
+        projects.delete_project(current, str(victim), {"confirmation": "wrong"})
+    monkeypatch.setattr(projects, "_project_activity", lambda _cfg: ["a task is running"])
+    with pytest.raises(ConfigDenial, match="task is running"):
+        projects.delete_project(current, str(victim), {"confirmation": "victim"})
+    assert victim.is_dir()
+
+
+def test_deleted_chat_tombstone_prevents_a_ledger_id_from_reappearing(
+        tmp_path, monkeypatch):
+    monkeypatch.delenv("CROSSAUDIT_AUDITOR_KEY", raising=False)
+    root = Path(projects.create_project(
+        tmp_path, payload(name="chat-project"), lambda *_: None)["root"])
+    cfg = load(root / "crossaudit.yml")
+    row = chats.create(cfg, "Remove me")
+    deleted = chats.delete(cfg, row["id"])
+
+    assert deleted["evidence_preserved"] is False
+    assert row["id"] not in {item["id"] for item in chats.snapshot(
+        cfg, known_chat_ids=[row["id"]])["items"]}
+    with pytest.raises(ConfigDenial, match="was deleted"):
+        chats.touch(cfg, row["id"], "do not resurrect")
+
+
+def test_permanent_github_delete_needs_a_second_phrase_and_exact_repositories(
+        tmp_path, monkeypatch):
+    monkeypatch.delenv("CROSSAUDIT_AUDITOR_KEY", raising=False)
+    control = Path(projects.create_project(
+        tmp_path, payload(name="control"), lambda *_: None)["root"])
+    victim = Path(projects.create_project(
+        tmp_path, payload(name="victim"), lambda *_: None)["root"])
+    config = victim / "crossaudit.yml"
+    body = config.read_text().replace(
+        "science_repo: victim", "science_repo: owner/victim\naudit_repo: owner/victim-audit")
+    config.write_text(body)
+    current = load(control / "crossaudit.yml")
+    with pytest.raises(ConfigDenial, match="DELETE GITHUB"):
+        projects.delete_project(current, str(victim), {
+            "confirmation": "victim", "delete_github": True})
+
+    calls = []
+    monkeypatch.setattr(pair, "gh", lambda: "/usr/bin/gh")
+    monkeypatch.setattr(pair, "_exists", lambda _repo: True)
+    monkeypatch.setattr(pair, "_gh", lambda *args, **_kwargs: calls.append(args) or "")
+    result = projects.delete_project(current, str(victim), {
+        "confirmation": "victim", "delete_github": True,
+        "github_confirmation": "DELETE GITHUB"})
+
+    assert result["github_complete"] is True
+    assert calls == [("repo", "delete", "owner/victim", "--yes"),
+                     ("repo", "delete", "owner/victim-audit", "--yes")]
 
 
 @pytest.mark.parametrize("changes,why", [
@@ -185,7 +271,7 @@ def test_project_page_contains_the_control_plane_contract():
                  "/api/projects/stream", "Create and connect two repositories",
                  'role="progressbar"', "project-live-copy",
                  'aria-label="Back to projects"',
-                 "document.getElementById('back-projects').onclick=showProjects",
+                 "document.getElementById('back-projects').onclick=returnToProjects",
                  "Connect GitHub", "/api/github/connect", "Open GitHub",
                  "Local workspace folder", "Choose folder…",
                  "/api/workspace/select", "/api/github/check",
@@ -195,13 +281,20 @@ def test_project_page_contains_the_control_plane_contract():
                  "/api/projects/pin", "data-pin-chat", "data-pin-project",
                  "current-project-pin", "chat_id:activeChatId"):
         assert text in PAGE
+    for text in ("Delete project", "/api/projects/delete", "data-delete-project",
+                 "DELETE GITHUB", "Move project to Trash", "Delete chat?",
+                 "/api/chats/delete", "data-delete-chat", "evidence remains"):
+        assert text in PAGE
     for text in ("Models, reasoning & audit loop", "/api/runtime/options",
                  "/api/runtime", "Save for next call", "Reasoning effort",
                  "Automatic revision limit", "Committed project controls",
                  "Generator guidance", "/api/skills", "Save guidance"):
         assert text in PAGE
-    for text in ("Resolve audit escalation", "/api/escalation",
-                 "Allow another round", "Stop task", "Review decision"):
+    for text in ("The audit needs your decision", "/api/escalation",
+                 "Automatic audit limit reached", "What is still blocking the result",
+                 "Revise and continue", "Stop this task", "Review issues & decide",
+                 "promptedEscalations", "maybePromptForHuman",
+                 "continuation_cycle", "pendingContinuation"):
         assert text in PAGE
     assert "data-copy-recovery-github" in PAGE
     assert "This dialog updates automatically after approval." in PAGE
@@ -218,7 +311,7 @@ def test_every_workspace_exposes_a_persistent_bilingual_display_layer():
     # files, usage/compute navigation and the primary conversation—not just
     # translate a landing-page label.
     for chinese in ("项目", "创建受监督项目", "供应商凭据", "API key 以只写方式",
-                    "处理审计升级", "添加文件", "用量", "计算", "生成者", "独立审计者",
+                    "已达自动审计轮数上限", "审计需要你作出决定", "添加文件", "用量", "计算", "生成者", "独立审计者",
                     "环境诊断", "提交远程任务"):
         assert chinese in PAGE
     assert "localStorage.setItem(LOCALE_KEY,currentLocale)" in PAGE

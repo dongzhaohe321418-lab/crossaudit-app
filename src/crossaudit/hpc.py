@@ -12,6 +12,7 @@ connection is non-interactive and uses the user's existing ``~/.ssh/config``
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import posixpath
@@ -23,6 +24,7 @@ import subprocess
 import threading
 import time
 from pathlib import Path, PurePosixPath
+from types import SimpleNamespace
 from typing import Callable
 
 from .config import Config
@@ -38,8 +40,11 @@ JOB_ID = re.compile(r"[a-f0-9]{16}")
 MAX_SCRIPT_BYTES = 256 * 1024
 MAX_DETAILS = 4000
 LOG_BYTES = 64 * 1024
+MAX_AGENT_RESULT_BYTES = 256 * 1024
 POLL_SECONDS = 2.0
 TERMINAL_STATES = {"completed", "failed", "cancelled", "timeout", "out_of_memory"}
+TEXT_OUTPUT_SUFFIXES = {".csv", ".json", ".jsonl", ".log", ".md", ".txt",
+                        ".tsv", ".yaml", ".yml"}
 _ALIAS_CACHE: dict[str, tuple[float, list[str]]] = {}
 
 _SSH_OPTIONS = (
@@ -112,6 +117,42 @@ def _bounded_int(value, label: str, minimum: int, maximum: int) -> int:
     if not minimum <= number <= maximum:
         raise ConfigDenial(f"{label} must be between {minimum} and {maximum}")
     return number
+
+
+def _walltime_seconds(value: str) -> int:
+    raw = str(value).strip()
+    if not WALLTIME.fullmatch(raw):
+        raise ConfigDenial("wall time must look like HH:MM:SS or D-HH:MM:SS")
+    days, separator, clock = raw.partition("-")
+    if not separator:
+        days, clock = "0", days
+    parts = [int(part) for part in clock.split(":")]
+    if len(parts) == 2:
+        hours, minutes, seconds = 0, parts[0], parts[1]
+    else:
+        hours, minutes, seconds = parts
+    return int(days) * 86400 + hours * 3600 + minutes * 60 + seconds
+
+
+def _memory_bytes(value: str) -> int:
+    raw = str(value).strip().upper()
+    if not raw:
+        return 0
+    if not MEMORY.fullmatch(raw):
+        raise ConfigDenial("memory must look like 16G, 8000M, or 1T")
+    match = re.fullmatch(r"([1-9][0-9]{0,8})([KMGTP]?)(?:B)?", raw)
+    assert match is not None
+    powers = {"": 1, "K": 1024, "M": 1024 ** 2, "G": 1024 ** 3,
+              "T": 1024 ** 4, "P": 1024 ** 5}
+    return int(match.group(1)) * powers[match.group(2)]
+
+
+def _digest_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
 
 
 class SSHFailure(ConfigDenial):
@@ -381,6 +422,28 @@ class Manager:
         if len(details) > MAX_DETAILS:
             raise ConfigDenial(f"host details must be at most {MAX_DETAILS} characters")
         limit = _bounded_int(payload.get("concurrency", 100), "concurrent job limit", 1, 100)
+        agent_enabled = payload.get("agent_enabled") is True
+        agent_policy = {
+            "enabled": agent_enabled,
+            "max_jobs_per_task": _bounded_int(
+                payload.get("agent_max_jobs", 2), "Generator jobs per task", 1, 10),
+            "max_nodes": _bounded_int(
+                payload.get("agent_max_nodes", 1), "Generator node limit", 1, 64),
+            "max_cpus": _bounded_int(
+                payload.get("agent_max_cpus", 8), "Generator CPU limit", 1, 4096),
+            "max_gpus": _bounded_int(
+                payload.get("agent_max_gpus", 0), "Generator GPU limit", 0, 64),
+            "max_memory": str(payload.get("agent_max_memory", "16G")).strip().upper(),
+            "max_walltime": str(payload.get(
+                "agent_max_walltime", "01:00:00")).strip(),
+        }
+        _memory_bytes(agent_policy["max_memory"])
+        _walltime_seconds(agent_policy["max_walltime"])
+        for key in ("partition", "account", "qos"):
+            value = str(payload.get(f"agent_{key}", "")).strip()
+            if value and not RESOURCE.fullmatch(value):
+                raise ConfigDenial(f"Generator {key} contains unsupported characters")
+            agent_policy[key] = value
         expanded = self.transport.expanded(alias)
         trust = payload.get("trust_first_key") is True
         output = self.transport.run(alias, _probe_script(), timeout=25,
@@ -398,6 +461,7 @@ class Manager:
                 "proxy_jump": bool(expanded.get("proxyjump") and
                                    expanded.get("proxyjump") != "none"),
                 "probe": probe, "status": "ready", "checked": now,
+                "agent_policy": agent_policy,
             })
             if existing is None:
                 rows.append(row)
@@ -435,7 +499,8 @@ class Manager:
     def _public_host(row: dict) -> dict:
         return {key: row.get(key) for key in (
             "id", "alias", "scratch", "details", "concurrency", "hostname",
-            "user", "port", "proxy_jump", "probe", "status", "checked")}
+            "user", "port", "proxy_jump", "probe", "status", "checked",
+            "agent_policy")}
 
     @staticmethod
     def _resources(payload: dict) -> dict:
@@ -481,7 +546,9 @@ class Manager:
         lines.extend(["set -o pipefail", f"cd -- {shlex.quote(directory)}", body.rstrip(), ""])
         return "\n".join(lines)
 
-    def submit(self, cfg: Config, payload: dict, *, attachments=()) -> dict:
+    def submit(self, cfg: Config, payload: dict, *, attachments=(),
+               origin: str = "user", chat_id: str = "",
+               requested_outputs=()) -> dict:
         host = self._host(cfg, str(payload.get("host_id", "")))
         script_body = str(payload.get("script", ""))
         if not script_body.strip():
@@ -507,6 +574,8 @@ class Manager:
             "name": resources["name"], "resources": resources, "inputs": [],
             "status": "submitting", "detail": "Preparing remote job",
             "submitted": now, "updated": now, "elapsed": "0:00", "exit_code": "",
+            "origin": origin, "chat_id": chat_id,
+            "requested_outputs": list(requested_outputs),
         }
         local = _state_root(cfg) / "jobs" / job_id
         local.mkdir(parents=True, exist_ok=False)
@@ -592,6 +661,173 @@ class Manager:
                     break
             self._save_jobs(cfg, rows)
         return self._public_job(row)
+
+    def agent_context(self, cfg: Config) -> list[dict]:
+        """Capabilities the Generator may see; disabled hosts stay invisible."""
+        rows = []
+        for host in self._hosts(cfg):
+            policy = dict(host.get("agent_policy") or {})
+            if not policy.get("enabled"):
+                continue
+            probe = host.get("probe") or {}
+            rows.append({
+                "host_id": host["id"], "label": host["alias"],
+                "scheduler": probe.get("scheduler", "workstation"),
+                "available_cpus": probe.get("cpus"),
+                "available_gpus": probe.get("gpus", []),
+                "partitions": probe.get("partitions", []),
+                "instructions": host.get("details", ""),
+                "policy": policy,
+            })
+        return rows
+
+    def _agent_inputs(self, cfg: Config, values) -> list[SimpleNamespace]:
+        if not isinstance(values, list):
+            raise ConfigDenial("Generator compute inputs must be a list of project paths")
+        allowed = set(cfg.scope_dirs or [])
+        allowed_roots = [(cfg.root / value).resolve() for value in allowed]
+        names: set[str] = set()
+        rows = []
+        root = cfg.root.resolve()
+        for value in values:
+            relative = _relative_output(str(value))
+            path = PurePosixPath(relative)
+            if not path.parts or path.parts[0] not in allowed:
+                raise ConfigDenial(
+                    f"Generator compute input {relative!r} is outside project work scope")
+            requested = cfg.root / Path(*path.parts)
+            source = requested.resolve()
+            try:
+                source.relative_to(root)
+            except ValueError as exc:
+                raise ConfigDenial("Generator compute input escapes the project") from exc
+            if not any(source == work_root or source.is_relative_to(work_root)
+                       for work_root in allowed_roots):
+                raise ConfigDenial(
+                    f"Generator compute input {relative!r} resolves outside project work scope")
+            if not source.is_file() or requested.is_symlink():
+                raise ConfigDenial(
+                    f"Generator compute input {relative!r} is not a regular file")
+            name = path.name
+            if name.casefold() in names:
+                raise ConfigDenial(
+                    "Generator compute inputs must have unique file names")
+            names.add(name.casefold())
+            rows.append(SimpleNamespace(name=name, source=source,
+                                        digest=_digest_file(source)))
+        return rows
+
+    def submit_agent(self, cfg: Config, request: dict, *, chat_id: str = "",
+                     ordinal: int = 1) -> dict:
+        """Submit one model-authored job inside a host policy approved in the UI."""
+        if not isinstance(request, dict):
+            raise ConfigDenial("Generator compute request must be an object")
+        host = self._host(cfg, str(request.get("host_id", "")))
+        policy = dict(host.get("agent_policy") or {})
+        if not policy.get("enabled"):
+            raise ConfigDenial(
+                "this host is not enabled as an automatic Generator compute tool")
+        if not 1 <= ordinal <= int(policy.get("max_jobs_per_task", 1)):
+            raise ConfigDenial(
+                "the Generator reached this host's automatic jobs-per-task limit")
+        outputs = request.get("outputs", [])
+        if not isinstance(outputs, list):
+            raise ConfigDenial("Generator compute outputs must be a list of relative paths")
+        safe_outputs = [_relative_output(str(value)) for value in outputs]
+        if len({value.casefold() for value in safe_outputs}) != len(safe_outputs):
+            raise ConfigDenial("Generator compute output paths must be unique")
+        resources = self._resources({
+            "name": request.get("name", "Generator compute"),
+            **(request.get("resources") if isinstance(request.get("resources"), dict)
+               else {}),
+        })
+        limits = {
+            "nodes": int(policy.get("max_nodes", 1)),
+            "cpus": int(policy.get("max_cpus", 1)),
+            "gpus": int(policy.get("max_gpus", 0)),
+        }
+        for key, maximum in limits.items():
+            if resources[key] > maximum:
+                raise ConfigDenial(
+                    f"Generator requested {resources[key]} {key}; this host allows {maximum}")
+        if _memory_bytes(resources["memory"]) > _memory_bytes(
+                str(policy.get("max_memory", ""))):
+            raise ConfigDenial("Generator memory request exceeds this host's policy")
+        if _walltime_seconds(resources["walltime"]) > _walltime_seconds(
+                str(policy.get("max_walltime", "00:30:00"))):
+            raise ConfigDenial("Generator wall time exceeds this host's policy")
+        for key in ("partition", "account", "qos"):
+            resources[key] = str(policy.get(key, ""))
+        payload = {**resources, "host_id": host["id"],
+                   "script": str(request.get("script", ""))}
+        attachments = self._agent_inputs(cfg, request.get("inputs", []))
+        return self.submit(
+            cfg, payload, attachments=attachments, origin="generator",
+            chat_id=chat_id, requested_outputs=safe_outputs)
+
+    def _agent_result(self, cfg: Config, job: dict) -> dict:
+        try:
+            logs = self.logs(cfg, job["id"])
+        except (ConfigDenial, SSHFailure) as exc:
+            logs = {"stdout": "", "stderr": "", "error": exc.reason}
+        try:
+            available = {row["path"]: row for row in self.outputs(cfg, job["id"])}
+        except (ConfigDenial, SSHFailure) as exc:
+            available = {}
+            logs.setdefault("error", exc.reason)
+        host = self._host(cfg, job["host_id"])
+        remaining = MAX_AGENT_RESULT_BYTES
+        contents = []
+        for relative in job.get("requested_outputs", []):
+            meta = available.get(relative)
+            row = {"path": relative, "available": bool(meta)}
+            if meta:
+                row["bytes"] = meta["bytes"]
+                suffix = PurePosixPath(relative).suffix.lower()
+                if suffix in TEXT_OUTPUT_SUFFIXES and remaining > 0:
+                    limit = min(int(meta["bytes"]), remaining, 128 * 1024)
+                    full = posixpath.join(job["directory"], relative)
+                    row["content"] = self.transport.run(
+                        host["alias"],
+                        f"tail -c {limit} -- {shlex.quote(full)}", timeout=30)
+                    row["truncated"] = int(meta["bytes"]) > limit
+                    remaining -= len(row["content"].encode("utf-8", "replace"))
+            contents.append(row)
+        return {
+            "job_id": job["id"], "status": job["status"],
+            "exit_code": job.get("exit_code", ""), "elapsed": job.get("elapsed", ""),
+            "stdout": str(logs.get("stdout", ""))[-LOG_BYTES:],
+            "stderr": str(logs.get("stderr", ""))[-LOG_BYTES:],
+            "monitoring_error": logs.get("error", ""), "outputs": contents,
+        }
+
+    def run_agent(self, cfg: Config, request: dict, *, chat_id: str = "",
+                  ordinal: int = 1, notify: Callable[[str, str], None] | None = None,
+                  poll_seconds: float = POLL_SECONDS,
+                  timeout_seconds: float | None = None) -> dict:
+        """Run the Generator's approved remote calculation and return bounded data."""
+        job = self.submit_agent(cfg, request, chat_id=chat_id, ordinal=ordinal)
+        if notify:
+            notify("submitted", f"{job['name']} · {job['host']} · {job['id']}")
+        maximum = timeout_seconds
+        if maximum is None:
+            maximum = _walltime_seconds(job["resources"]["walltime"]) + 300
+        deadline = time.monotonic() + max(1.0, float(maximum))
+        previous = ""
+        while job.get("status") not in TERMINAL_STATES:
+            if time.monotonic() >= deadline:
+                result = self._agent_result(cfg, job)
+                result.update({"status": "detached", "remote_status": job.get("status"),
+                               "message": "The remote job continues, but the Generator stopped waiting."})
+                return result
+            if poll_seconds:
+                time.sleep(poll_seconds)
+            self.refresh(cfg)
+            job = self._public_job(self._job(cfg, job["id"]))
+            if notify and job.get("status") != previous:
+                notify(str(job.get("status")), str(job.get("detail", "")))
+                previous = str(job.get("status"))
+        return self._agent_result(cfg, job)
 
     @staticmethod
     def _map_slurm(value: str) -> str:
@@ -782,7 +1018,8 @@ class Manager:
         return {key: row.get(key) for key in (
             "id", "host_id", "host", "scheduler", "remote_id", "directory",
             "name", "resources", "status", "detail", "submitted", "updated",
-            "elapsed", "exit_code", "connection_error", "inputs")}
+            "elapsed", "exit_code", "connection_error", "inputs", "origin",
+            "chat_id", "requested_outputs")}
 
     def snapshot(self, cfg: Config, notify: Callable[[], None] | None = None) -> dict:
         with self._lock:

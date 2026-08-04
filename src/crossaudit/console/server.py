@@ -26,6 +26,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import secrets
 import shutil
 import subprocess
@@ -35,9 +36,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, quote, urlparse
 
 from ..config import Config, load
-from .. import app_doctor, app_keys, connections, hpc, usage
+from .. import app_doctor, app_keys, connections, hpc, mcp, usage
 from ..controller import StateStore
 from ..errors import ConfigDenial, Denial
+from ..gitio import is_ancestor
 from ..receipt.verify import (admit as admit_receipt, load as load_receipt,
                               verify as verify_receipt)
 from ..router import history as routing_history
@@ -239,6 +241,14 @@ def snapshot(cfg: Config) -> dict:
         if related:
             row["updated"] = max(row["updated"], related[-1]["updated"])
     audits = overview.read_cycles(cfg)
+    escalation_rows = overview.escalations(cfg)
+    cycle_chats = {row["id"]: row["chat_id"] for row in cycles}
+    for row in escalation_rows:
+        # Older controller records predate the durable chat_id field.  The
+        # commit trailer mapping used by the rest of this snapshot still lets
+        # the decision prompt appear in the correct conversation.
+        row["chat_id"] = row.get("chat_id") or cycle_chats.get(
+            row["cycle_id"], chats.LEGACY_CHAT_ID)
     try:
         house = [s.name for s in skills_mod.load(cfg.root)]
     except Denial:
@@ -284,7 +294,10 @@ def snapshot(cfg: Config) -> dict:
         # Remote jobs are scheduler-owned or detached on the SSH host.  This
         # snapshot only reattaches the live UI to their persistent identifiers.
         "compute": hpc.MANAGER.snapshot(cfg, STREAM_CHANGES.notify),
-        "escalations": overview.escalations(cfg),
+        # MCP credentials remain in Keychain; the UI receives only configured
+        # server/tool policy and hashed call-ledger metadata.
+        "mcp": mcp.MANAGER.snapshot(cfg),
+        "escalations": escalation_rows,
         "disputes": overview.disputes(cfg),
         "routing": routing_history(cfg.root / cfg.ledger_dir / "routing.jsonl", 40),
         "generator_stream": gen_stream,
@@ -299,7 +312,8 @@ def snapshot(cfg: Config) -> dict:
 
 
 def start_build(cfg: Config, task: str, *, before_start=None,
-                attachments=None, chat_id: str = "") -> dict:
+                attachments=None, chat_id: str = "",
+                continuation_cycle: str = "") -> dict:
     """Run a build in the background so the browser can watch it happen.
 
     The loop is the same one the CLI runs — the console watches it, it does not
@@ -310,6 +324,20 @@ def start_build(cfg: Config, task: str, *, before_start=None,
 
     from ..cli.build import preflight, resolve_task, run_loop
 
+    if continuation_cycle:
+        if not re.fullmatch(r"[a-f0-9]{16}", continuation_cycle):
+            raise ConfigDenial("the human continuation cycle id is invalid")
+        prior = StateStore(cfg.root / cfg.state_dir / "state.json").cycle(
+            continuation_cycle)
+        if prior is None or prior.get("status") != "OPEN" or not prior.get(
+                "human_reopened"):
+            raise ConfigDenial(
+                "that audit cycle is not waiting for a human-authorized revision")
+        if prior.get("chat_id") and prior["chat_id"] != chat_id:
+            raise ConfigDenial("the audit cycle belongs to a different chat")
+        if not is_ancestor(cfg.root, prior["active_sha"], "HEAD"):
+            raise ConfigDenial(
+                "the project no longer descends from the cycle being revised")
     preflight(cfg)
     resolved = resolve_task(cfg, task.split())
     staged = stage_attachments(cfg, attachments or [])
@@ -336,7 +364,8 @@ def start_build(cfg: Config, task: str, *, before_start=None,
         try:
             code = run_loop(cfg, resolved, attachments=prompt_section(staged),
                             on_step=lambda a, txt, d="": TRACKER.step(a, txt, d),
-                            chat_id=chat_id)
+                            chat_id=chat_id,
+                            continuation_cycle=continuation_cycle)
             TRACKER.finish({0: "passed", 11: "escalated"}.get(code, "blocked"))
         except Denial as exc:
             TRACKER.finish("refused", exc.reason)
@@ -387,7 +416,7 @@ def _guided_task(text: str, choices) -> str:
 
 def say(cfg: Config, text: str, *, attachments=None,
         attachment_consent: bool = False, delivery_choices=None,
-        chat_id: str = "") -> dict:
+        chat_id: str = "", continuation_cycle: str = "") -> dict:
     """Route one sentence and run its lane — the same path `talk` takes.
 
     The sentence submit is the normal action confirmation. Attachments cross a
@@ -404,7 +433,13 @@ def say(cfg: Config, text: str, *, attachments=None,
             "attachment contents require explicit consent for transmission to "
             f"the configured generator ({cfg.generator_vendor or 'unknown vendor'})")
 
-    if delivery_choices is not None:
+    if continuation_cycle:
+        routing = router_mod.Routing(
+            utterance=text, lane="generator", confidence=1.0,
+            reasoning="the owner authorized a correction to an escalated cycle",
+            restated=text, t=int(time.time()), addressed_to="generator",
+            routing_mode="human_continuation", chat_id=chat_id)
+    elif delivery_choices is not None:
         task_text = router_mod.MENTION_RE.sub("", text, count=1).strip()
         routing = router_mod.Routing(
             utterance=text, lane="generator", confidence=1.0,
@@ -437,7 +472,8 @@ def say(cfg: Config, text: str, *, attachments=None,
 
         started = start_build(cfg, routing.restated,
                               before_start=record_before_start,
-                              attachments=prepared, chat_id=chat_id)
+                              attachments=prepared, chat_id=chat_id,
+                              continuation_cycle=continuation_cycle)
         attachments_accepted = bool(started["attachments"])
         suffix = (f"\nattachments: "
                   + ", ".join(item["name"] for item in started["attachments"])) \
@@ -757,14 +793,15 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                 return
             if parsed.path not in {"/api/say", "/api/upload", "/api/projects/create",
                                    "/api/projects/open", "/api/projects/resume",
-                                   "/api/projects/pin", "/api/chats/new",
-                                   "/api/chats/pin",
+                                   "/api/projects/pin", "/api/projects/delete",
+                                   "/api/chats/new", "/api/chats/pin",
+                                   "/api/chats/delete",
                                    "/api/github/connect", "/api/github/check",
                                    "/api/workspace/select", "/api/models/refresh",
                                    "/api/runtime/options", "/api/runtime",
                                    "/api/skills",
                                    "/api/settings", "/api/providers/connect",
-                                   "/api/doctor", "/api/hpc", "/api/admit",
+                                   "/api/doctor", "/api/hpc", "/api/mcp", "/api/admit",
                                    "/api/escalation"}:
                 self._deny(404, "no such action")
                 return
@@ -797,6 +834,18 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                     STREAM_CHANGES.notify()
                     self._send(json.dumps(result).encode(), "application/json")
                     return
+                if parsed.path == "/api/projects/delete":
+                    current = self._config()
+                    root = str(payload.get("root", ""))
+                    if payload.get("action") == "preview":
+                        result = projects.project_deletion_preview(current, root)
+                    elif payload.get("action") == "delete":
+                        result = projects.delete_project(current, root, payload)
+                        STREAM_CHANGES.notify()
+                    else:
+                        raise ConfigDenial("project delete action must be preview or delete")
+                    self._send(json.dumps(result).encode(), "application/json")
+                    return
                 if parsed.path == "/api/chats/new":
                     result = chats.create(
                         self._config(), str(payload.get("title", "New chat")))
@@ -809,6 +858,25 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                         payload.get("pinned") is True)
                     STREAM_CHANGES.notify()
                     self._send(json.dumps({"chat": result}).encode(), "application/json")
+                    return
+                if parsed.path == "/api/chats/delete":
+                    current = self._config()
+                    chat_id = str(payload.get("chat_id", ""))
+                    progress = TRACKER.snapshot()
+                    if (TRACKER.running and isinstance(progress, dict) and
+                            (progress.get("chat_id") or chats.LEGACY_CHAT_ID) == chat_id):
+                        raise ConfigDenial(
+                            "that chat has a task running; wait for it to finish before deleting")
+                    compute = hpc.MANAGER.snapshot(current)
+                    if any((row.get("chat_id") or chats.LEGACY_CHAT_ID) == chat_id and
+                           row.get("status") not in hpc.TERMINAL_STATES
+                           for row in compute.get("jobs", [])):
+                        raise ConfigDenial(
+                            "that chat has remote compute running; cancel or finish it first")
+                    result = chats.delete(current, chat_id)
+                    STREAM_CHANGES.notify()
+                    self._send(json.dumps({"chat": result}).encode(),
+                               "application/json")
                     return
                 if parsed.path == "/api/projects/open":
                     result = projects.open_project(self._config(),
@@ -935,6 +1003,22 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                     STREAM_CHANGES.notify()
                     self._send(json.dumps(result).encode(), "application/json")
                     return
+                if parsed.path == "/api/mcp":
+                    action = str(payload.get("action", ""))
+                    current = self._config()
+                    if action == "register":
+                        result = mcp.MANAGER.register(current, payload)
+                    elif action == "probe":
+                        result = mcp.MANAGER.probe(
+                            current, str(payload.get("server_id", "")))
+                    elif action == "remove":
+                        result = mcp.MANAGER.remove(
+                            current, str(payload.get("server_id", "")))
+                    else:
+                        raise ConfigDenial("unsupported MCP action")
+                    STREAM_CHANGES.notify()
+                    self._send(json.dumps(result).encode(), "application/json")
+                    return
                 if parsed.path == "/api/providers/connect":
                     if os.environ.get("CROSSAUDIT_APP_MODE") != "1":
                         raise ConfigDenial("provider login is available in the macOS app")
@@ -995,11 +1079,14 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                 chat = chats.touch(self._config(),
                                    str(payload.get("chat_id", "")), text)
                 with MODEL_SWITCH_LOCK:
+                    continuation = str(payload.get("continuation_cycle", ""))
+                    continuation_args = ({"continuation_cycle": continuation}
+                                         if continuation else {})
                     result = say(
                         self._config(), text, attachments=attachments,
                         attachment_consent=payload.get("attachment_consent") is True,
                         delivery_choices=payload.get("delivery_choices"),
-                        chat_id=chat["id"])
+                        chat_id=chat["id"], **continuation_args)
                 result["chat_id"] = chat["id"]
                 STREAM_CHANGES.notify()
             except TransferError as exc:

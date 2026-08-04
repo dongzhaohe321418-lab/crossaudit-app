@@ -138,6 +138,28 @@ def test_the_cli_and_the_console_drive_the_same_loop():
     assert "run_loop" in inspect.getsource(server.start_build)
 
 
+def test_human_continuation_is_forced_to_the_generator_and_keeps_its_cycle(
+        cfg, monkeypatch):
+    from crossaudit.cli import talk as talk_mod
+    from crossaudit.console import server
+
+    seen = {}
+
+    def fake_start(_cfg, task, **kwargs):
+        seen.update(task=task, **kwargs)
+        return {"task": task, "attachments": []}
+
+    monkeypatch.setattr(server, "start_build", fake_start)
+    monkeypatch.setattr(talk_mod, "_record_routing", lambda *_a, **_k: None)
+    result = server.say(
+        cfg, "Correct the cited figures.", chat_id="history",
+        continuation_cycle="a" * 16)
+
+    assert result["lane"] == "generator"
+    assert seen["continuation_cycle"] == "a" * 16
+    assert seen["chat_id"] == "history"
+
+
 def test_no_string_literal_in_the_page_script_spans_a_line():
     """A stray real newline inside a JS string kills the whole script, and the
     only visible symptom is the form falling back to a native submit that drops

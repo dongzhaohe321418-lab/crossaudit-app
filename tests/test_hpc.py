@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
@@ -143,6 +144,139 @@ def test_job_inputs_stream_to_remote_inputs_without_loading_into_prompt(cfg, tmp
                for call in transport.calls if call[1].startswith("send_file:"))
 
 
+class CompletedAgentSSH(FakeSSH):
+    def run(self, alias, command, **kwargs):
+        if "squeue -h" in command:
+            self.calls.append((alias, command, None, kwargs.get("timeout", 20), False))
+            return "acct|COMPLETED|00:03|0:0\n"
+        if "find . -type f" in command:
+            self.calls.append((alias, command, None, kwargs.get("timeout", 20), False))
+            return "results/summary.csv\t24\nstdout.log\t20\n"
+        if command.startswith("tail -c") and "results/summary.csv" in command:
+            self.calls.append((alias, command, None, kwargs.get("timeout", 20), False))
+            return "metric,value\nscore,0.97\n"
+        return super().run(alias, command, **kwargs)
+
+
+def test_generator_uses_enabled_host_as_an_automatic_external_calculator(cfg):
+    cfg = replace(cfg, scope_dirs=["experiments"])
+    transport = CompletedAgentSSH()
+    manager = hpc.Manager(transport)
+    host = registered(
+        manager, cfg, agent_enabled=True, agent_max_jobs=2,
+        agent_max_nodes=1, agent_max_cpus=8, agent_max_gpus=1,
+        agent_max_memory="32G", agent_max_walltime="01:00:00",
+        agent_partition="gpu", agent_account="lab-123", agent_qos="normal")
+    source = cfg.root / cfg.scope_dirs[0] / "demo" / "dataset.csv"
+    source.parent.mkdir(parents=True, exist_ok=True)
+    source.write_text("x,y\n1,2\n")
+    events = []
+
+    result = manager.run_agent(cfg, {
+        "host_id": host["id"], "name": "analyze dataset",
+        "script": "mkdir -p results; python analyze.py inputs/dataset.csv > results/summary.csv",
+        "inputs": [source.relative_to(cfg.root).as_posix()],
+        "outputs": ["results/summary.csv"],
+        "resources": {"nodes": 1, "cpus": 4, "gpus": 1,
+                      "memory": "16G", "walltime": "00:20:00"},
+    }, chat_id="history", notify=lambda state, detail: events.append((state, detail)),
+       poll_seconds=0, timeout_seconds=2)
+
+    assert manager.agent_context(cfg)[0]["host_id"] == host["id"]
+    assert result["status"] == "completed"
+    assert result["outputs"][0]["content"].endswith("score,0.97\n")
+    job = manager.snapshot(cfg)["jobs"][0]
+    assert job["origin"] == "generator" and job["chat_id"] == "history"
+    assert job["resources"]["partition"] == "gpu"
+    assert events[0][0] == "submitted" and events[-1][0] == "completed"
+
+
+def test_generator_compute_policy_refuses_excess_resources_before_upload(cfg):
+    transport = FakeSSH()
+    manager = hpc.Manager(transport)
+    host = registered(
+        manager, cfg, agent_enabled=True, agent_max_jobs=1,
+        agent_max_nodes=1, agent_max_cpus=4, agent_max_gpus=0,
+        agent_max_memory="8G", agent_max_walltime="00:30:00")
+    before = len(transport.calls)
+
+    with pytest.raises(ConfigDenial, match="allows 4"):
+        manager.submit_agent(cfg, {
+            "host_id": host["id"], "script": "true", "inputs": [], "outputs": [],
+            "resources": {"nodes": 1, "cpus": 32, "gpus": 0,
+                          "memory": "4G", "walltime": "00:10:00"},
+        })
+    assert len(transport.calls) == before
+
+
+def test_generator_compute_refuses_inputs_outside_work_scope_and_symlink_escape(
+        cfg):
+    cfg = replace(cfg, scope_dirs=["experiments"])
+    transport = FakeSSH()
+    manager = hpc.Manager(transport)
+    host = registered(manager, cfg, agent_enabled=True)
+    secret = cfg.root / "crossaudit.yml"
+    secret.write_text("secret: do-not-stage\n")
+    work = cfg.root / "experiments"
+    work.mkdir(exist_ok=True)
+    link = work / "looks-like-data.yml"
+    link.symlink_to(secret)
+    before = len(transport.calls)
+
+    with pytest.raises(ConfigDenial, match="outside project work scope"):
+        manager.submit_agent(cfg, {
+            "host_id": host["id"], "script": "true",
+            "inputs": ["crossaudit.yml"], "outputs": [],
+        })
+    with pytest.raises(ConfigDenial, match="resolves outside project work scope"):
+        manager.submit_agent(cfg, {
+            "host_id": host["id"], "script": "true",
+            "inputs": ["experiments/looks-like-data.yml"], "outputs": [],
+        })
+    assert len(transport.calls) == before
+
+
+def test_generator_compute_refuses_output_traversal_duplicates_and_job_overrun(cfg):
+    transport = FakeSSH()
+    manager = hpc.Manager(transport)
+    host = registered(manager, cfg, agent_enabled=True, agent_max_jobs=1)
+    request = {"host_id": host["id"], "script": "true", "inputs": []}
+    before = len(transport.calls)
+
+    with pytest.raises(ConfigDenial, match="safe relative path"):
+        manager.submit_agent(cfg, {**request, "outputs": ["../../secret"]})
+    with pytest.raises(ConfigDenial, match="must be unique"):
+        manager.submit_agent(cfg, {
+            **request, "outputs": ["results/value.csv", "RESULTS/VALUE.CSV"]})
+    with pytest.raises(ConfigDenial, match="jobs-per-task limit"):
+        manager.submit_agent(cfg, {**request, "outputs": []}, ordinal=2)
+    assert len(transport.calls) == before
+
+
+def test_generator_compute_has_no_crossaudit_file_count_quota(cfg):
+    cfg = replace(cfg, scope_dirs=["experiments"])
+    manager = hpc.Manager(FakeSSH())
+    work = cfg.root / "experiments" / "many-inputs"
+    work.mkdir(parents=True, exist_ok=True)
+    paths = []
+    for number in range(70):
+        path = work / f"sample-{number:02d}.csv"
+        path.write_text(f"value\n{number}\n")
+        paths.append(path.relative_to(cfg.root).as_posix())
+
+    staged = manager._agent_inputs(cfg, paths)
+
+    assert len(staged) == 70
+    assert staged[0].name == "sample-00.csv"
+    assert staged[-1].digest
+
+
+def test_disabled_host_is_invisible_to_generator(cfg):
+    manager = hpc.Manager(FakeSSH())
+    registered(manager, cfg)
+    assert manager.agent_context(cfg) == []
+
+
 def test_connection_loss_does_not_mark_remote_job_failed(cfg):
     transport = FakeSSH()
     manager = hpc.Manager(transport)
@@ -246,6 +380,8 @@ def test_compute_ui_exposes_guided_hosts_jobs_and_remote_outputs():
         "I approve this remote execution", "Remote-owned execution",
         "Closing CrossAudit will not stop it", "data-hpc-logs",
         "data-hpc-outputs", "/api/hpc/file", "followComputeLogs",
+        "Allow Generator to use this host automatically",
+        "Generator compute policy", "Generator tool",
     ):
         assert text in PAGE
     assert "StrictHostKeyChecking=no" not in PAGE
