@@ -24,9 +24,9 @@ import contextlib
 import io
 import os
 import re
-from pathlib import Path
 
 from .. import generator as gen_mod
+from .. import document_export
 from .. import hpc
 from .. import mcp
 from .. import skills as skills_mod
@@ -36,59 +36,37 @@ from ..dcl import describe as describe_checks
 from ..errors import (EXIT_ESCALATED, EXIT_OK, ConfigDenial, Denial,
                       ProviderDenial)
 from ..gitio import git, is_repo
-from ..providers import get_provider
-from ..providers.registry import NEEDS_KEY
+from ..providers import resilience as provider_resilience
 from ..usage import record_completion
 from .main import cmd_run
-from .talk import _routing_path
 
 TASK_FILE = "TASK.md"
 MAX_AGENT_JOBS_PER_BUILD = 20
 MAX_MCP_CALLS_PER_BUILD = 40
 
 
-def _generator_complete(cfg: Config, allow_custom: bool):
+def _generator_complete(cfg: Config, allow_custom: bool, on_event=None):
     """A `complete(system, prompt)` bound to the generator role.
 
     The generator role needs its own credential; falling back to the auditor's
     would put one key behind both ends of a loop whose whole premise is that the
     ends are separate.
     """
-    if (cfg.generator_vendor or "").lower() == "human":
-        raise ConfigDenial(
-            "this project selected a human generator: make and commit the change, "
-            "then run `crossaudit run`")
-    provider = (
-        os.environ.get("CROSSAUDIT_GENERATOR_PROVIDER")
-        or cfg.generator_provider
-        or ("anthropic" if (cfg.generator_vendor or "").lower() == "anthropic"
-            else "openai_compat")
-    )
-    model = os.environ.get("CROSSAUDIT_GENERATOR_MODEL") or cfg.generator_model or ""
-    if not model:
-        raise ConfigDenial(
-            "the generator's model is not set: export CROSSAUDIT_GENERATOR_MODEL "
-            "(and CROSSAUDIT_GENERATOR_PROVIDER if it is not the vendor default)")
-    key_env = cfg.generator_key_env or "CROSSAUDIT_GENERATOR_KEY"
-    if NEEDS_KEY.get(provider, True) and not os.environ.get(key_env, "").strip():
-        raise ConfigDenial(
-            f"the generator has no key in ${key_env}. The auditor's key is not "
-            f"reused: one credential behind both ends would collapse the "
-            f"separation the loop depends on")
-    base_url = (os.environ.get("CROSSAUDIT_GENERATOR_BASE_URL")
-                or cfg.generator_base_url or None)
-    fn = get_provider(provider)
+    primary = provider_resilience.generator_role(cfg)
 
     def complete(*, system: str, prompt: str):
-        reply = fn(model=model, system=system, prompt=prompt, key_env=key_env,
-                   base_url=base_url, allow_custom=allow_custom,
-                   reasoning_effort=cfg.generator_reasoning_effort)
+        reply = provider_resilience.complete(
+            cfg, "generator", primary, system=system, prompt=prompt,
+            allow_custom=allow_custom, on_event=on_event)
+        route = provider_resilience.route_from_reply(reply, primary)
+        complete.last_route = route
         record_completion(root=cfg.root, state_dir=cfg.state_dir, role="generator",
-                          phase="generation", vendor=cfg.generator_vendor or "unknown",
-                          provider=provider, model=model, reply=reply, system=system,
-                          prompt=prompt, base_url=base_url)
+                          phase="generation", vendor=route["vendor"],
+                          provider=route["provider"], model=route["model"], reply=reply,
+                          system=system, prompt=prompt, base_url=route.get("base_url"))
         return reply
 
+    complete.last_route = None
     return complete
 
 
@@ -107,7 +85,9 @@ def _current_work(cfg: Config) -> dict[str, str]:
                     out[p.relative_to(cfg.root).as_posix()] = p.read_text(
                         encoding="utf-8")
                 except UnicodeDecodeError:
-                    continue
+                    rendered = document_export.current_document_text(p)
+                    if rendered is not None:
+                        out[p.relative_to(cfg.root).as_posix()] = rendered
     return out
 
 
@@ -156,7 +136,7 @@ def run_loop(cfg, task: str, *, on_step=None, attachments: str = "",
     if chat_id and not re.fullmatch(r"(?:history|[a-f0-9]{16})", chat_id):
         raise ConfigDenial("chat id is invalid")
     allow_custom = bool(os.environ.get("CROSSAUDIT_ALLOW_CUSTOM_ENDPOINT"))
-    complete = _generator_complete(cfg, allow_custom)
+    complete = _generator_complete(cfg, allow_custom, report)
     constitution = (cfg.root / cfg.constitution).read_text(encoding="utf-8")
     store = StateStore(cfg.root / cfg.state_dir / "state.json")
     house = skills_mod.load(cfg.root)
@@ -259,7 +239,22 @@ def run_loop(cfg, task: str, *, on_step=None, attachments: str = "",
                 break
             continue
 
-        written = gen_mod.apply(work, cfg.root)
+        try:
+            document_export.validate_export_work(cfg.root, work.files, task)
+            written = gen_mod.apply(work, cfg.root)
+            if document_export.parse_export_task(task) is not None:
+                report("generator", "rendering final document locally")
+            written = document_export.render_export(cfg.root, written, task)
+        except ProviderDenial as exc:
+            report("generator", "document export refused", exc.reason)
+            findings = ("[BLOCKER] The local document export boundary refused the "
+                        f"last round: {exc.reason}\nReturn exactly one valid "
+                        f"*{document_export.SOURCE_SUFFIX} Markdown source and try again.")
+            if round_no == cfg.max_rounds:
+                termination_reason = (
+                    f"document export failed in round {round_no}: {exc.reason[:400]}")
+                break
+            continue
         report("generator", work.summary, ", ".join(written[:4]))
         if work.notes:
             report("generator", "note", work.notes[:200])
@@ -277,6 +272,11 @@ def run_loop(cfg, task: str, *, on_step=None, attachments: str = "",
         try:
             commit_args = ["commit", "-q", "-m",
                            f"{work.summary} (round {round_no})"]
+            route = getattr(complete, "last_route", None)
+            if isinstance(route, dict):
+                commit_args += ["-m", ("CrossAudit-Generator: "
+                                f"{route['vendor']}/{route['provider']}:{route['model']}; "
+                                f"fallback={str(bool(route.get('fallback'))).lower()}")]
             if chat_id:
                 # A commit trailer associates durable work/audit evidence with
                 # its UI chat without putting conversation metadata in files.
@@ -296,6 +296,7 @@ def run_loop(cfg, task: str, *, on_step=None, attachments: str = "",
         buffer = io.StringIO()
         run_args = _Args()
         run_args.continue_cycle = build_cycle_id
+        run_args.on_step = report
         with contextlib.redirect_stdout(buffer):
             code = cmd_run(run_args)
         inner = buffer.getvalue()

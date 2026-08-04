@@ -18,10 +18,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping
 
-from ..config import Config, heterogeneity
+from ..config import Config, Role, heterogeneity
 from ..dcl import run_checks
 from ..errors import ConfigDenial, Denial, ProviderDenial
-from ..providers import get_provider
+from ..providers import resilience as provider_resilience
 from ..providers.registry import NON_EVIDENTIAL
 from ..usage import record_completion
 from . import prompt as prompt_mod
@@ -49,12 +49,18 @@ def dcl_source_digest() -> str:
     for p in sorted(root.rglob("*.py")):
         h.update(p.relative_to(root).as_posix().encode())
         h.update(p.read_bytes())
+    # The mandatory document check delegates container parsing and semantic
+    # recovery to this module; bind that implementation into the DCL digest.
+    import crossaudit.document_export as document_export
+    h.update(b"document_export.py")
+    h.update(Path(document_export.__file__).read_bytes())
     return h.hexdigest()
 
 
 def render_report(*, cfg: Config, sha: str, round_: int, verdict: str, dcl: dict,
                   reply: dict | None, invalid: str | None, constitution_commit: str,
-                  provider: str, model: str) -> str:
+                  provider: str, model: str, vendor: str | None = None,
+                  reasoning_effort: str | None = None) -> str:
     lines = [
         f"# Audit Report — {cfg.science_repo}@{sha[:12]}",
         "",
@@ -63,8 +69,8 @@ def render_report(*, cfg: Config, sha: str, round_: int, verdict: str, dcl: dict
         f"| verdict | **{verdict}** |",
         f"| round | {round_} |",
         f"| constitution | `{constitution_commit[:12]}` |",
-        f"| auditor | `{provider}:{model}` (vendor {cfg.auditor.vendor}; effort "
-        f"{cfg.auditor.reasoning_effort or 'provider-default'}) |",
+        f"| auditor | `{provider}:{model}` (vendor {vendor or cfg.auditor.vendor}; effort "
+        f"{reasoning_effort or 'provider-default'}) |",
         f"| deterministic layer | {dcl['total_hard_failures']} hard failure(s) |",
         "",
         "## Deterministic findings",
@@ -74,8 +80,10 @@ def render_report(*, cfg: Config, sha: str, round_: int, verdict: str, dcl: dict
         for f in dcl["findings"]:
             lines.append(f"### [{f['severity']}] {f['rule']} — {f['artifact']}")
             if f.get("check"):
-                lines.append(f"Machine check: `{f['check']}` (configured in "
-                             "`crossaudit.yml`; not a Constitution amendment)")
+                origin = ("mandatory runtime document-integrity boundary"
+                          if f["check"] == "document-export-integrity" else
+                          "configured in `crossaudit.yml`; not a Constitution amendment")
+                lines.append(f"Machine check: `{f['check']}` ({origin})")
             lines.append(f"{f['observation']}")
             lines.append("")
     else:
@@ -104,7 +112,8 @@ def run_audit(*, cfg: Config, sha: str, round_: int, files: Mapping[str, bytes],
               notes: list[str], constitution: str, constitution_commit: str,
               task: str = "",
               escalation_lock: bool = False, offline: bool = False,
-              allow_custom_endpoint: bool = False, retention: str = "sealed"
+              allow_custom_endpoint: bool = False, retention: str = "sealed",
+              on_event=None
               ) -> AuditOutcome:
     dcl = run_checks(files, cfg.checks, notes, cfg.plugins).as_dict()
     prompt, bounded, prompt_sha = prompt_mod.build(
@@ -113,25 +122,31 @@ def run_audit(*, cfg: Config, sha: str, round_: int, files: Mapping[str, bytes],
     invalid: str | None = None
     integrity = "OK"
     exchange: dict = {"mode": "none"}
+    actual = cfg.auditor
 
     if not offline:
         ok, why = heterogeneity(cfg)
         if not ok and cfg.generator_vendor:
             raise ConfigDenial(why)                   # a same-vendor pair is not CrossAudit
-        complete = get_provider(cfg.auditor.provider)
         try:
-            raw = complete(model=cfg.auditor.model, system=prompt_mod.SYSTEM,
-                           prompt=prompt, key_env=cfg.auditor.key_env,
-                           base_url=cfg.auditor.base_url,
-                           allow_custom=allow_custom_endpoint,
-                           reasoning_effort=cfg.auditor.reasoning_effort)
+            raw = provider_resilience.complete(
+                cfg, "auditor", cfg.auditor, system=prompt_mod.SYSTEM,
+                prompt=prompt, allow_custom=allow_custom_endpoint,
+                on_event=on_event)
+            route = provider_resilience.route_from_reply(raw, cfg.auditor)
             record_completion(root=cfg.root, state_dir=cfg.state_dir, role="auditor",
-                              phase="audit", vendor=cfg.auditor.vendor,
-                              provider=cfg.auditor.provider, model=cfg.auditor.model,
+                              phase="audit", vendor=route["vendor"],
+                              provider=route["provider"], model=route["model"],
                               reply=raw, system=prompt_mod.SYSTEM, prompt=prompt,
-                              base_url=cfg.auditor.base_url)
-            exchange = {"mode": retention, "provider": cfg.auditor.provider,
-                        "reasoning_effort": cfg.auditor.reasoning_effort or "provider-default",
+                              base_url=route.get("base_url"))
+            actual = Role(provider=route["provider"], model=route["model"],
+                          vendor=route["vendor"], key_env=route["key_env"],
+                          base_url=route.get("base_url"),
+                          reasoning_effort=route.get("reasoning_effort"))
+            exchange = {"mode": retention, "provider": actual.provider,
+                        "vendor": actual.vendor, "model": actual.model,
+                        "fallback": bool(route.get("fallback")),
+                        "reasoning_effort": actual.reasoning_effort or "provider-default",
                         **raw.commitments(retention)}
             parsed, perr = parse_reply(raw.text)
             invalid = perr or validate_reply(parsed, known_rules(constitution))
@@ -158,14 +173,16 @@ def run_audit(*, cfg: Config, sha: str, round_: int, files: Mapping[str, bytes],
     else:
         verdict = "DCL_ONLY"
 
-    if cfg.auditor.provider in NON_EVIDENTIAL and verdict == "PASS":
+    if actual.provider in NON_EVIDENTIAL and verdict == "PASS":
         # A fixture is not an audit; it may exercise the loop, never bless a commit.
         integrity = "NON_EVIDENTIAL_PROVIDER"
 
     report = render_report(cfg=cfg, sha=sha, round_=round_, verdict=verdict, dcl=dcl,
                            reply=reply, invalid=invalid,
                            constitution_commit=constitution_commit,
-                           provider=cfg.auditor.provider, model=cfg.auditor.model)
+                           provider=actual.provider, model=actual.model,
+                           vendor=actual.vendor,
+                           reasoning_effort=actual.reasoning_effort)
     return AuditOutcome(verdict=verdict, dcl=dcl, model_reply=reply,
                         invalid_reason=invalid, integrity=integrity, exchange=exchange,
                         prompt_sha256=prompt_sha, report=report)

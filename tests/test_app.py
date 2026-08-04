@@ -62,6 +62,25 @@ def test_settings_response_reports_presence_but_never_secret(monkeypatch):
     assert "private-openai" not in encoded and "private-anthropic" not in encoded
 
 
+def test_backup_key_uses_an_independent_write_only_keychain_slot(monkeypatch):
+    calls = []
+    monkeypatch.delenv("CROSSAUDIT_OPENAI_BACKUP_KEY", raising=False)
+
+    def run(args, **kwargs):
+        calls.append((args, kwargs))
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(app_keys.subprocess, "run", run)
+    monkeypatch.setattr(app_keys, "_security", lambda: "/usr/bin/security")
+    monkeypatch.setattr(app_keys, "_account", lambda: "tester")
+    result = app_keys.apply({"openai_backup_key": "backup-only-secret"})
+
+    assert any(str(item).endswith(".openai.backup") for item in calls[0][0])
+    assert "backup-only-secret" not in calls[0][0]
+    assert result["providers"]["openai"]["backup_configured"] is True
+    assert "backup-only-secret" not in json.dumps(result)
+
+
 def test_settings_exposes_every_first_party_provider_without_a_secret(monkeypatch):
     for vendor, spec in SPECS.items():
         monkeypatch.setenv(spec.key_env, f"private-{vendor}")

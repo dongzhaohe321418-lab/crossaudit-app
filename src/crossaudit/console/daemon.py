@@ -348,12 +348,50 @@ def _zombie(pid: int) -> bool:
 
 
 # ------------------------------------------------------- interrupted builds
-def mark_build(cfg: Config, task: str, chat_id: str = "") -> None:
+def mark_build(cfg: Config, task: str, chat_id: str = "",
+               continuation_cycle: str = "") -> None:
     p = flag_path(cfg)
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps({"task": task, "chat_id": chat_id,
+                             "continuation_cycle": continuation_cycle,
+                             "phase": "starting", "detail": "",
                              "started": int(time.time()), "pid": os.getpid()}),
                  encoding="utf-8")
+
+
+def update_build(cfg: Config, phase: str, detail: str = "") -> None:
+    """Checkpoint the visible phase; no prompt, response, or credential is stored."""
+    p = flag_path(cfg)
+    try:
+        row = json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError):
+        return
+    if not isinstance(row, dict) or row.get("pid") != os.getpid():
+        return
+    row.update(phase=str(phase)[:40], detail=str(detail)[:300],
+               updated=int(time.time()))
+    temp = p.with_suffix(".tmp")
+    try:
+        temp.write_text(json.dumps(row), encoding="utf-8")
+        temp.replace(p)
+    except OSError:
+        temp.unlink(missing_ok=True)
+
+
+def mark_failed(cfg: Config, phase: str, detail: str) -> None:
+    """Keep a durable, immediately recoverable marker for a caught worker crash."""
+    update_build(cfg, phase, detail)
+    p = flag_path(cfg)
+    try:
+        row = json.loads(p.read_text(encoding="utf-8"))
+        if isinstance(row, dict):
+            row.update(pid=0, failed=True, phase=phase, detail=detail[:300],
+                       updated=int(time.time()))
+            temp = p.with_suffix(".tmp")
+            temp.write_text(json.dumps(row), encoding="utf-8")
+            temp.replace(p)
+    except (OSError, ValueError, TypeError):
+        return
 
 
 def unmark_build(cfg: Config) -> None:

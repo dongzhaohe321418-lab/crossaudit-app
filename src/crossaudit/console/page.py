@@ -112,8 +112,12 @@ button{cursor:pointer}
 .runtime-button{height:29px;border:1px solid var(--line);border-radius:8px;background:var(--surface);
   color:var(--muted);padding:0 9px;font-size:10.5px;white-space:nowrap}.runtime-button:hover{
   background:var(--hover);color:var(--text)}
-.thread{flex:1;overflow:auto;min-height:0;scrollbar-gutter:stable}
-.thread-inner{width:min(760px,calc(100% - 48px));margin:0 auto;padding:28px 0 120px}
+.thread{flex:1;overflow:auto;min-height:0;scrollbar-gutter:stable;overscroll-behavior:contain;
+  scroll-padding-bottom:var(--composer-clearance,180px);scrollbar-width:thin;scrollbar-color:var(--line-strong) transparent}
+.thread::-webkit-scrollbar{width:10px}.thread::-webkit-scrollbar-track{background:transparent}
+.thread::-webkit-scrollbar-thumb{background:var(--line-strong);border:3px solid transparent;border-radius:10px;background-clip:padding-box}
+.thread-inner{width:min(760px,calc(100% - 48px));margin:0 auto;
+  padding:28px 0 calc(var(--composer-clearance,180px) + 28px)}
 .welcome{padding:56px 20px 26px;text-align:center}.welcome-mark{width:38px;height:38px;
   margin:0 auto 15px;border-radius:12px;background:var(--inverse);color:var(--inverse-text);display:grid;
   place-items:center;font-size:17px}.welcome h2{font-size:19px;margin:0;letter-spacing:-.025em}
@@ -141,17 +145,36 @@ button{cursor:pointer}
 .output-files{margin-top:11px}.output-head{display:flex;align-items:center;gap:7px;margin-bottom:6px;
   color:var(--muted);font-size:10.5px;font-weight:600}.output-count{font-weight:400;color:var(--faint)}
 .artifact-list{display:grid;gap:6px}.output-file{min-width:0;border:1px solid var(--line);
-  border-radius:9px;padding:8px 9px;display:flex;align-items:center;gap:9px;background:var(--panel);
+  border-radius:9px;padding:0;display:flex;align-items:stretch;gap:0;background:var(--panel);
   color:inherit;text-decoration:none}.output-file:hover{border-color:var(--line-strong);background:var(--surface-2)}
 .output-file.unavailable{opacity:.62}.output-file.unavailable:hover{border-color:var(--line);background:var(--panel)}
+.artifact-main{display:flex;align-items:center;gap:9px;min-width:0;flex:1;padding:8px 9px;
+  color:inherit;text-decoration:none;border:0;background:transparent;text-align:left;cursor:pointer}
+.artifact-main:hover{color:inherit}.artifact-actions{display:flex;align-items:center;padding:5px;border-left:1px solid var(--line)}
 .artifact-icon{width:31px;height:31px;flex:none;border-radius:7px;background:var(--blue-bg);color:var(--blue);
   display:grid;place-items:center;font-size:8.5px;font-weight:700;letter-spacing:.02em}
 .artifact-copy{min-width:0}.artifact-name{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;
   white-space:nowrap;font:11.5px ui-monospace,SFMono-Regular,Menlo,monospace}
 .artifact-context{display:block;font-size:9.5px;color:var(--faint);margin-top:2px;overflow:hidden;
-  text-overflow:ellipsis;white-space:nowrap}.artifact-action{margin-left:auto;flex:none;color:var(--muted);
-  font-size:14px}.output-more{margin-top:6px;padding:2px 0;border:0;background:transparent;color:var(--blue);
+  text-overflow:ellipsis;white-space:nowrap}.artifact-action{width:28px;height:28px;display:grid;place-items:center;
+  flex:none;color:var(--muted);font-size:13px;text-decoration:none;border-radius:6px}.artifact-action:hover{background:var(--hover);color:var(--text)}
+.output-more{margin-top:6px;padding:2px 0;border:0;background:transparent;color:var(--blue);
   font:inherit;font-size:10.5px;cursor:pointer}.output-more:hover{text-decoration:underline}
+.preview-wizard{width:min(1040px,calc(100% - 32px));height:min(820px,calc(100vh - 40px));
+  display:flex;flex-direction:column;overflow:hidden}.preview-wizard .wizard-head{flex:none}
+.preview-body{min-height:0;flex:1;overflow:auto;background:var(--surface-2);padding:18px;display:grid;place-items:center}
+.preview-loading,.preview-unavailable{color:var(--muted);font-size:12px;text-align:center;max-width:560px;line-height:1.6}
+.preview-frame{width:100%;height:100%;min-height:520px;border:1px solid var(--line);border-radius:9px;background:#fff}
+.preview-image{display:block;max-width:100%;max-height:100%;object-fit:contain;border-radius:7px;box-shadow:var(--shadow)}
+.preview-code,.preview-document,.preview-markdown{width:min(820px,100%);min-height:100%;margin:0;padding:28px 32px;
+  border:1px solid var(--line);border-radius:9px;background:var(--surface);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.preview-code{white-space:pre-wrap;word-break:break-word;font:11.5px/1.62 ui-monospace,SFMono-Regular,Menlo,monospace}
+.preview-document{white-space:pre-wrap;word-break:break-word;font:13.5px/1.7 ui-serif,Georgia,serif}
+.preview-markdown{font-size:13.5px;line-height:1.65}.preview-markdown h1,.preview-markdown h2,.preview-markdown h3{line-height:1.25}
+.preview-markdown pre{overflow:auto;padding:12px;border-radius:7px;background:var(--surface-2)}
+.preview-markdown code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.preview-markdown table{border-collapse:collapse;width:100%}
+.preview-markdown th,.preview-markdown td{border:1px solid var(--line);padding:6px 8px;text-align:left}.preview-markdown blockquote{margin-left:0;padding-left:12px;border-left:3px solid var(--line-strong);color:var(--muted)}
+.preview-note{min-height:34px;padding:9px 18px;border-top:1px solid var(--line);color:var(--muted);font-size:10.5px;background:var(--panel)}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
   clip:rect(0,0,0,0);white-space:nowrap;border:0}
 .view-heading{padding:4px 0 22px}.view-heading h2{font-size:18px;margin:0;
@@ -269,6 +292,8 @@ button{cursor:pointer}
 .audit-evidence-head h3{margin:0;font-size:13px}.audit-evidence-head span{color:var(--faint);font-size:10px}
 .interrupted{margin-bottom:20px;padding:10px 12px;background:var(--amber-bg);color:var(--amber);
   border-radius:9px;font-size:12px;display:none}.interrupted.on{display:block}
+.interrupted-actions{display:flex;gap:7px;margin-top:9px}.interrupted-actions button{height:29px;border-radius:7px;
+  border:1px solid currentColor;background:var(--surface);color:var(--amber);padding:0 10px;cursor:pointer}
 
 .composer-wrap{position:absolute;left:var(--sidebar);right:var(--inspector);bottom:0;
   padding:28px 22px 16px;background:linear-gradient(transparent,var(--surface) 30%);z-index:4}
@@ -422,6 +447,10 @@ textarea::placeholder{color:var(--faint)}.compose-button{border:0;background:tra
   .decision-options{grid-template-columns:1fr}
   .usage-roles{grid-template-columns:1fr}.usage-cards{grid-template-columns:1fr 1fr}.usage-card-value{font-size:18px}
   .usage-bars{gap:4px;padding-left:6px;padding-right:6px}.usage-day-value{display:none}
+  .preview-wizard{width:100%;height:100vh;max-height:none;border-radius:0}.preview-body{padding:8px}
+  .preview-code,.preview-document,.preview-markdown{padding:18px 16px;border-radius:7px}.preview-frame{min-height:420px}
+  .hpc-connection-grid,.hpc-limit-grid{grid-template-columns:1fr}.hpc-connection-grid .field:nth-child(2){grid-column:auto}
+  .hpc-setup-section{padding:12px}.hpc-host-wizard .wizard-head p{max-width:280px}
 }
 @media(max-width:380px){
   .version{display:none}.brand{gap:7px}.thread-title p{display:none}.status{padding:4px 6px}
@@ -521,6 +550,11 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
   font-size:10.5px;line-height:1.5}.runtime-note b{color:var(--text)}.effort-help{display:block;
   color:var(--faint);font-size:10px;margin-top:6px;line-height:1.4}.runtime-saved{color:var(--green)}
 .model-actions{display:flex;justify-content:flex-end;margin-top:6px}.model-actions button{height:27px;font-size:10px}
+.fallback-list{display:grid;gap:8px}.fallback-row{display:grid;grid-template-columns:130px minmax(0,1fr) 92px 28px;
+  gap:7px;align-items:center}.fallback-row select,.fallback-row input{width:100%;border:1px solid var(--line-strong);border-radius:7px;
+  background:var(--surface);padding:8px;font-size:10px}.fallback-remove{height:30px;border:1px solid var(--line);
+  border-radius:7px;background:var(--surface);color:var(--muted);cursor:pointer}.fallback-empty{color:var(--faint);
+  font-size:10px;padding:8px 0}.guardrail-state{font-size:10px;color:var(--muted);margin-top:8px}
 .custom-model.off{display:none}
 .github-box{border:1px solid var(--line);border-radius:10px;padding:14px;background:var(--panel)}
 .toggle-line{display:flex;align-items:flex-start;gap:10px}.toggle-line input{margin-top:3px}.toggle-line b{display:block}
@@ -616,6 +650,26 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
   border-radius:7px;padding:7px 8px;color:var(--text);text-decoration:none;font-size:9.5px}.hpc-output span:last-child{margin-left:auto;color:var(--faint)}
 .hpc-confirm{display:flex;align-items:flex-start;gap:9px;padding:10px;border:1px solid var(--amber);border-radius:8px;
   background:var(--amber-bg);font-size:10px;color:var(--muted)}.hpc-confirm input{margin-top:2px}.hpc-confirm b{display:block;color:var(--amber)}
+.hpc-host-wizard{width:min(820px,100%);overflow:hidden;display:flex;flex-direction:column}
+.hpc-host-wizard .wizard-body{overflow:auto}.hpc-host-intro{display:flex;align-items:flex-start;gap:10px;padding:11px 12px;
+  margin-bottom:14px;border-radius:10px;background:var(--blue-bg);color:var(--muted);font-size:10.5px;line-height:1.5}
+.hpc-host-intro b{display:block;color:var(--text);font-size:11px;margin-bottom:2px}.hpc-host-intro-icon{color:var(--blue);font-size:14px}
+.hpc-setup-section{border:1px solid var(--line);border-radius:11px;background:var(--panel);padding:15px;margin-bottom:12px}
+.hpc-setup-section:last-child{margin-bottom:0}.hpc-section-head{display:grid;grid-template-columns:25px minmax(0,1fr);gap:9px;
+  align-items:start;margin-bottom:13px}.hpc-section-index{width:24px;height:24px;border-radius:7px;background:var(--surface-2);
+  color:var(--muted);display:grid;place-items:center;font-size:9.5px;font-weight:750}.hpc-section-head b{display:block;font-size:12px}
+.hpc-section-head p{margin:2px 0 0;color:var(--muted);font-size:10px;line-height:1.45}
+.hpc-connection-grid{display:grid;grid-template-columns:1fr 1.4fr 110px;gap:11px}.hpc-connection-grid .field.full{grid-column:1/-1}
+.hpc-permission{display:flex;align-items:flex-start;gap:10px;padding:11px 12px;border:1px solid var(--line-strong);
+  border-radius:9px;background:var(--surface);cursor:pointer}.hpc-permission:has(input:checked){border-color:var(--blue);background:var(--blue-bg)}
+.hpc-permission input{margin-top:2px}.hpc-permission b{display:block;font-size:11px;color:var(--text)}.hpc-permission small{display:block;
+  margin-top:3px;color:var(--muted);font-size:10px;line-height:1.45}.hpc-policy{margin-top:13px;padding-top:13px;border-top:1px solid var(--line)}
+.hpc-policy.off{display:none}.hpc-policy-title{display:flex;align-items:baseline;gap:7px;margin-bottom:9px;font-size:11px;font-weight:650}
+.hpc-policy-title span{color:var(--faint);font-size:9.5px;font-weight:400}.hpc-limit-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+.hpc-advanced{margin-top:10px;border-top:1px solid var(--line);padding-top:10px}.hpc-advanced summary{cursor:pointer;color:var(--muted);
+  font-size:10.5px;user-select:none}.hpc-advanced .hpc-limit-grid{margin-top:10px}.hpc-host-key{display:flex;align-items:flex-start;gap:9px;
+  font-size:10px;color:var(--muted)}.hpc-host-key input{margin-top:2px}.hpc-host-key b{display:block;color:var(--text);font-size:10.5px}
+.hpc-host-key small{display:block;margin-top:2px;line-height:1.45}.hpc-host-wizard .wizard-foot{flex:none;background:var(--surface)}
 .hpc-input-list{display:flex;gap:5px;flex-wrap:wrap;margin-top:7px}.hpc-input{display:inline-flex;align-items:center;gap:5px;
   max-width:100%;border:1px solid var(--line);border-radius:7px;padding:4px 6px;color:var(--muted);font-size:9.5px}
 .hpc-input b{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)}
@@ -629,7 +683,8 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
 .mcp-call small{color:var(--faint);font-size:9px}.skill-row{padding:11px 12px;border-bottom:1px solid var(--line)}
 .skill-row:last-child{border-bottom:0}.skill-row b{font-size:11px}.skill-row p{margin:4px 0 0;color:var(--muted);font-size:9.5px}
 .tools-grid .compute-section:last-child{grid-column:1/-1}
-@media(max-width:840px){.compute-grid{grid-template-columns:1fr}.compute-toolbar{flex-wrap:wrap}}
+@media(max-width:840px){.compute-grid{grid-template-columns:1fr}.compute-toolbar{flex-wrap:wrap}
+  .hpc-connection-grid{grid-template-columns:1fr 1fr}.hpc-connection-grid .field:nth-child(2){grid-column:1/-1}.hpc-limit-grid{grid-template-columns:1fr 1fr}}
 @media(max-width:760px){.hub-bar{padding:0 14px}.hub-main{width:calc(100% - 24px);padding-top:26px}
   .hub-heading{align-items:flex-start;flex-direction:column}.hub-summary{margin-left:0}.project-row{grid-template-columns:minmax(0,1fr) 58px 62px 28px 28px 16px;gap:8px}
   .project-models,.project-tier{display:none}.form-grid{grid-template-columns:1fr}
@@ -638,13 +693,14 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
   .doctor-check{grid-template-columns:18px minmax(0,1fr)}.doctor-version{grid-column:2}.doctor-action{grid-column:2}
   .doctor-identity{grid-template-columns:1fr}.doctor-head{align-items:flex-start}
   .runtime-grid{grid-template-columns:1fr}
+  .fallback-row{grid-template-columns:minmax(0,1fr) 92px 28px}.fallback-row [data-fallback-model]{grid-column:1/-1;grid-row:2}
   .path-picker{align-items:stretch;flex-direction:column}.path-picker button{width:100%}.repo-actions{align-items:flex-start;
     flex-direction:column}.hub-tools,.hub-search{width:100%;min-width:0}}
 </style></head>
 <body>
 <section class="project-hub" id="project-hub" aria-label="Projects">
   <header class="hub-bar"><button class="brand-button" id="hub-brand"><span class="brand-mark">◇</span>
-    CrossAudit <span class="version" id="hub-version">V4.11.1</span></button><span class="spacer"></span>
+    CrossAudit <span class="version" id="hub-version">V4.13.0</span></button><span class="spacer"></span>
     <button class="icon-button" id="hub-locale" aria-label="Switch to Chinese" title="Switch language">中文</button>
     <button class="icon-button" id="hub-settings" aria-label="Settings" title="Settings">⚙</button>
     <button class="icon-button" id="hub-theme" aria-label="Switch theme">◐</button>
@@ -755,6 +811,16 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
   </form>
 </div>
 
+<div class="project-modal" id="file-preview-modal" role="dialog" aria-modal="true" aria-labelledby="file-preview-title">
+  <section class="wizard preview-wizard"><div class="wizard-head"><div><h2 id="file-preview-title">File preview</h2>
+    <p id="file-preview-meta">Preparing preview…</p></div><span class="spacer"></span>
+    <a class="secondary" id="file-preview-download" download>Download</a>
+    <button type="button" class="icon-button" id="close-file-preview" aria-label="Close preview">×</button></div>
+    <div class="preview-body" id="file-preview-body"><div class="preview-loading">Loading audited deliverable…</div></div>
+    <div class="preview-note" id="file-preview-note">The complete file remains available to download.</div>
+  </section>
+</div>
+
 <div class="project-modal" id="runtime-modal" role="dialog" aria-modal="true" aria-labelledby="runtime-title">
   <form class="wizard" id="runtime-form"><div class="wizard-head"><div><h2 id="runtime-title">Models, reasoning & audit loop</h2>
     <p>Change project controls for the next provider call without restarting this workspace.</p></div>
@@ -772,7 +838,23 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
         <label class="field"><span>Reasoning effort</span><select id="runtime-auditor-effort"></select><small class="effort-help" id="runtime-auditor-effort-help"></small></label>
         <div class="model-actions"><button type="button" class="secondary" data-runtime-refresh="auditor">Refresh models</button></div>
       </section>
-    </div><section class="form-section" style="margin-top:12px"><div class="form-title">Audit loop</div>
+    </div><section class="form-section" style="margin-top:12px"><div class="form-title">Automatic provider recovery</div>
+      <div class="runtime-grid"><div class="role-card"><div class="runtime-role-head"><b>Generator fallback chain</b><span>in order</span></div><div class="fallback-list" id="runtime-generator-fallbacks"></div><div class="model-actions"><button type="button" class="secondary" data-add-fallback="generator">＋ Add fallback</button></div></div>
+      <div class="role-card"><div class="runtime-role-head"><b>Auditor fallback chain</b><span>in order</span></div><div class="fallback-list" id="runtime-auditor-fallbacks"></div><div class="model-actions"><button type="button" class="secondary" data-add-fallback="auditor">＋ Add fallback</button></div></div></div>
+      <div class="form-grid" style="margin-top:13px"><label class="field"><span>Attempts per route</span><input id="runtime-max-attempts" type="number" min="1" max="10"></label>
+        <label class="field"><span>Initial retry delay (seconds)</span><input id="runtime-initial-backoff" type="number" min="0" max="60" step="0.1"></label>
+        <label class="field"><span>Maximum retry delay (seconds)</span><input id="runtime-max-backoff" type="number" min="0" max="300" step="0.1"></label>
+        <label class="field"><span>Honor Retry-After up to (seconds)</span><input id="runtime-retry-after-cap" type="number" min="0" max="900" step="1"></label>
+        <label class="field"><span>Open circuit after failures</span><input id="runtime-circuit-failures" type="number" min="1" max="20"></label>
+        <label class="field"><span>Circuit cooldown (seconds)</span><input id="runtime-circuit-cooldown" type="number" min="1" max="3600" step="1"></label></div>
+      <small class="field-help">Retries stay inside one provider call and never consume Generator → Auditor revision rounds. A fallback is used only after its earlier route fails.</small>
+    </section><section class="form-section" style="margin-top:12px"><div class="form-title">Usage guardrails</div>
+      <div class="form-grid"><label class="field"><span>Daily token warning</span><input id="runtime-daily-token-warning" type="number" min="1" placeholder="No warning"></label>
+        <label class="field"><span>Daily token hard limit</span><input id="runtime-daily-token-limit" type="number" min="1" placeholder="No limit"></label>
+        <label class="field"><span>Monthly API-value warning (USD)</span><input id="runtime-monthly-cost-warning" type="number" min="0.01" step="0.01" placeholder="No warning"></label>
+        <label class="field"><span>Monthly API-value hard limit (USD)</span><input id="runtime-monthly-cost-limit" type="number" min="0.01" step="0.01" placeholder="No limit"></label></div>
+      <div class="guardrail-state" id="runtime-guardrail-state">Limits are local safeguards; provider billing remains authoritative.</div>
+    </section><section class="form-section" style="margin-top:12px"><div class="form-title">Audit loop</div>
       <label class="field"><span>Automatic revision limit</span><select id="runtime-max-rounds"><option value="1">1 — quick stop</option><option value="3">3 — recommended</option><option value="5">5 — persistent</option><option value="10">10 — maximum</option></select><small class="field-help">After this many generator → auditor rounds, the task pauses for your explicit decision. It never auto-passes.</small></label>
     </section><section class="form-section" style="margin-top:12px"><div class="form-title">Generator guidance</div>
       <div class="form-grid"><label class="field"><span>Edit guidance</span><select id="runtime-skill-select"><option value="__new__">Create new guidance…</option></select></label>
@@ -837,28 +919,36 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
 </div>
 
 <div class="project-modal" id="compute-host-modal" role="dialog" aria-modal="true" aria-labelledby="compute-host-title">
-  <form class="wizard" id="compute-host-form"><div class="wizard-head"><div><h2 id="compute-host-title">Add SSH compute host</h2>
-    <p>CrossAudit uses your existing OpenSSH config, keys, ssh-agent and ProxyJump. Nothing is installed remotely.</p></div>
+  <form class="wizard hpc-host-wizard" id="compute-host-form"><div class="wizard-head"><div><h2 id="compute-host-title">Add SSH compute host</h2>
+    <p>Connect a workstation or Slurm cluster through your existing SSH setup.</p></div>
     <span class="spacer"></span><button type="button" class="icon-button" id="close-compute-host" aria-label="Close">×</button></div>
-    <div class="wizard-body"><div class="form-grid">
-      <label class="field"><span>SSH alias</span><input name="alias" id="compute-alias" list="compute-aliases" maxlength="128" required placeholder="hpc-login"><datalist id="compute-aliases"></datalist><small class="field-help">A Host alias from ~/.ssh/config, or a directly reachable hostname.</small></label>
-      <label class="field"><span>Shared scratch directory</span><input name="scratch" maxlength="500" required placeholder="/scratch/your-user/crossaudit"><small class="field-help">For Slurm this must be visible from login and compute nodes.</small></label>
-      <label class="field"><span>Concurrent job limit</span><input name="concurrency" type="number" min="1" max="100" value="4" required></label>
-      <label class="field full"><span>Host instructions</span><textarea name="details" maxlength="4000" placeholder="Account code, approved partitions, module loads, environment activation, and local cluster policy."></textarea></label>
-      <label class="hpc-confirm field full"><input name="agent_enabled" type="checkbox"><span><b>Allow Generator to use this host automatically</b>The Generator may author and submit scripts without per-job confirmation, but only inside the resource and file policy below. Use a dedicated least-privilege SSH account.</span></label>
-      <div class="field full"><span>Generator compute policy</span><small class="field-help">These are hard ceilings. SSH identity, scheduler policy and filesystem permissions remain the final boundary.</small></div>
-      <label class="field"><span>Jobs per task</span><input name="agent_max_jobs" type="number" min="1" max="10" value="2" required></label>
-      <label class="field"><span>Maximum nodes</span><input name="agent_max_nodes" type="number" min="1" max="64" value="1" required></label>
-      <label class="field"><span>Maximum CPUs</span><input name="agent_max_cpus" type="number" min="1" max="4096" value="8" required></label>
-      <label class="field"><span>Maximum GPUs</span><input name="agent_max_gpus" type="number" min="0" max="64" value="0" required></label>
-      <label class="field"><span>Maximum memory</span><input name="agent_max_memory" value="16G" required></label>
-      <label class="field"><span>Maximum wall time</span><input name="agent_max_walltime" value="01:00:00" required></label>
-      <label class="field"><span>Fixed partition</span><input name="agent_partition" maxlength="128" placeholder="cpu"></label>
-      <label class="field"><span>Fixed account</span><input name="agent_account" maxlength="128" placeholder="lab-account"></label>
-      <label class="field"><span>Fixed QoS</span><input name="agent_qos" maxlength="128"></label>
-      <label class="hpc-confirm field full"><input name="trust_first_key" type="checkbox"><span><b>Trust a new host key once</b>Use only after verifying the hostname with your cluster administrator. Existing or changed keys are never replaced.</span></label>
-    </div><div class="wizard-error" id="compute-host-error"></div></div>
-    <div class="wizard-foot"><span>Registration runs a read-only probe for CPU, memory, GPU, Slurm, modules, conda and Apptainer.</span>
+    <div class="wizard-body"><div class="hpc-host-intro"><span class="hpc-host-intro-icon">⌘</span><div><b>CrossAudit does not install anything on the cluster.</b>It uses OpenSSH config, keys, ssh-agent and ProxyJump already configured on this Mac, then runs a read-only capability check.</div></div>
+      <section class="hpc-setup-section"><div class="hpc-section-head"><span class="hpc-section-index">1</span><div><b>Connection</b><p>Name the SSH target and choose a shared work directory for durable remote jobs.</p></div></div>
+        <div class="hpc-connection-grid">
+          <label class="field"><span>SSH alias</span><input name="alias" id="compute-alias" list="compute-aliases" maxlength="128" required placeholder="hpc-login"><datalist id="compute-aliases"></datalist><small class="field-help">Alias from ~/.ssh/config or a reachable hostname.</small></label>
+          <label class="field"><span>Shared scratch directory</span><input name="scratch" maxlength="500" required placeholder="/scratch/your-user/crossaudit"><small class="field-help">For Slurm, login and compute nodes must both see this path.</small></label>
+          <label class="field"><span>Parallel jobs</span><input name="concurrency" type="number" min="1" max="100" value="4" required><small class="field-help">Project limit</small></label>
+          <label class="field full"><span>Cluster notes <small>optional</small></span><textarea name="details" maxlength="4000" placeholder="Approved partitions, module loads, environment activation, or account policy."></textarea></label>
+        </div></section>
+      <section class="hpc-setup-section"><div class="hpc-section-head"><span class="hpc-section-index">2</span><div><b>Generator access</b><p>Manual job submission is always available. Automatic access is optional and constrained by hard ceilings.</p></div></div>
+        <label class="hpc-permission"><input name="agent_enabled" id="hpc-agent-enabled" type="checkbox"><span><b>Allow Generator to use this host automatically</b><small>The Generator can submit calculation scripts without per-job confirmation. Use a dedicated least-privilege SSH account.</small></span></label>
+        <div class="hpc-policy off" id="hpc-agent-policy"><div class="hpc-policy-title">Generator compute policy <span>hard maximums per task</span></div>
+          <div class="hpc-limit-grid">
+            <label class="field"><span>Jobs per task</span><input name="agent_max_jobs" type="number" min="1" max="10" value="2" required></label>
+            <label class="field"><span>Maximum nodes</span><input name="agent_max_nodes" type="number" min="1" max="64" value="1" required></label>
+            <label class="field"><span>Maximum CPUs</span><input name="agent_max_cpus" type="number" min="1" max="4096" value="8" required></label>
+            <label class="field"><span>Maximum GPUs</span><input name="agent_max_gpus" type="number" min="0" max="64" value="0" required></label>
+            <label class="field"><span>Maximum memory</span><input name="agent_max_memory" value="16G" required></label>
+            <label class="field"><span>Maximum wall time</span><input name="agent_max_walltime" value="01:00:00" required></label>
+          </div><details class="hpc-advanced"><summary>Scheduler restrictions (optional)</summary><div class="hpc-limit-grid">
+            <label class="field"><span>Fixed partition</span><input name="agent_partition" maxlength="128" placeholder="cpu"></label>
+            <label class="field"><span>Fixed account</span><input name="agent_account" maxlength="128" placeholder="lab-account"></label>
+            <label class="field"><span>Fixed QoS</span><input name="agent_qos" maxlength="128"></label>
+          </div></details></div></section>
+      <section class="hpc-setup-section"><div class="hpc-section-head"><span class="hpc-section-index">3</span><div><b>Host identity</b><p>Known host keys are required. A changed key always stops the connection.</p></div></div>
+        <label class="hpc-host-key"><input name="trust_first_key" type="checkbox"><span><b>Trust a new host key once</b><small>Only select this after verifying the hostname with your cluster administrator. Existing or changed keys are never replaced.</small></span></label>
+      </section><div class="wizard-error" id="compute-host-error"></div></div>
+    <div class="wizard-foot"><span>Next: read-only connection and capability check.</span>
       <button type="button" class="secondary" id="cancel-compute-host">Cancel</button><button class="primary" id="save-compute-host">Probe & add</button></div>
   </form>
 </div>
@@ -930,7 +1020,7 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
       aria-controls="sidebar-panel" aria-expanded="false">☰</button>
     <button class="icon-button" id="back-projects" aria-label="Back to projects" title="Back to projects">←</button>
     <button class="brand-button" id="projects-home"><span class="brand-mark">◇</span>CrossAudit
-      <span class="version" id="version-badge">V4.11.1</span></button>
+      <span class="version" id="version-badge">V4.13.0</span></button>
     <button class="top-project" id="project-switcher"><b id="proj">…</b> <span id="branch-label">/ project folder</span>⌄</button>
     <button class="icon-button" id="current-project-pin" aria-label="Pin project" title="Pin project">☆</button>
     <span class="spacer"></span>
@@ -985,9 +1075,9 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
         <label class="choice-option"><input type="radio" name="task_format" value="Markdown (.md)" checked><span>Markdown</span></label>
         <label class="choice-option"><input type="radio" name="task_format" value="Plain text (.txt)"><span>Plain text</span></label>
         <label class="choice-option"><input type="radio" name="task_format" value="HTML (.html)"><span>HTML</span></label>
-        <label class="choice-option" title="Binary export is not yet receipt-auditable"><input type="radio" name="task_format" value="PDF" disabled><span>PDF</span></label>
-        <label class="choice-option" title="Binary export is not yet receipt-auditable"><input type="radio" name="task_format" value="DOCX" disabled><span>DOCX</span></label>
-      </div></div><p class="choice-note">PDF and DOCX are not available yet.</p>
+        <label class="choice-option" title="Rendered locally and audited from the final binary"><input type="radio" name="task_format" value="PDF (.pdf)"><span>PDF</span></label>
+        <label class="choice-option" title="Rendered locally and audited from the final binary"><input type="radio" name="task_format" value="Word (.docx)"><span>DOCX</span></label>
+      </div></div><p class="choice-note">PDF and DOCX are rendered locally; only the final audited file is shown.</p>
       <div class="choice-group"><span class="choice-label">Tone</span><div class="choice-options">
         <label class="choice-option"><input type="radio" name="task_tone" value="Editorial and readable" checked><span>Editorial</span></label>
         <label class="choice-option"><input type="radio" name="task_tone" value="Technical and precise"><span>Technical</span></label>
@@ -1067,6 +1157,17 @@ const ZH={
   "Retry setup":"重试设置","Retry is idempotent: repositories created before the interruption are reused, not duplicated.":"重试是幂等的：中断前已创建的仓库会被复用，不会重复创建。",
   "Models, reasoning & audit loop":"模型、推理与审计循环","Change project controls for the next provider call without restarting this workspace.":"无需重启工作区，即可修改下一次供应商调用使用的项目控制。",
   "Reasoning effort":"推理强度","Refresh models":"刷新模型","Audit loop":"审计循环",
+  "Automatic provider recovery":"供应商自动恢复","Generator fallback chain":"生成者备用路由链","Auditor fallback chain":"审计者备用路由链","in order":"按顺序",
+  "＋ Add fallback":"＋ 添加备用路由","Attempts per route":"每条路由尝试次数","Initial retry delay (seconds)":"首次重试延迟（秒）",
+  "Maximum retry delay (seconds)":"最大重试延迟（秒）","Honor Retry-After up to (seconds)":"遵循 Retry-After 的最大秒数",
+  "Open circuit after failures":"连续失败后打开熔断器","Circuit cooldown (seconds)":"熔断冷却时间（秒）",
+  "Retries stay inside one provider call and never consume Generator → Auditor revision rounds. A fallback is used only after its earlier route fails.":"重试发生在单次供应商调用内部，不消耗生成者 → 审计者修订轮次；只有前序路由失败后才会使用备用路由。",
+  "Usage guardrails":"用量保护线","Daily token warning":"每日 Token 预警","Daily token hard limit":"每日 Token 硬上限",
+  "Monthly API-value warning (USD)":"每月 API 价值预警（美元）","Monthly API-value hard limit (USD)":"每月 API 价值硬上限（美元）",
+  "No warning":"不预警","No limit":"不限制","Limits are local safeguards; provider billing remains authoritative.":"这些上限是本地保护措施，最终计费以供应商为准。",
+  "No fallback. A provider failure pauses safely for you.":"未配置备用路由。供应商失败时会安全暂停并等待你处理。",
+  "Project controls updated":"项目控制已更新","— recovery routes, usage guardrails, models and loop limits apply to the next provider call.":"— 恢复路由、用量保护线、模型和循环上限将在下一次供应商调用时生效。",
+  "The selected effort is sent on the next provider request.":"所选推理强度会用于下一次供应商请求。",
   "After this many generator → auditor rounds, the task pauses for your explicit decision. It never auto-passes.":"达到该生成者 → 审计者轮数后，任务会暂停并等待你的明确决定，绝不会自动通过。",
   "Generator guidance":"生成者指导","Edit guidance":"编辑指导","Create new guidance…":"创建新指导…","Name":"名称",
   "Applies to paths (optional)":"适用路径（可选）","Comma-separated project-relative prefixes. Leave blank to apply on every task.":"以逗号分隔的项目相对路径前缀。留空则适用于所有任务。",
@@ -1094,10 +1195,24 @@ const ZH={
   "Application readiness":"应用就绪状态","Git":"Git","GitHub connection tool":"GitHub 连接工具","Application build":"应用构建","Code identity":"代码身份",
   "Environment Doctor":"环境诊断","Preparing checks…":"正在准备检查…","Run check":"运行检查","Checking required software…":"正在检查所需软件…",
   "Project workspace":"项目工作区","Provider credentials":"供应商凭据",
+  "Backup API key (optional)":"备用 API Key（可选）","Used only by an explicit fallback route":"仅由明确配置的备用路由使用",
+  "Delete backup key":"删除备用 Key","Primary key":"主 Key","Backup key":"备用 Key",
   "Developer access and consumer subscriptions are different products.":"开发者 API 与消费者订阅是不同的产品。",
   "CrossAudit only offers web sign-in where the provider publishes a supported third-party inference flow. It never imports browser cookies or CLI session files.":"只有供应商公开支持第三方推理登录流程时，CrossAudit 才提供网页登录。它不会导入浏览器 Cookie 或 CLI 会话文件。",
   "API keys are write-only macOS Keychain items. Subscription credentials stay with the official provider runtime.":"API key 以只写方式存入 macOS 钥匙串；订阅凭据始终由官方供应商运行时持有。",
   "Save settings":"保存设置","Add SSH compute host":"添加 SSH 计算主机",
+  "Connect a workstation or Slurm cluster through your existing SSH setup.":"通过现有 SSH 配置连接工作站或 Slurm 集群。",
+  "CrossAudit does not install anything on the cluster.":"CrossAudit 不会在集群上安装任何内容。",
+  "It uses OpenSSH config, keys, ssh-agent and ProxyJump already configured on this Mac, then runs a read-only capability check.":"它使用此 Mac 已配置的 OpenSSH、密钥、ssh-agent 和 ProxyJump，然后执行只读能力检查。",
+  "Connection":"连接","Name the SSH target and choose a shared work directory for durable remote jobs.":"指定 SSH 目标，并为可持续运行的远程任务选择共享工作目录。",
+  "Alias from ~/.ssh/config or a reachable hostname.":"~/.ssh/config 中的别名或可访问的主机名。","For Slurm, login and compute nodes must both see this path.":"使用 Slurm 时，登录节点和计算节点必须都能访问此路径。",
+  "Parallel jobs":"并行任务数","Project limit":"项目上限","Cluster notes":"集群说明","optional":"可选","Approved partitions, module loads, environment activation, or account policy.":"获准分区、模块加载、环境激活或账户政策。",
+  "Generator access":"生成者权限","Manual job submission is always available. Automatic access is optional and constrained by hard ceilings.":"始终可以手动提交任务；自动权限为可选项，并受硬性上限约束。",
+  "The Generator can submit calculation scripts without per-job confirmation. Use a dedicated least-privilege SSH account.":"生成者可无需逐个确认即提交计算脚本。请使用专用的最小权限 SSH 账户。",
+  "hard maximums per task":"每个任务的硬性上限","Scheduler restrictions (optional)":"调度器限制（可选）",
+  "Host identity":"主机身份","Known host keys are required. A changed key always stops the connection.":"必须使用已知主机密钥；密钥一旦变化，连接必定停止。",
+  "Only select this after verifying the hostname with your cluster administrator. Existing or changed keys are never replaced.":"仅在与集群管理员核实主机名后选择。已有或发生变化的密钥绝不会被替换。",
+  "Next: read-only connection and capability check.":"下一步：执行只读连接和能力检查。",
   "CrossAudit uses your existing OpenSSH config, keys, ssh-agent and ProxyJump. Nothing is installed remotely.":"CrossAudit 使用你现有的 OpenSSH 配置、密钥、ssh-agent 和 ProxyJump，不会在远端安装任何内容。",
   "SSH alias":"SSH 别名","A Host alias from ~/.ssh/config, or a directly reachable hostname.":"~/.ssh/config 中的 Host 别名，或可直接访问的主机名。",
   "Shared scratch directory":"共享临时目录","For Slurm this must be visible from login and compute nodes.":"使用 Slurm 时，该目录必须同时对登录节点和计算节点可见。",
@@ -1120,9 +1235,9 @@ const ZH={
   "Message recipient":"消息接收方","To":"发送给","Auto":"自动","@ Generator":"@ 生成者","@ Auditor":"@ 审计者","Add files":"添加文件","＋ Add files":"＋ 添加文件",
   "Message the group, or @ someone…":"给群组发送消息，或 @ 某一方…","Run task":"运行任务","Generator → Auditor":"生成者 → 审计者","Enter to send · Shift+Enter for new line":"Enter 发送 · Shift+Enter 换行",
   "Audit context":"审计上下文","Close audit context":"关闭审计上下文","Models":"模型","Loop parameters":"循环参数","Maximum rounds":"最大轮数","Current round":"当前轮次","Constitution":"审计章程","Admission tier":"准入级别","Deterministic checks":"确定性检查","Ledger":"账本","Needs attention":"需要处理",
-  "Task delivery choices":"任务交付选项","Confirm the choices that materially change the deliverable.":"确认会实质影响交付物的选项。","Before I start":"开始之前","Focus":"重点","Balanced":"均衡","Technical depth":"技术深度","Everyday use":"日常使用","Value":"价值","Format":"格式","Markdown":"Markdown","Plain text":"纯文本","HTML":"HTML","PDF":"PDF","DOCX":"DOCX","PDF and DOCX are not available yet.":"PDF 和 DOCX 暂不可用。","Tone":"语气","Editorial":"编辑风格","Technical":"技术风格","Concise":"简洁","Persuasive":"说服性","Close choices":"关闭选项","Use prompt as written":"按原提示执行","Run with selections":"按所选项运行",
+  "Task delivery choices":"任务交付选项","Confirm the choices that materially change the deliverable.":"确认会实质影响交付物的选项。","Before I start":"开始之前","Focus":"重点","Balanced":"均衡","Technical depth":"技术深度","Everyday use":"日常使用","Value":"价值","Format":"格式","Markdown":"Markdown","Plain text":"纯文本","HTML":"HTML","PDF":"PDF","DOCX":"DOCX","PDF and DOCX are rendered locally; only the final audited file is shown.":"PDF 和 DOCX 在本地渲染；界面只显示通过审计的最终文件。","Tone":"语气","Editorial":"编辑风格","Technical":"技术风格","Concise":"简洁","Persuasive":"说服性","Close choices":"关闭选项","Use prompt as written":"按原提示执行","Run with selections":"按所选项运行",
   "Confirm file transfer":"确认文件传输","Drop files to add them":"拖放文件以添加","No CrossAudit file-count or file-size quota. Available storage, filesystem limits and provider context still apply.":"CrossAudit 不限制文件数量或大小，但仍受可用存储、文件系统和供应商上下文限制。","Send files":"发送文件",
-  "Binary export is not yet receipt-auditable":"二进制导出暂不支持 receipt 审计","ready":"就绪","connecting":"正在连接","Connected":"已连接","Not connected":"未连接","Checking…":"正在检查…","Loading projects…":"正在加载项目…","Something went wrong":"发生了错误","Open help ↗":"打开帮助 ↗",
+  "Rendered locally and audited from the final binary":"在本地渲染，并从最终二进制文件回读审计","File preview":"文件预览","Preparing preview…":"正在准备预览…","Loading audited deliverable…":"正在加载已审计的交付文件…","Download":"下载","Close preview":"关闭预览","The complete file remains available to download.":"完整文件始终可供下载。","Preview unavailable for this file type. Download the complete file to open it in a compatible app.":"此文件类型无法安全预览。请下载完整文件并使用兼容应用打开。","The reading preview is shortened for responsiveness; the download is complete.":"为保证界面流畅，阅读预览已截短；下载文件是完整的。","Preview is reconstructed from the final audited DOCX binary.":"预览内容从最终通过审计的 DOCX 二进制文件中重建。","HTML preview is isolated from the app and cannot access the network.":"HTML 预览与应用隔离，且无法访问网络。","ready":"就绪","connecting":"正在连接","Connected":"已连接","Not connected":"未连接","Checking…":"正在检查…","Loading projects…":"正在加载项目…","Something went wrong":"发生了错误","Open help ↗":"打开帮助 ↗",
   "Close":"关闭","Close settings":"关闭设置","No matching projects.":"没有匹配的项目。","Switch to dark theme":"切换到深色主题","Switch to light theme":"切换到浅色主题",
   "Delete project":"删除项目","Review the local and GitHub impact before anything is changed.":"更改任何内容前，请检查本地与 GitHub 影响。",
   "Checking project state…":"正在检查项目状态…","The local folder will move to CrossAudit Trash and can be recovered. GitHub repositories remain untouched unless you explicitly select permanent deletion below.":"本地文件夹会移到 CrossAudit 废纸篓并可恢复。除非你在下方明确选择永久删除，否则 GitHub 仓库保持不变。",
@@ -1309,6 +1424,18 @@ themeButton.onclick = () => applyTheme(
   document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark',true);
 hubThemeButton.onclick = themeButton.onclick;
 
+const composerWrap=document.querySelector('.composer-wrap');
+const threadScroller=document.getElementById('thread');
+function syncComposerClearance(){
+  const nearBottom=threadScroller.scrollHeight-threadScroller.scrollTop-threadScroller.clientHeight<96;
+  const clearance=composerWrap.classList.contains('view-hidden')?0:Math.ceil(composerWrap.getBoundingClientRect().height);
+  document.documentElement.style.setProperty('--composer-clearance',clearance+'px');
+  if(nearBottom)requestAnimationFrame(()=>{threadScroller.scrollTop=threadScroller.scrollHeight;});
+}
+new ResizeObserver(syncComposerClearance).observe(composerWrap);
+window.addEventListener('resize',syncComposerClearance);
+syncComposerClearance();
+
 async function api(path, body){
   const opt = body ? {method:'POST',headers:{'content-type':'application/json'},
     body:JSON.stringify(body)} : {};
@@ -1369,7 +1496,9 @@ function renderProviderCards(d){
       +(p.docs_url?'<a class="login-link" href="'+esc(p.docs_url)+'" target="_blank" rel="noopener">API docs ↗</a>':'');
     return '<div class="credential-card"><div class="credential-head"><b>'+esc(label)+'</b><span class="credential-state" id="'+esc(vendor)+'-state">Checking…</span></div>'
       +subscription+'<div class="secret-row"><label class="field"><span>New API key · '+links+'</span><input type="password" id="'+esc(vendor)+'-key" data-provider-key="'+esc(vendor)+'" autocomplete="new-password" placeholder="Leave blank to keep the saved key"></label>'
-      +'<label class="toggle-line"><input type="checkbox" id="remove-'+esc(vendor)+'" data-provider-remove="'+esc(vendor)+'"><span><b>Remove</b><small>Delete saved key</small></span></label></div></div>';
+      +'<label class="toggle-line"><input type="checkbox" id="remove-'+esc(vendor)+'" data-provider-remove="'+esc(vendor)+'"><span><b>Remove</b><small>Delete saved key</small></span></label></div>'
+      +'<div class="secret-row"><label class="field"><span>Backup API key (optional)</span><input type="password" id="'+esc(vendor)+'-backup-key" data-provider-key="'+esc(vendor)+'_backup" autocomplete="new-password" placeholder="Used only by an explicit fallback route"></label>'
+      +'<label class="toggle-line"><input type="checkbox" id="remove-'+esc(vendor)+'-backup" data-provider-remove="'+esc(vendor)+'_backup"><span><b>Remove</b><small>Delete backup key</small></span></label></div></div>';
   }).join('');
 }
 function renderDoctor(doctor){
@@ -1403,6 +1532,7 @@ function renderSettings(d){
     const state=document.getElementById(vendor+'-state');state.textContent=configured?'Connected':'Not connected';
     state.className='credential-state'+(configured?' ok':'');
     document.getElementById('remove-'+vendor).disabled=!apiConfigured;
+    document.getElementById('remove-'+vendor+'-backup').disabled=!Boolean(provider.backup_api_key&&provider.backup_api_key.configured);
   }
   const openai=d.providers&&d.providers.openai||{};const chatgpt=openai.chatgpt||{};
   const login=d.provider_login||{};const button=document.getElementById('connect-chatgpt');
@@ -1484,7 +1614,7 @@ settingsForm.onsubmit=async ev=>{ev.preventDefault();const save=document.getElem
 
 const runtimeModal=document.getElementById('runtime-modal');
 const runtimeForm=document.getElementById('runtime-form');
-let runtimeRoles={};let runtimeSkills=[];let runtimeCapabilityNonce={generator:0,auditor:0};
+let runtimeRoles={};let runtimeSkills=[];let runtimeFallbackCatalog=[];let runtimeCapabilityNonce={generator:0,auditor:0};
 function runtimeEl(role,name){return document.getElementById('runtime-'+role+'-'+name);}
 function runtimeModel(role){const select=runtimeEl(role,'model');return select.value==='__custom__'
   ?runtimeEl(role,'custom').value.trim():select.value;}
@@ -1508,6 +1638,21 @@ function renderRuntimeRole(role,row){runtimeRoles[role]=row;const card=runtimeEl
   else{select.value='__custom__';runtimeEl(role,'custom').value=row.model||'';}
   runtimeEl(role,'custom-wrap').className='field custom-model'+(select.value==='__custom__'?'':' off');
   renderRuntimeEfforts(role,row);}
+function fallbackChoices(role){const opposite=role==='generator'?'auditor':'generator';const blocked=(runtimeRoles[opposite]||{}).vendor;
+  return runtimeFallbackCatalog.filter(row=>row.vendor!==blocked);}
+function renderFallbacks(role,rows){const host=document.getElementById('runtime-'+role+'-fallbacks');const choices=fallbackChoices(role);
+  if(!(rows||[]).length){host.innerHTML='<div class="fallback-empty">No fallback. A provider failure pauses safely for you.</div>';return;}
+  host.innerHTML=rows.map((row,index)=>{const listId='fallback-models-'+role+'-'+index;
+    const options=choices.map(item=>'<option value="'+esc(item.vendor)+'"'+(item.vendor===row.vendor?' selected':'')+'>'+esc(item.label)+(item.connected?' · connected':' · key needed')+'</option>').join('');
+    const selected=choices.find(item=>item.vendor===row.vendor)||choices[0]||{models:[]};
+    return '<div class="fallback-row" data-fallback-role="'+role+'"><select data-fallback-vendor>'+options+'</select>'
+      +'<input data-fallback-model list="'+listId+'" maxlength="120" value="'+esc(row.model||((selected.models||[])[0]||{}).id||'')+'" placeholder="Exact model ID"><datalist id="'+listId+'">'
+      +(selected.models||[]).map(model=>'<option value="'+esc(model.id)+'">'+esc(model.hint||'')+'</option>').join('')+'</datalist>'
+      +'<select data-fallback-credential title="Credential"><option value="primary"'+(row.credential==='backup'?'':' selected')+'>Primary key</option><option value="backup"'+(row.credential==='backup'?' selected':'')+'>Backup key</option></select>'
+      +'<button type="button" class="fallback-remove" data-remove-fallback title="Remove">×</button></div>';}).join('');}
+function fallbackRows(role){return [...document.querySelectorAll('[data-fallback-role="'+role+'"]')].map(row=>({
+  vendor:row.querySelector('[data-fallback-vendor]').value,model:row.querySelector('[data-fallback-model]').value.trim(),
+  credential:row.querySelector('[data-fallback-credential]').value}));}
 function syncRuntimeBusy(d){const busy=Boolean(d&&d.progress&&!d.progress.finished);const save=document.getElementById('save-runtime');
   save.disabled=busy;document.getElementById('save-runtime-skill').disabled=busy;document.getElementById('runtime-foot').textContent=busy
     ?'A loop is running. These controls unlock when its current model calls finish.'
@@ -1521,8 +1666,22 @@ async function updateRuntimeCapabilities(role){const model=runtimeModel(role);if
     runtimeEl(role,'effort').disabled=true;runtimeEl(role,'effort-help').textContent=e.message;}}
 function openRuntime(){const config=lastState&&lastState.runtime_config;if(!config)return;
   document.getElementById('runtime-error').className='wizard-error';
+  runtimeFallbackCatalog=config.fallback_catalog||[];
   for(const role of ['generator','auditor'])renderRuntimeRole(role,config.roles[role]);
+  for(const role of ['generator','auditor'])renderFallbacks(role,(config.roles[role]||{}).fallbacks||[]);
   document.getElementById('runtime-max-rounds').value=String(config.max_rounds||lastState.max_rounds||3);
+  const resilience=config.resilience||{};document.getElementById('runtime-max-attempts').value=resilience.max_attempts||3;
+  document.getElementById('runtime-initial-backoff').value=resilience.initial_backoff_seconds??1;
+  document.getElementById('runtime-max-backoff').value=resilience.max_backoff_seconds??20;
+  document.getElementById('runtime-retry-after-cap').value=resilience.retry_after_cap_seconds??120;
+  document.getElementById('runtime-circuit-failures').value=resilience.circuit_breaker_failures||3;
+  document.getElementById('runtime-circuit-cooldown').value=resilience.circuit_breaker_cooldown_seconds||60;
+  const budgets=config.budgets||{};document.getElementById('runtime-daily-token-warning').value=budgets.daily_token_warning||'';
+  document.getElementById('runtime-daily-token-limit').value=budgets.daily_token_limit||'';
+  document.getElementById('runtime-monthly-cost-warning').value=budgets.monthly_cost_warning_usd||'';
+  document.getElementById('runtime-monthly-cost-limit').value=budgets.monthly_cost_limit_usd||'';
+  const guard=lastState&&lastState.usage&&lastState.usage.budget||{};document.getElementById('runtime-guardrail-state').textContent=
+    guard.state==='blocked'?(guard.reasons||[]).join(' '):guard.state==='warning'?(guard.warnings||[]).join(' '):'Limits are local safeguards; provider billing remains authoritative.';
   renderRuntimeSkills(config.skills||[]);
   if(config.skills_error)document.getElementById('runtime-skill-status').textContent=config.skills_error;
   syncRuntimeBusy(lastState);runtimeModal.className='project-modal on';}
@@ -1532,6 +1691,16 @@ for(const role of ['generator','auditor']){
       +(runtimeEl(role,'model').value==='__custom__'?'':' off');if(runtimeEl(role,'model').value!=='__custom__')updateRuntimeCapabilities(role);};
   runtimeEl(role,'custom').onchange=()=>updateRuntimeCapabilities(role);
 }
+document.querySelectorAll('[data-add-fallback]').forEach(button=>button.onclick=()=>{const role=button.getAttribute('data-add-fallback');
+  const rows=fallbackRows(role),choices=fallbackChoices(role),choice=choices.find(item=>item.vendor!==(runtimeRoles[role]||{}).vendor)||choices[0];if(!choice)return;
+  rows.push({vendor:choice.vendor,model:(choice.models[0]||{}).id||'',credential:'primary'});renderFallbacks(role,rows);});
+runtimeModal.addEventListener('click',ev=>{const button=ev.target.closest('[data-remove-fallback]');if(!button)return;
+  const row=button.closest('[data-fallback-role]'),role=row.getAttribute('data-fallback-role');row.remove();
+  if(!fallbackRows(role).length)renderFallbacks(role,[]);});
+runtimeModal.addEventListener('change',ev=>{if(!ev.target.matches('[data-fallback-vendor]'))return;
+  const row=ev.target.closest('[data-fallback-role]'),role=row.getAttribute('data-fallback-role'),rows=fallbackRows(role);
+  const index=[...document.querySelectorAll('[data-fallback-role="'+role+'"]')].indexOf(row),choice=runtimeFallbackCatalog.find(x=>x.vendor===ev.target.value);
+  if(choice)rows[index].model=(choice.models[0]||{}).id||'';renderFallbacks(role,rows);});
 document.querySelectorAll('[data-runtime-refresh]').forEach(button=>button.onclick=async()=>{
   const role=button.getAttribute('data-runtime-refresh'),row=runtimeRoles[role];if(!row||row.vendor==='human')return;
   button.disabled=true;button.textContent='Refreshing…';
@@ -1571,10 +1740,21 @@ runtimeForm.onsubmit=async ev=>{ev.preventDefault();const save=document.getEleme
   const payload={generator_model:runtimeModel('generator'),auditor_model:runtimeModel('auditor'),
     generator_reasoning_effort:runtimeEl('generator','effort').value||'',
     auditor_reasoning_effort:runtimeEl('auditor','effort').value||'',
-    max_rounds:Number(document.getElementById('runtime-max-rounds').value)};
+    generator_fallbacks:fallbackRows('generator'),auditor_fallbacks:fallbackRows('auditor'),
+    max_rounds:Number(document.getElementById('runtime-max-rounds').value),
+    max_attempts:Number(document.getElementById('runtime-max-attempts').value),
+    initial_backoff_seconds:Number(document.getElementById('runtime-initial-backoff').value),
+    max_backoff_seconds:Number(document.getElementById('runtime-max-backoff').value),
+    retry_after_cap_seconds:Number(document.getElementById('runtime-retry-after-cap').value),
+    circuit_breaker_failures:Number(document.getElementById('runtime-circuit-failures').value),
+    circuit_breaker_cooldown_seconds:Number(document.getElementById('runtime-circuit-cooldown').value),
+    daily_token_warning:document.getElementById('runtime-daily-token-warning').value,
+    daily_token_limit:document.getElementById('runtime-daily-token-limit').value,
+    monthly_cost_warning_usd:document.getElementById('runtime-monthly-cost-warning').value,
+    monthly_cost_limit_usd:document.getElementById('runtime-monthly-cost-limit').value};
   try{const result=await api('/api/runtime',payload);if(lastState)lastState.runtime_config=result;
     if(lastState)lastState.max_rounds=result.max_rounds;
-    closeRuntime();route.className='route on';route.innerHTML='<b>Project controls updated</b> — the next provider call will use the saved models, effort and audit loop limit.';}
+    closeRuntime();route.className='route on';route.innerHTML='<b>Project controls updated</b> — recovery routes, usage guardrails, models and loop limits apply to the next provider call.';}
   catch(e){showInlineError('runtime-error',e);syncRuntimeBusy(lastState);}
   finally{if(!lastState||!lastState.progress||lastState.progress.finished)save.disabled=false;}
 };
@@ -2081,7 +2261,14 @@ function titleOf(d){
   const p=chatProgress(d);if(p&&p.task)return p.task.replace(/\s+/g,' ').slice(0,88);
   return 'New chat';
 }
-function fileUrl(path){return '/api/file?t=' + encodeURIComponent(T) + '&path=' + encodeURIComponent(path);}
+function fileUrl(path,view=false){return '/api/file?t=' + encodeURIComponent(T) + '&path=' + encodeURIComponent(path)
+  +(view?'&view=1':'');}
+async function previewData(path){
+  const response=await fetch('/api/preview?t='+encodeURIComponent(T)+'&path='+encodeURIComponent(path));
+  const raw=await response.text();let data={};try{data=raw?JSON.parse(raw):{};}catch(e){}
+  if(!response.ok)throw new Error(data.reason||raw||('Preview failed ('+response.status+')'));
+  return data;
+}
 function formatBytes(value){
   if(value===null||value===undefined) return '';
   const units=['B','KB','MB','GB','TB','PB'];let size=Number(value),unit=0;
@@ -2105,11 +2292,65 @@ function outputFile(item,status,context){
   const core='<span class="artifact-icon">'+esc((f.extension||'FILE').slice(0,4))+'</span>'
     +'<span class="artifact-copy"><span class="artifact-name">'+esc(f.path)+'</span>'
     +'<span class="artifact-context">'+esc(bits.join(' · '))+'</span></span>';
-  if(f.available===false) return '<div class="output-file unavailable">'+core
+  if(f.available===false) return '<div class="output-file unavailable"><span class="artifact-main">'+core+'</span>'
     +'<span class="artifact-action" aria-hidden="true">—</span></div>';
-  return '<a class="artifact output-file" href="'+fileUrl(f.path)+'" download aria-label="Download '
-    +esc(f.name||f.path)+'">'+core+'<span class="artifact-action" aria-hidden="true">↓</span></a>';
+  const name=esc(f.name||f.path),path=esc(f.path);
+  const primary='<button type="button" class="artifact-main" data-preview="'+path+'" aria-label="Preview '+name+'">'+core+'</button>';
+  return '<div class="artifact output-file">'+primary+'<span class="artifact-actions">'
+    +'<button type="button" class="artifact-action" data-preview="'+path+'" aria-label="Preview '+name+'" title="File preview">⌕</button>'
+    +'<a class="artifact-action" href="'+fileUrl(f.path)+'" download aria-label="Download '+name+'" title="Download">↓</a>'
+    +'</span></div>';
 }
+
+const filePreviewModal=document.getElementById('file-preview-modal');
+const filePreviewBody=document.getElementById('file-preview-body');
+const filePreviewNote=document.getElementById('file-preview-note');
+let filePreviewTrigger=null;
+function inlineMarkdown(value){return esc(value).replace(/`([^`]+)`/g,'<code>$1</code>')
+  .replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>').replace(/_([^_]+)_/g,'<em>$1</em>');}
+function markdownPreview(value){
+  const lines=String(value||'').replace(/\r\n?/g,'\n').split('\n');let html='',code=false,list='';
+  const closeList=()=>{if(list){html+='</'+list+'>';list='';}};
+  for(const line of lines){
+    if(line.startsWith('```')){closeList();html+=code?'</code></pre>':'<pre><code>';code=!code;continue;}
+    if(code){html+=esc(line)+'\n';continue;}
+    let match=line.match(/^(#{1,4})\s+(.+)$/);if(match){closeList();const level=match[1].length;html+='<h'+level+'>'+inlineMarkdown(match[2])+'</h'+level+'>';continue;}
+    match=line.match(/^\s*[-*+]\s+(.+)$/);if(match){if(list!=='ul'){closeList();list='ul';html+='<ul>';}html+='<li>'+inlineMarkdown(match[1])+'</li>';continue;}
+    match=line.match(/^\s*\d+[.)]\s+(.+)$/);if(match){if(list!=='ol'){closeList();list='ol';html+='<ol>';}html+='<li>'+inlineMarkdown(match[1])+'</li>';continue;}
+    if(line.startsWith('> ')){closeList();html+='<blockquote>'+inlineMarkdown(line.slice(2))+'</blockquote>';continue;}
+    closeList();if(/^\s*([-*_])(?:\s*\1){2,}\s*$/.test(line))html+='<hr>';
+    else if(line.trim())html+='<p>'+inlineMarkdown(line)+'</p>';
+  }
+  closeList();if(code)html+='</code></pre>';return html;
+}
+function closeFilePreview(){filePreviewModal.className='project-modal';filePreviewBody.replaceChildren();
+  if(filePreviewTrigger){filePreviewTrigger.focus();filePreviewTrigger=null;}}
+async function openFilePreview(path,trigger){
+  filePreviewTrigger=trigger||document.activeElement;filePreviewModal.className='project-modal on';
+  document.getElementById('file-preview-title').textContent=path.split('/').pop()||'File preview';
+  document.getElementById('file-preview-meta').textContent='Preparing preview…';
+  const download=document.getElementById('file-preview-download');download.href=fileUrl(path);download.setAttribute('download','');
+  filePreviewBody.innerHTML='<div class="preview-loading">Loading audited deliverable…</div>';
+  filePreviewNote.textContent='The complete file remains available to download.';
+  try{
+    const data=await previewData(path);document.getElementById('file-preview-meta').textContent=(data.mime||data.kind)+' · '+formatBytes(data.bytes);
+    filePreviewBody.replaceChildren();let node;
+    if(data.kind==='pdf'){node=document.createElement('iframe');node.className='preview-frame';node.title=data.name;node.src=fileUrl(path,true);}
+    else if(data.kind==='image'){node=document.createElement('img');node.className='preview-image';node.alt=data.name;node.src=fileUrl(path,true);}
+    else if(data.kind==='html'){node=document.createElement('iframe');node.className='preview-frame';node.title=data.name;
+      node.setAttribute('sandbox','');node.srcdoc='<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; img-src data:"><style>body{font:15px/1.6 system-ui,sans-serif;margin:32px;color:#202124}img{max-width:100%}pre{white-space:pre-wrap}</style>'+data.text;
+      filePreviewNote.textContent='HTML preview is isolated from the app and cannot access the network.';}
+    else if(data.kind==='markdown'){node=document.createElement('article');node.className='preview-markdown';node.innerHTML=markdownPreview(data.text);}
+    else if(data.kind==='document'){node=document.createElement('article');node.className='preview-document';node.textContent=data.text;
+      filePreviewNote.textContent='Preview is reconstructed from the final audited DOCX binary.';}
+    else if(data.kind==='text'){node=document.createElement('pre');node.className='preview-code';node.textContent=data.text;}
+    else{node=document.createElement('div');node.className='preview-unavailable';node.textContent='Preview unavailable for this file type. Download the complete file to open it in a compatible app.';}
+    filePreviewBody.appendChild(node);if(data.truncated)filePreviewNote.textContent='The reading preview is shortened for responsiveness; the download is complete.';
+  }catch(error){filePreviewBody.innerHTML='<div class="preview-unavailable">'+esc(error.message)+'</div>';}
+}
+document.getElementById('close-file-preview').onclick=closeFilePreview;
+filePreviewModal.addEventListener('click',event=>{if(event.target===filePreviewModal)closeFilePreview();});
+document.addEventListener('click',event=>{const button=event.target.closest('[data-preview]');if(button){event.preventDefault();openFilePreview(button.getAttribute('data-preview'),button);}});
 function artifactList(items,status){
   if(!items||!items.length) return '';
   const shown=items.slice(0,6).map(f=>outputFile(f,status,'')).join('');
@@ -2274,7 +2515,7 @@ function usageQuality(row){
   if(row.estimated_calls)return ['Estimated','estimated'];return ['Reported',''];
 }
 function usageView(d){
-  const u=d.usage||{};const today=u.today||{};const month=u.month||{};
+  const u=d.usage||{};const today=u.today||{};const month=u.month||{},guard=u.budget||{};
   const days=u.days||[];const peak=Math.max(1,...days.map(day=>Number(day.tokens||0)));
   const dayBars=days.map(day=>{const date=new Date(day.date+'T00:00:00');
     return '<div class="usage-day"><span class="usage-day-value">'+formatTokens(day.tokens)+'</span>'
@@ -2296,10 +2537,12 @@ function usageView(d){
     +'<div class="usage-call-value"><b>'+formatTokens(row.tokens)+'</b><span>'
     +(row.api_value_usd===null?'unpriced':formatUsd(row.api_value_usd))+' · '
     +esc(new Date(row.t).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}))+'</span></div></div>').join('');
+  const guardrail=guard.state&&guard.state!=='unconfigured'?'<div class="usage-note"><span>'+(guard.blocked?'!':'◉')+'</span><div><b>Usage guardrail · '+esc(guard.state)+'</b><br>'
+    +esc([...(guard.reasons||[]),...(guard.warnings||[])].join(' ')||'Usage is below the configured thresholds.')+'</div></div>':'';
   return '<div class="view-heading"><h2>Token usage</h2><p>Project-level model consumption, updated with every completion.</p></div>'
     +'<div class="usage-note"><span>ⓘ</span><div><b>Local metering · '+esc(u.cost_label||'API-value estimate')+'</b><br>'
     +'Token counts come from the provider runtime when available. Costs use the '+esc(u.price_snapshot||'current')
-    +' public API price snapshot and are not a provider invoice or subscription charge.</div></div>'
+    +' public API price snapshot and are not a provider invoice or subscription charge.</div></div>'+guardrail
     +'<div class="usage-cards"><div class="usage-card"><div class="usage-card-label">Today</div><div class="usage-card-value">'
     +formatTokens(today.tokens)+'</div><div class="usage-card-detail">'+formatUsd(today.api_value_usd)+' API value</div></div>'
     +'<div class="usage-card"><div class="usage-card-label">This month</div><div class="usage-card-value">'
@@ -2498,12 +2741,22 @@ function render(d){
   projectPin.title=projectPinned?'Unpin project':'Pin project';projectPin.setAttribute('aria-label',projectPin.title);
   renderTasks(d);renderInspector(d);renderConversation(d);
   const iv = document.getElementById('interrupted');
-  if(d.interrupted&&(d.interrupted.chat_id||'history')===activeChatId && !(chatProgress(d) && !chatProgress(d).finished)){
-    iv.className = 'interrupted on';iv.textContent = 'Interrupted run: "'
-      + d.interrupted.task.replace(/\s+/g,' ').slice(0,72) + '". Send it again to continue.';
+  const interruptedChat=d.interrupted&&(d.interrupted.chat_id||'history');
+  const interruptedChatExists=Boolean(interruptedChat&&(d.chats&&d.chats.items||[]).some(item=>item.id===interruptedChat));
+  if(d.interrupted&&(interruptedChat===activeChatId||!interruptedChatExists) && !(chatProgress(d) && !chatProgress(d).finished)){
+    const interruptedTask=esc(d.interrupted.task.replace(/\s+/g,' ').slice(0,72)),interruptedPhase=esc(d.interrupted.phase||'unknown');
+    iv.className = 'interrupted on';iv.innerHTML = currentLocale==='zh'
+      ?'<b>任务已安全中断</b><br>“'+interruptedTask+'”。最后可见阶段：'+interruptedPhase+'。已提交轮次均已保留；重试会从最近的持久 Git 提交继续，忽略提示也不会改动文件。<div class="interrupted-actions"><button type="button" data-interrupted="retry">重试任务</button><button type="button" data-interrupted="dismiss">忽略提示</button></div>'
+      :'<b>Task interrupted safely</b><br>"'+interruptedTask+'". Last visible phase: '+interruptedPhase+'. Committed rounds are preserved. Retry resumes from the last durable commit; dismiss keeps files unchanged.<div class="interrupted-actions"><button type="button" data-interrupted="retry">Retry task</button><button type="button" data-interrupted="dismiss">Dismiss notice</button></div>';
   }else iv.className = 'interrupted';
   maybePromptForHuman(d);
 }
+document.getElementById('interrupted').onclick=async ev=>{const button=ev.target.closest('[data-interrupted]');if(!button)return;
+  button.disabled=true;const action=button.getAttribute('data-interrupted');
+  try{await api('/api/interrupted',{action});route.className='route on';route.innerHTML=currentLocale==='zh'
+    ?(action==='retry'?'<b>任务已重启</b> — 正从最近的持久 Git 提交继续。':'<b>提示已忽略</b> — 文件和已提交证据均已保留。')
+    :(action==='retry'?'<b>Task restarted</b> — continuing from the last durable Git commit.':'<b>Notice dismissed</b> — files and committed evidence were preserved.');}
+  catch(e){route.className='route on error';route.textContent=e.message;button.disabled=false;}};
 function selectView(view){
   activeView = ['tasks','artifacts','audits','usage','compute','tools'].includes(view) ? view : 'tasks';
   if(activeView!=='compute')stopComputeTimers();
@@ -2646,7 +2899,10 @@ function closeComputeHost(){computeHostModal.className='project-modal';computeHo
 function openComputeHost(){computeHostForm.reset();document.getElementById('compute-host-error').className='wizard-error';
   const aliases=(lastState&&lastState.compute&&lastState.compute.aliases)||[];
   document.getElementById('compute-aliases').innerHTML=aliases.map(value=>'<option value="'+esc(value)+'"></option>').join('');
+  document.getElementById('hpc-agent-policy').className='hpc-policy off';
   computeHostModal.className='project-modal on';setTimeout(()=>document.getElementById('compute-alias').focus(),0);}
+document.getElementById('hpc-agent-enabled').onchange=event=>{
+  document.getElementById('hpc-agent-policy').className='hpc-policy'+(event.target.checked?'':' off');};
 function closeComputeJob(){computeJobModal.className='project-modal';computeJobForm.reset();}
 function openComputeJob(hostId){const hosts=(lastState&&lastState.compute&&lastState.compute.hosts)||[];
   if(!hosts.length){openComputeHost();return;}computeJobForm.reset();computeInputFiles=[];renderComputeInputs();document.getElementById('compute-job-error').className='wizard-error';
@@ -2825,7 +3081,9 @@ document.getElementById('escalations').onclick=ev=>{const button=ev.target.close
   const cycle=button.getAttribute('data-cycle');const row=lastState&&(lastState.escalations||[]).find(item=>item.cycle_id===cycle);
   openResolution(row||cycle,button.getAttribute('data-resolve'),button.getAttribute('data-sha'));};
 scrim.onclick=closePanels;
-document.addEventListener('keydown',ev=>{if(ev.key==='Escape')closePanels();});
+document.addEventListener('keydown',ev=>{if(ev.key==='Escape'){
+  if(filePreviewModal.classList.contains('on'))closeFilePreview();else closePanels();
+}});
 window.addEventListener('resize',()=>{if(innerWidth>1120)closePanels();});
 form.onsubmit=async ev=>{ev.preventDefault();const rawText=say.value.trim();if(!rawText)return;
   const continuing=pendingContinuation.chat===activeChatId&&Boolean(pendingContinuation.cycle);

@@ -418,6 +418,19 @@ def test_delivery_choices_refuse_an_unimplemented_binary_format():
             "tone": "Editorial and readable"})
 
 
+@pytest.mark.parametrize("label,format_name", [
+    ("PDF (.pdf)", "pdf"), ("Word (.docx)", "docx"),
+])
+def test_delivery_choices_bind_supported_document_export(label, format_name):
+    from crossaudit.console.server import _guided_task
+
+    task = _guided_task("Write a review", {
+        "mode": "selected", "focus": "Balanced coverage", "format": label,
+        "tone": "Editorial and readable"})
+    assert f"[CROSSAUDIT-DOCUMENT-EXPORT format={format_name}" in task
+    assert "Return exactly one Markdown source file" in task
+
+
 def test_artifact_download_is_tokened_streamed_and_forces_a_download(
         console, monkeypatch, tmp_path):
     from crossaudit.console import server as server_mod

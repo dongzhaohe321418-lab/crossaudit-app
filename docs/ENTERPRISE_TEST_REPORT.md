@@ -1,14 +1,14 @@
-# CrossAudit 4.11.1 enterprise release assessment
+# CrossAudit 4.13.0 enterprise release assessment
 
 Date: 2026-08-04
 
 Target: Apple Silicon macOS 13 or later
 
-Release candidate: 4.11.1
+Release candidate: 4.13.0
 
 ## Executive result
 
-CrossAudit 4.11.1 is suitable for local evaluation and controlled pilot use. It
+CrossAudit 4.13.0 is suitable for local evaluation and controlled pilot use. It
 preserves the V3.2 audited protocol while adding a native AppKit/WebKit shell,
 Keychain credentials, UI-first project creation, independent background
 projects, GitHub connection, chunked file transfer, final-artifact downloads,
@@ -45,10 +45,60 @@ Policy rather than hidden behind an installation workaround.
 | Runtime models | Atomic model/effort switch, busy refusal, SSE refresh, provider-specific payload | Automated and live |
 | Environment Doctor | Missing/outdated tools, startup degradation, safe repair allowlist, update check, responsive UI | Automated and browser smoke |
 | Remote compute | SSH-config discovery, strict host keys, read-only probe, Slurm/workstation detach, restart reattachment, 2-second status/logs, cancel, input/output streaming | Automated, real SSH failure smoke, and browser smoke |
+| Provider resilience | Bounded retry, `Retry-After`, durable circuit breakers, explicit fallback chains, and cross-role vendor-pool isolation | Automated and browser failure-path smoke |
+| Spend controls | Daily token and monthly API-value warning/hard limits; unknown-price fail-closed behavior | Automated and live UI state smoke |
+| Crash recovery | Durable task/chat/phase checkpoints; restart, retry, and dismiss controls without deleting work | Automated and browser smoke |
+| Backup credentials | Independent Keychain slots, write-only UI, explicit route selection, and no silent rotation | Automated and browser paste smoke |
 
 The final command outputs and artifact hashes are recorded in the GitHub release
 and CI logs. Tests that spend provider credits remain explicitly opt-in and use
 repository secrets in CI.
+
+## V4.13.0 release-candidate evidence
+
+- Automated suite: **536 passed, 2 skipped**. JavaScript syntax validation,
+  Python bytecode compilation, and whitespace validation passed. The skipped
+  cases are only explicitly opt-in paid-provider checks.
+- Resilience tests cover server-directed `Retry-After`, exponential retry,
+  fallback within one audit turn, open-circuit bypass, durable circuit state,
+  exhausted-provider escalation, and hard budget refusal before a request is
+  sent. Retries do not consume additional audit rounds.
+- Configuration validation now treats each role as a provider pool. Generator
+  and Auditor pools must remain vendor-disjoint even when fallback routes or
+  backup credential slots are configured.
+- Real browser acceptance exercised the project controls, fallback route
+  editor, budgets, dark/light themes, 700 px and 390 px layouts, API-key paste,
+  interrupted-task recovery, and the no-credential escalation path. The narrow
+  layout had no horizontal overflow.
+- Final PDF and DOCX delivery was exercised from temporary Markdown source
+  through local rendering, container validation, semantic recovery from the
+  exact binary, mandatory DCL inspection, Generator-only commit staging, and
+  Console preview/download. English and CJK output was rendered to page images
+  and visually checked. Corrupt, empty, encrypted, and macro-enabled document
+  paths fail closed.
+- Browser acceptance reopened a real long audit view and measured the final
+  audit evidence **80 px above** the live composer at maximum scroll. Composer
+  clearance follows the rendered composer height through `ResizeObserver`.
+  The redesigned SSH host dialog was checked with Generator access collapsed
+  and expanded; its independently scrolling body left **34 px** between the
+  last host-identity control and the fixed action footer.
+- Interrupted work records its task, Chat, continuation cycle, and last phase.
+  Retry resumes from the last durable Git commit; dismiss preserves files and
+  ledger evidence. A caught worker exception is recoverable immediately rather
+  than being hidden until a process restart.
+- This candidate did **not** spend live provider credits. Provider protocol
+  behavior is covered by deterministic tests; paid OpenAI/Anthropic checks
+  remain opt-in. No live GitHub repository creation or real HPC job is claimed
+  for this candidate.
+- The Apple Silicon DMG was built from the final source, verified by `hdiutil`,
+  mounted read-only, copied to an isolated directory, and checked with `plutil`,
+  deep strict `codesign`, and `lipo`. Both the native shell and frozen core are
+  arm64 and the minimum system version is macOS 13. The copied frozen core
+  bootstrapped an isolated workspace; missing token, wrong token, and foreign
+  Host requests returned HTTP 403, while authenticated state/settings/project
+  endpoints returned HTTP 200.
+- Distribution SHA-256:
+  `87bb9a70ac767b92e4e9b081df82709442489ab37d3961517d4ba23465ae3b05`.
 
 ## V4.11.1 release-candidate evidence
 

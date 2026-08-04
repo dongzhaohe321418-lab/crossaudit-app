@@ -16,6 +16,7 @@ import base64
 import binascii
 import hashlib
 import json
+import mimetypes
 import os
 import re
 import secrets
@@ -29,6 +30,7 @@ from ..config import Config
 MAX_REQUEST_BYTES = 800_000
 UPLOAD_CHUNK_BYTES = 512_000
 MAX_INLINE_TEXT_BYTES = 400_000
+MAX_PREVIEW_TEXT_BYTES = 1_000_000
 UPLOAD_ID = re.compile(r"[a-f0-9]{32}")
 UPLOAD_BATCH = re.compile(r"[a-f0-9]{32}")
 
@@ -440,3 +442,51 @@ def read_artifact(cfg: Config, relative: str) -> tuple[bytes, str]:
     """
     resolved, name, _size = resolve_artifact(cfg, relative)
     return resolved.read_bytes(), name
+
+
+def preview_artifact(cfg: Config, relative: str) -> dict:
+    """Return a safe preview description for one generator-recorded output.
+
+    Binary PDF/image bytes are streamed by the file endpoint. Text and office
+    documents are returned as escaped-by-the-client data, never executable
+    markup. Very large text previews are clipped for UI responsiveness without
+    changing or limiting the downloadable file.
+    """
+    resolved, name, size = resolve_artifact(cfg, relative)
+    suffix = resolved.suffix.lower()
+    mime = mimetypes.guess_type(name)[0] or "application/octet-stream"
+    base = {"path": relative, "name": name, "bytes": size, "mime": mime,
+            "truncated": False}
+    if suffix == ".pdf":
+        return {**base, "kind": "pdf"}
+    if mime.startswith("image/"):
+        return {**base, "kind": "image"}
+    if suffix == ".docx":
+        from ..document_export import extract_document
+        view = extract_document(relative, resolved.read_bytes())
+        if not view.valid:
+            raise TransferError(f"Word preview is unavailable: {view.reason}", 422)
+        text = view.text
+        truncated = len(text.encode("utf-8")) > MAX_PREVIEW_TEXT_BYTES
+        if truncated:
+            text = text.encode("utf-8")[:MAX_PREVIEW_TEXT_BYTES].decode(
+                "utf-8", errors="ignore")
+        return {**base, "kind": "document", "text": text,
+                "truncated": truncated, "units": view.units}
+    text_suffixes = {
+        ".md", ".markdown", ".txt", ".html", ".htm", ".css", ".js",
+        ".jsx", ".ts", ".tsx", ".py", ".json", ".yaml", ".yml",
+        ".csv", ".xml", ".toml", ".sh", ".sql", ".log", ".ini",
+    }
+    if suffix in text_suffixes or mime.startswith("text/"):
+        with open(resolved, "rb") as handle:
+            raw = handle.read(MAX_PREVIEW_TEXT_BYTES + 1)
+        truncated = len(raw) > MAX_PREVIEW_TEXT_BYTES
+        raw = raw[:MAX_PREVIEW_TEXT_BYTES]
+        if b"\0" in raw:
+            return {**base, "kind": "binary"}
+        text = raw.decode("utf-8", errors="replace")
+        kind = ("markdown" if suffix in {".md", ".markdown"} else
+                "html" if suffix in {".html", ".htm"} else "text")
+        return {**base, "kind": kind, "text": text, "truncated": truncated}
+    return {**base, "kind": "binary"}

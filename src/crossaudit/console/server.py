@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import mimetypes
 import os
 import re
 import secrets
@@ -36,12 +37,13 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, quote, urlparse
 
 from ..config import Config, load
-from .. import app_doctor, app_keys, connections, hpc, mcp, usage
+from .. import app_doctor, app_keys, connections, document_export, hpc, mcp, usage
 from ..controller import StateStore
 from ..errors import ConfigDenial, Denial
 from ..gitio import is_ancestor
 from ..receipt.verify import (admit as admit_receipt, load as load_receipt,
                               verify as verify_receipt)
+from ..providers import resilience as provider_resilience
 from ..router import history as routing_history
 from . import chats, daemon, overview, projects
 from .page import PAGE
@@ -50,7 +52,7 @@ from .streams import bundle
 from .transfers import (MAX_REQUEST_BYTES, TransferError, decode_attachments,
                         prompt_section, receive_upload_chunk, resolve_artifact,
                         resolve_upload_batch, resolve_uploads, retire_uploads,
-                        stage_attachments)
+                        stage_attachments, preview_artifact)
 
 IDLE_TIMEOUT_S = 900.0
 STREAM_POLL_S = 0.1          # fallback for changes made by another local process
@@ -291,6 +293,7 @@ def snapshot(cfg: Config) -> dict:
         "findings": overview.findings_by_severity(audits),
         "top_rules": overview.top_rules(audits),
         "usage": usage.summary(cfg),
+        "provider_resilience": provider_resilience.snapshot(cfg),
         # Remote jobs are scheduler-owned or detached on the SSH host.  This
         # snapshot only reattaches the live UI to their persistent identifiers.
         "compute": hpc.MANAGER.snapshot(cfg, STREAM_CHANGES.notify),
@@ -355,24 +358,35 @@ def start_build(cfg: Config, task: str, *, before_start=None,
         TRACKER.step("input", f"{len(staged)} attachment(s) received",
                      ", ".join(item["name"] for item in staged))
     try:
-        daemon.mark_build(cfg, resolved, chat_id=chat_id)
+        daemon.mark_build(cfg, resolved, chat_id=chat_id,
+                          continuation_cycle=continuation_cycle)
     except Exception:
         daemon.release_workspace_slot(slot)
         raise
 
     def work() -> None:
+        recoverable = False
         try:
+            def live_step(actor: str, text: str, detail: str = "") -> None:
+                TRACKER.step(actor, text, detail)
+                daemon.update_build(cfg, actor, detail or text)
+
             code = run_loop(cfg, resolved, attachments=prompt_section(staged),
-                            on_step=lambda a, txt, d="": TRACKER.step(a, txt, d),
+                            on_step=live_step,
                             chat_id=chat_id,
                             continuation_cycle=continuation_cycle)
             TRACKER.finish({0: "passed", 11: "escalated"}.get(code, "blocked"))
         except Denial as exc:
             TRACKER.finish("refused", exc.reason)
+            daemon.mark_failed(cfg, "refused", exc.reason)
+            recoverable = True
         except Exception as exc:                                  # noqa: BLE001
             TRACKER.finish("failed", f"{type(exc).__name__}: {exc}")
+            daemon.mark_failed(cfg, "failed", f"{type(exc).__name__}: {exc}")
+            recoverable = True
         finally:
-            daemon.unmark_build(cfg)
+            if not recoverable:
+                daemon.unmark_build(cfg)
             daemon.release_workspace_slot(slot)
 
     threading.Thread(target=work, daemon=True).start()
@@ -385,7 +399,8 @@ DELIVERY_CHOICES = {
     "focus": {"Balanced coverage", "Technical depth",
               "Everyday use and practical experience",
               "Value and purchase recommendation"},
-    "format": {"Markdown (.md)", "Plain text (.txt)", "HTML (.html)"},
+    "format": {"Markdown (.md)", "Plain text (.txt)", "HTML (.html)",
+               "PDF (.pdf)", "Word (.docx)"},
     "tone": {"Editorial and readable", "Technical and precise",
              "Concise and direct", "Persuasive but evidence-led"},
 }
@@ -405,13 +420,18 @@ def _guided_task(text: str, choices) -> str:
         if value not in allowed:
             raise ConfigDenial(f"choose a supported {key}")
         selected[key] = value
-    return (text + "\n\nCONFIRMED DELIVERY REQUIREMENTS\n"
+    task = (text + "\n\nCONFIRMED DELIVERY REQUIREMENTS\n"
             f"- Focus: {selected['focus']}\n"
             f"- Output format: {selected['format']}\n"
             f"- Tone: {selected['tone']}\n"
             "- Produce exactly one primary deliverable. Do not create supporting "
             "or alternate-format files unless the task or configured audit "
             "contract explicitly requires them.")
+    if selected["format"] == "PDF (.pdf)":
+        task += document_export.export_instructions("pdf")
+    elif selected["format"] == "Word (.docx)":
+        task += document_export.export_instructions("docx")
+    return task
 
 
 def say(cfg: Config, text: str, *, attachments=None,
@@ -564,20 +584,24 @@ def make_handler(cfg: Config, token: str, touch) -> type:
             self.send_header("content-length", str(len(body)))
             self.send_header("content-security-policy",
                              "default-src 'none'; style-src 'unsafe-inline'; "
-                             "script-src 'unsafe-inline'; connect-src 'self'")
+                             "script-src 'unsafe-inline'; connect-src 'self'; "
+                             "img-src 'self' data:; frame-src 'self'")
             self.send_header("referrer-policy", "no-referrer")
             self.send_header("x-content-type-options", "nosniff")
             self.end_headers()
             self.wfile.write(body)
 
-        def _send_download(self, path, filename: str, size: int) -> None:
+        def _send_download(self, path, filename: str, size: int, *, inline=False) -> None:
             self.send_response(200)
-            self.send_header("content-type", "application/octet-stream")
+            ctype = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+            self.send_header("content-type", ctype)
             self.send_header("content-length", str(size))
             self.send_header("content-disposition",
-                             "attachment; filename*=UTF-8''" + quote(filename))
+                             ("inline" if inline else "attachment")
+                             + "; filename*=UTF-8''" + quote(filename))
             self.send_header("cache-control", "no-store")
             self.send_header("x-content-type-options", "nosniff")
+            self.send_header("content-security-policy", "default-src 'none'; sandbox")
             self.end_headers()
             try:
                 with open(path, "rb") as handle:
@@ -644,13 +668,25 @@ def make_handler(cfg: Config, token: str, touch) -> type:
             elif parsed.path == "/api/settings/stream":
                 self._stream_settings(touch)
             elif parsed.path == "/api/file":
+                query = parse_qs(parsed.query)
                 try:
                     path, filename, size = resolve_artifact(
+                        self._config(), (query.get("path") or [""])[0])
+                except TransferError as exc:
+                    self._deny(exc.status, exc.reason)
+                    return
+                inline_types = (".pdf", ".png", ".jpg", ".jpeg", ".gif", ".webp")
+                inline = ((query.get("view") or [""])[0] == "1"
+                          and filename.lower().endswith(inline_types))
+                self._send_download(path, filename, size, inline=inline)
+            elif parsed.path == "/api/preview":
+                try:
+                    result = preview_artifact(
                         self._config(), (parse_qs(parsed.query).get("path") or [""])[0])
                 except TransferError as exc:
                     self._deny(exc.status, exc.reason)
                     return
-                self._send_download(path, filename, size)
+                self._send(json.dumps(result).encode(), "application/json")
             elif parsed.path == "/api/hpc/file":
                 query = parse_qs(parsed.query)
                 try:
@@ -802,7 +838,7 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                                    "/api/skills",
                                    "/api/settings", "/api/providers/connect",
                                    "/api/doctor", "/api/hpc", "/api/mcp", "/api/admit",
-                                   "/api/escalation"}:
+                                   "/api/escalation", "/api/interrupted"}:
                 self._deny(404, "no such action")
                 return
             touch()
@@ -933,6 +969,7 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                                 "provider calls, so wait for this task to finish and save again.",
                                 issue="runtime_busy", action="wait")
                         result = projects.update_runtime(self._config(), payload)
+                        provider_resilience.reset(self._config())
                     STREAM_CHANGES.notify()
                     self._send(json.dumps(result).encode(), "application/json")
                     return
@@ -954,6 +991,7 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                         raise ConfigDenial("Keychain settings are available in the macOS app")
                     app_keys.apply(payload)
                     connections.invalidate()
+                    provider_resilience.reset(self._config())
                     STREAM_CHANGES.notify()
                     self._send(json.dumps(app_settings(self._config())).encode(),
                                "application/json")
@@ -1047,6 +1085,28 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                         "status": result["status"],
                         "round": result["round"],
                     }).encode(), "application/json")
+                    return
+                if parsed.path == "/api/interrupted":
+                    current = self._config()
+                    interrupted = daemon.interrupted(current)
+                    if not interrupted:
+                        raise ConfigDenial("there is no interrupted task to recover")
+                    action = str(payload.get("action", ""))
+                    if action == "retry":
+                        result = start_build(
+                            current, str(interrupted.get("task", "")),
+                            chat_id=str(interrupted.get("chat_id", "")),
+                            continuation_cycle=str(
+                                interrupted.get("continuation_cycle", "")))
+                        result["recovery"] = "restarted_from_last_durable_commit"
+                    elif action == "dismiss":
+                        daemon.unmark_build(current)
+                        result = {"dismissed": True,
+                                  "working_tree_preserved": True}
+                    else:
+                        raise ConfigDenial("interrupted task action must be retry or dismiss")
+                    STREAM_CHANGES.notify()
+                    self._send(json.dumps(result).encode(), "application/json")
                     return
                 text = str(payload.get("text", "")).strip()
                 if len(text.encode()) > MAX_UTTERANCE:

@@ -13,6 +13,7 @@ from crossaudit.console.transfers import (
     TransferError,
     decode_attachments,
     prompt_section,
+    preview_artifact,
     read_artifact,
     receive_upload_chunk,
     resolve_artifact,
@@ -183,6 +184,44 @@ def test_only_generator_recorded_scope_files_can_be_downloaded(cfg):
         read_artifact(scoped, "crossaudit.yml")
     with pytest.raises(TransferError):
         read_artifact(scoped, "../AUDIT_RULES.md")
+
+
+@pytest.mark.parametrize("name,kind,content", [
+    ("review.md", "markdown", b"# Review\n\nAudited text\n"),
+    ("result.json", "text", b'{"audited": true}\n'),
+    ("page.html", "html", b"<h1>Audited page</h1>"),
+    ("opaque.bin", "binary", b"\x00\xff\x01"),
+])
+def test_preview_describes_recorded_formats_without_executing_them(
+        cfg, name: str, kind: str, content: bytes):
+    scoped = replace(cfg, scope_dirs=["experiments"])
+    target = cfg.root / "experiments" / name
+    target.write_bytes(content)
+    subprocess.run(["git", "add", "--", target.relative_to(cfg.root)],
+                   cwd=cfg.root, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", f"produce {name} (round 1)"],
+                   cwd=cfg.root, check=True)
+    preview = preview_artifact(scoped, f"experiments/{name}")
+    assert preview["kind"] == kind and preview["bytes"] == len(content)
+    if kind != "binary":
+        assert preview["text"] == content.decode()
+
+
+@pytest.mark.parametrize("format_name,kind", [("pdf", "pdf"), ("docx", "document")])
+def test_final_documents_have_safe_console_previews(cfg, format_name: str, kind: str):
+    from crossaudit.document_export import SOURCE_SUFFIX, export_instructions, render_export
+
+    scoped = replace(cfg, scope_dirs=["experiments"])
+    relative = f"experiments/preview{SOURCE_SUFFIX}"
+    (cfg.root / relative).write_text("# Audited document\n\n中文 final content.\n")
+    final = render_export(cfg.root, [relative], "Write" + export_instructions(format_name))[0]
+    subprocess.run(["git", "add", "--", final], cwd=cfg.root, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "produce preview (round 1)"],
+                   cwd=cfg.root, check=True)
+    preview = preview_artifact(scoped, final)
+    assert preview["kind"] == kind
+    if kind == "document":
+        assert "Audited document" in preview["text"] and "中文" in preview["text"]
 
 
 def test_unrecorded_and_symlink_outputs_are_refused(cfg):

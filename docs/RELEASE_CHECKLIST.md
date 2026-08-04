@@ -8,6 +8,12 @@
 - [ ] Start the copied frozen core with isolated support/workspace directories.
 - [ ] Test project creation, independent worker attachment, token refusals, and
       final-artifact download.
+- [ ] Generate PDF and DOCX through the UI; verify only the requested binary is
+      committed, semantic audit sees the final bytes, CJK text renders, every
+      supported preview opens safely, and unknown binaries remain download-only.
+- [ ] Open a long audit at maximum scroll with a tall composer and attachments;
+      confirm the final evidence stays visible above the composer. Exercise the
+      SSH host dialog with Generator access both collapsed and expanded.
 - [ ] Run Environment Doctor with current, missing, and outdated Git; verify
       real-time refresh, project-creation blocking, update guidance, local Git
       identity repair, and first-launch recovery without a usable Git binary.
@@ -27,6 +33,6 @@
       input streaming, and portable remote-output download.
 - [ ] Confirm no key, tokenized localhost URL, build directory, or app support
       data is tracked by Git.
-- [ ] Confirm `main` is clean, version is 4.11.1, and README links target V4.
-- [ ] Push `main`, create the `v4.11.1` release, upload DMG and checksum, and
+- [ ] Confirm `main` is clean, version is 4.13.0, and README links target V4.
+- [ ] Push `main`, create the `v4.13.0` release, upload DMG and checksum, and
       verify the repository default branch is `main`.

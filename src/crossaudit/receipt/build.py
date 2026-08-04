@@ -19,7 +19,7 @@ def _sha256(data: bytes) -> str:
 
 
 def isolation_evidence(cfg: Config, *, mode: str, provisioner: str,
-                       admission: str) -> dict:
+                       admission: str, exchange: dict | None = None) -> dict:
     """Observed isolation, per dimension, plus the operational evidence.
 
     parametric: the two roles name different vendors, asserted from config (I1).
@@ -30,16 +30,21 @@ def isolation_evidence(cfg: Config, *, mode: str, provisioner: str,
         false — recorded, not narrated.
     """
     ok, _why = heterogeneity(cfg)
-    gen_key_env = "CROSSAUDIT_GENERATOR_KEY"
-    both_keys_here = bool(os.environ.get(cfg.auditor.key_env)) and bool(
-        os.environ.get(gen_key_env))
+    auditor_keys = {cfg.auditor.key_env,
+                    *(item.key_env for item in cfg.auditor.fallbacks)}
+    generator_keys = {cfg.generator_key_env or "CROSSAUDIT_GENERATOR_KEY",
+                      *(item.key_env for item in cfg.generator_fallbacks)}
+    both_keys_here = (any(bool(os.environ.get(name)) for name in auditor_keys) and
+                      any(bool(os.environ.get(name)) for name in generator_keys))
+    actual_provider = ((exchange or {}).get("provider") or cfg.auditor.provider)
+    actual_model = ((exchange or {}).get("model") or cfg.auditor.model)
     return {
         "parametric": ok,
         "contextual": True,
         "permissive": mode != "local" and not both_keys_here,
         "execution": mode,
         "credential": "shared-process" if both_keys_here else "auditor-only",
-        "provider": f"{cfg.auditor.provider}:{cfg.auditor.model}",
+        "provider": f"{actual_provider}:{actual_model}",
         "provisioner": provisioner,
         "admission": admission,
     }
@@ -83,11 +88,12 @@ def build(*, cfg: Config, subject: dict, cycle: dict, manifest: dict,
         },
         "audit": {
             "verdict": verdict,
-            "provider": cfg.auditor.provider,
-            "model": cfg.auditor.model,
-            "reasoning_effort": (cfg.auditor.reasoning_effort
-                                 or "provider-default"),
-            "vendor": cfg.auditor.vendor,
+            "provider": exchange.get("provider") or cfg.auditor.provider,
+            "model": exchange.get("model") or cfg.auditor.model,
+            "reasoning_effort": (exchange.get("reasoning_effort") or
+                                 cfg.auditor.reasoning_effort or "provider-default"),
+            "vendor": exchange.get("vendor") or cfg.auditor.vendor,
+            "fallback": bool(exchange.get("fallback")),
             "audit_integrity": integrity,
             "exchange": exchange,
             "retention": retention,
@@ -100,5 +106,5 @@ def build(*, cfg: Config, subject: dict, cycle: dict, manifest: dict,
         },
         "verifier": _selfid.identity(cfg.root),
         "isolation": isolation_evidence(cfg, mode=mode, provisioner=provisioner,
-                                        admission=admission),
+                                        admission=admission, exchange=exchange),
     }

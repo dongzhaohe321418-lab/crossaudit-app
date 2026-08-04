@@ -105,6 +105,11 @@ def run_checks(files: Mapping[str, bytes], names: list[str],
     result = CheckResult(notes=list(notes or []), contracts=contracts(names))
     for name in names:
         result.findings.extend(replace(f, check=name) for f in _REGISTRY[name](files))
+    # Final office documents are opaque containers, so this integrity boundary
+    # is mandatory rather than a project-selectable quality rule.
+    from . import documents
+    result.contracts[documents.CHECK_NAME] = documents.INTEGRITY_CONTRACT
+    result.findings.extend(documents.validate(files))
     # I8: an input we could not fully read can never end in PASS.
     if any(n.startswith("truncated:") for n in result.notes):
         result.findings.append(Finding(

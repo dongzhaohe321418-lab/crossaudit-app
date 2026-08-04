@@ -117,6 +117,14 @@ def test_our_own_running_build_is_not_reported_as_interrupted(cfg):
     assert daemon.interrupted(cfg) is None
 
 
+def test_caught_worker_failure_remains_recoverable_in_the_same_process(cfg):
+    daemon.mark_build(cfg, "recover this", chat_id="history")
+    daemon.mark_failed(cfg, "failed", "RuntimeError: worker stopped")
+    found = daemon.interrupted(cfg)
+    assert found["task"] == "recover this"
+    assert found["phase"] == "failed" and found["failed"] is True
+
+
 def test_a_finished_build_leaves_nothing_behind(cfg):
     daemon.mark_build(cfg, "done soon")
     daemon.unmark_build(cfg)
@@ -137,6 +145,25 @@ def test_the_state_endpoint_surfaces_an_interruption(running):
         data = json.loads(r.read())
     assert data["interrupted"]["task"] == "cut off mid-round"
     daemon.unmark_build(cfg)
+
+
+def test_interrupted_notice_can_be_dismissed_through_the_ui_api(running):
+    cfg, url = running
+    daemon.mark_build(cfg, "preserve this work")
+    flag = json.loads(daemon.flag_path(cfg).read_text())
+    flag["pid"] = 999999
+    daemon.flag_path(cfg).write_text(json.dumps(flag))
+
+    import urllib.request
+
+    endpoint = url.replace("/?", "/api/interrupted?")
+    request = urllib.request.Request(
+        endpoint, data=b'{"action":"dismiss"}', method="POST",
+        headers={"content-type": "application/json"})
+    with urllib.request.urlopen(request, timeout=5) as response:
+        result = json.loads(response.read())
+    assert result == {"dismissed": True, "working_tree_preserved": True}
+    assert daemon.interrupted(cfg) is None
 
 
 # ---------------------------------------------------------------- idle policy

@@ -77,14 +77,15 @@ def entries(repo: Path, sha: str, prefix: str = "") -> list[tuple[str, str, str]
     return out
 
 
-def read_blob(repo: Path, blob: str, *, limit: int = MAX_BLOB_BYTES) -> tuple[bytes, bool]:
+def read_blob(repo: Path, blob: str, *,
+              limit: int | None = MAX_BLOB_BYTES) -> tuple[bytes, bool]:
     """Blob bytes and whether they were truncated at `limit`."""
     proc = subprocess.run(["git", "cat-file", "blob", blob], cwd=str(repo),
                           capture_output=True)
     if proc.returncode != 0:
         raise IntegrityDenial(f"cannot read blob {blob[:12]}", repo=str(repo))
     data = proc.stdout
-    return (data[:limit], True) if len(data) > limit else (data, False)
+    return (data[:limit], True) if limit is not None and len(data) > limit else (data, False)
 
 
 def materialise(repo: Path, sha: str, prefix: str = "",
@@ -105,7 +106,13 @@ def materialise(repo: Path, sha: str, prefix: str = "",
             raise IntegrityDenial(f"increment contains a symlink: {path}", sha=sha)
         if mode == "160000":
             raise IntegrityDenial(f"increment contains a submodule: {path}", sha=sha)
-        data, truncated = read_blob(repo, blob)
+        # PDF/DOCX content is audited through bounded semantic extraction, but
+        # the container itself must remain complete for validation and receipt
+        # hashing. Truncating the ZIP/PDF first would make every larger document
+        # look corrupt. No product quota is imposed here; physical memory/disk
+        # remain the real machine limits.
+        limit = None if Path(path).suffix.lower() in {".pdf", ".docx"} else MAX_BLOB_BYTES
+        data, truncated = read_blob(repo, blob, limit=limit)
         if truncated:
             notes.append(f"truncated: {path}")
         files[path] = data

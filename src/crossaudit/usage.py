@@ -19,6 +19,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable
 
+from .errors import ProviderDenial
 from .providers.base import Reply
 
 try:  # Unix advisory locking.
@@ -35,7 +36,7 @@ LEDGER_NAME = "usage.jsonl"
 PRICE_SNAPSHOT = "2026-08-03"
 _WRITE_LOCK = threading.Lock()
 _CACHE_LOCK = threading.Lock()
-_SUMMARY_CACHE: dict[str, tuple[tuple[int, int, int], dict]] = {}
+_SUMMARY_CACHE: dict[str, tuple[tuple, dict]] = {}
 _LISTENERS: list[Callable[[], None]] = []
 
 
@@ -286,6 +287,78 @@ def _finish(bucket: dict) -> dict:
     return bucket
 
 
+def _budget_view(cfg, today: dict, month: dict) -> dict:
+    policy = getattr(cfg, "budgets", None)
+    if policy is None:
+        return {"state": "unconfigured", "warnings": [], "blocked": False}
+    warnings: list[str] = []
+    reasons: list[str] = []
+    daily_tokens = int(today.get("tokens", 0))
+    month_cost = float(month.get("api_value_usd", 0.0))
+    unpriced = int(month.get("unpriced_calls", 0))
+    if policy.daily_token_warning and daily_tokens >= policy.daily_token_warning:
+        warnings.append(
+            f"Daily usage reached {daily_tokens:,} tokens (warning {policy.daily_token_warning:,}).")
+    if policy.daily_token_limit and daily_tokens >= policy.daily_token_limit:
+        reasons.append(
+            f"Daily token limit reached: {daily_tokens:,} / {policy.daily_token_limit:,}.")
+    if policy.monthly_cost_warning_usd and month_cost >= policy.monthly_cost_warning_usd:
+        warnings.append(
+            f"Monthly API value reached ${month_cost:.2f} "
+            f"(warning ${policy.monthly_cost_warning_usd:.2f}).")
+    if policy.monthly_cost_limit_usd:
+        if unpriced:
+            reasons.append(
+                "The monthly cost limit cannot be proven because one or more calls use "
+                "an unpriced model. Remove the cost limit or select priced models.")
+        elif month_cost >= policy.monthly_cost_limit_usd:
+            reasons.append(
+                f"Monthly API-value limit reached: ${month_cost:.2f} / "
+                f"${policy.monthly_cost_limit_usd:.2f}.")
+    configured = any((policy.daily_token_warning, policy.daily_token_limit,
+                      policy.monthly_cost_warning_usd,
+                      policy.monthly_cost_limit_usd))
+    return {
+        "state": "blocked" if reasons else "warning" if warnings else
+                 "ok" if configured else "unconfigured",
+        "warnings": warnings,
+        "reasons": reasons,
+        "blocked": bool(reasons),
+        "daily_tokens": daily_tokens,
+        "daily_token_warning": policy.daily_token_warning,
+        "daily_token_limit": policy.daily_token_limit,
+        "monthly_api_value_usd": round(month_cost, 8),
+        "monthly_cost_warning_usd": policy.monthly_cost_warning_usd,
+        "monthly_cost_limit_usd": policy.monthly_cost_limit_usd,
+        "unpriced_calls": unpriced,
+    }
+
+
+def enforce_budget(cfg, *, system: str = "", prompt: str = "") -> dict:
+    """Refuse a new provider call after a configured hard guardrail is reached."""
+    view = summary(cfg).get("budget", {})
+    if view.get("blocked"):
+        raise ProviderDenial(
+            "Local usage guardrail paused provider calls. " + " ".join(view["reasons"])
+            + " Open Project controls to raise or clear the limit, then retry.",
+            category="budget", retryable=False, budget=view)
+    projected_input = math.ceil((len(system) + len(prompt)) / 4)
+    limit = view.get("daily_token_limit")
+    if limit and int(view.get("daily_tokens", 0)) + projected_input > int(limit):
+        projected = dict(view)
+        projected.update(blocked=True, state="blocked",
+                         projected_input_tokens=projected_input)
+        reason = (f"The next request is estimated to exceed the daily token limit: "
+                  f"{int(view.get('daily_tokens', 0)):,} used + approximately "
+                  f"{projected_input:,} input > {int(limit):,}.")
+        projected["reasons"] = [*view.get("reasons", []), reason]
+        raise ProviderDenial(
+            "Local usage guardrail paused provider calls. " + reason
+            + " Open Project controls to raise or clear the limit, then retry.",
+            category="budget", retryable=False, budget=projected)
+    return view
+
+
 def summary(cfg) -> dict:
     """Aggregate one project's local ledger for the live console snapshot."""
     path = cfg.root / cfg.state_dir / LEDGER_NAME
@@ -295,6 +368,10 @@ def summary(cfg) -> dict:
         signature = (stat.st_mtime_ns, stat.st_size, now.date().toordinal())
     except OSError:
         signature = (0, 0, now.date().toordinal())
+    policy = getattr(cfg, "budgets", None)
+    signature += tuple(getattr(policy, name, None) for name in (
+        "daily_token_warning", "daily_token_limit", "monthly_cost_warning_usd",
+        "monthly_cost_limit_usd"))
     cache_key = str(path)
     with _CACHE_LOCK:
         cached = _SUMMARY_CACHE.get(cache_key)
@@ -378,6 +455,7 @@ def summary(cfg) -> dict:
         "local_only": True,
         "cost_label": "API-value estimate",
     }
+    result["budget"] = _budget_view(cfg, result["today"], result["month"])
     with _CACHE_LOCK:
         _SUMMARY_CACHE[cache_key] = (signature, result)
     return result

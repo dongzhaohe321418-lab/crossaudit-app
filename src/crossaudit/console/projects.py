@@ -21,8 +21,10 @@ import urllib.request
 import uuid
 from pathlib import Path
 
-from ..config import CONFIG_NAME, Config, load
-from ..app_keys import env_for_vendor
+import yaml
+
+from ..config import CONFIG_NAME, Config, heterogeneity, load
+from ..app_keys import backup_env_for_vendor, env_for_vendor
 from .. import connections, skills as skills_mod
 from ..providers import codex_subscription
 from ..controller import StateStore
@@ -530,12 +532,14 @@ def _runtime_role(current: Config, role: str, model: str | None = None, *,
         selected_model = model or current.auditor.model
         selected_effort = current.auditor.reasoning_effort or ""
         base_url = current.auditor.base_url or ""
+        fallback_roles = current.auditor.fallbacks
     elif role == "generator":
         vendor = current.generator_vendor or ""
         provider = current.generator_provider or ""
         selected_model = model or current.generator_model or ""
         selected_effort = current.generator_reasoning_effort or ""
         base_url = current.generator_base_url or ""
+        fallback_roles = current.generator_fallbacks
     else:
         raise ConfigDenial("runtime role must be auditor or generator")
     if vendor == "human":
@@ -570,7 +574,22 @@ def _runtime_role(current: Config, role: str, model: str | None = None, *,
         "detail": ("The provider controls reasoning automatically for this model."
                    if not efforts else
                    "The selected effort is sent on the next provider request."),
+        "fallbacks": [{"vendor": item.vendor, "provider": item.provider,
+                       "model": item.model, "reasoning_effort":
+                       item.reasoning_effort or "",
+                       "credential": ("backup" if item.key_env ==
+                                      backup_env_for_vendor(item.vendor)
+                                      else "primary")} for item in fallback_roles],
     }
+
+
+def _fallback_catalog() -> list[dict]:
+    return [{"vendor": vendor, "label": item.label, "provider": item.provider,
+             "models": [{"id": model, "hint": hint} for model, hint in item.models],
+             "connected": connections.ready(vendor, "api"),
+             "backup_connected": bool(os.environ.get(
+                 backup_env_for_vendor(vendor), "").strip())}
+            for vendor, item in SPECS.items()]
 
 
 def runtime_options(current: Config, role: str = "", model: str = "", *,
@@ -592,6 +611,22 @@ def runtime_options(current: Config, role: str = "", model: str = "", *,
         "roles": {name: _runtime_role(current, name)
                   for name in ("generator", "auditor")},
         "max_rounds": current.max_rounds,
+        "fallback_catalog": _fallback_catalog(),
+        "resilience": {
+            "max_attempts": current.resilience.max_attempts,
+            "initial_backoff_seconds": current.resilience.initial_backoff_seconds,
+            "max_backoff_seconds": current.resilience.max_backoff_seconds,
+            "retry_after_cap_seconds": current.resilience.retry_after_cap_seconds,
+            "circuit_breaker_failures": current.resilience.circuit_breaker_failures,
+            "circuit_breaker_cooldown_seconds":
+                current.resilience.circuit_breaker_cooldown_seconds,
+        },
+        "budgets": {
+            "daily_token_warning": current.budgets.daily_token_warning,
+            "daily_token_limit": current.budgets.daily_token_limit,
+            "monthly_cost_warning_usd": current.budgets.monthly_cost_warning_usd,
+            "monthly_cost_limit_usd": current.budgets.monthly_cost_limit_usd,
+        },
         "skills": skill_rows,
         "skills_error": skill_error,
         "applies": "next_provider_call",
@@ -725,6 +760,107 @@ def _replace_max_rounds(text: str, value: int) -> str:
     return "".join(lines)
 
 
+def _replace_top_mapping(text: str, name: str, value: dict) -> str:
+    """Replace one generated top-level mapping without rewriting user YAML."""
+    lines = text.splitlines(keepends=True)
+    start = next((i for i, line in enumerate(lines)
+                  if re.match(rf"^{re.escape(name)}\s*:", line)), None)
+    if start is not None:
+        end = len(lines)
+        for i in range(start + 1, len(lines)):
+            if lines[i].strip() and not lines[i].startswith((" ", "\t", "#")):
+                end = i
+                break
+        del lines[start:end]
+    block = yaml.safe_dump({name: value}, sort_keys=False, default_flow_style=False)
+    if lines and lines[-1] and not lines[-1].endswith(("\n", "\r")):
+        lines[-1] += "\n"
+    lines.extend(part + "\n" for part in block.rstrip("\n").splitlines())
+    return "".join(lines)
+
+
+def _fallback_payload(rows: object, role: str) -> list[dict]:
+    if rows in (None, ""):
+        return []
+    if not isinstance(rows, list) or len(rows) > 8:
+        raise ConfigDenial(f"{role} supports up to 8 fallback routes")
+    result = []
+    for row in rows:
+        if not isinstance(row, dict):
+            raise ConfigDenial(f"{role} fallback routes must be objects")
+        vendor = str(row.get("vendor", "")).strip().lower()
+        if vendor not in SPECS:
+            raise ConfigDenial(f"unsupported fallback provider {vendor!r}")
+        model = str(row.get("model", "")).strip()
+        if not MODEL.fullmatch(model):
+            raise ConfigDenial("fallback model ids contain unsupported characters")
+        credential = str(row.get("credential", "primary"))
+        if credential not in {"primary", "backup"}:
+            raise ConfigDenial("fallback credential must be primary or backup")
+        result.append({"provider": SPECS[vendor].provider, "model": model,
+                       "vendor": vendor,
+                       "key_env": (backup_env_for_vendor(vendor)
+                                   if credential == "backup" else env_for_vendor(vendor))})
+    return result
+
+
+def _replace_role_fallbacks(text: str, role: str, rows: list[dict]) -> str:
+    lines = text.splitlines(keepends=True)
+    header = next((i for i, line in enumerate(lines)
+                   if re.fullmatch(rf"{role}:\s*(?:#.*)?\n?", line)), None)
+    if header is None:
+        raise ConfigDenial(f"{role} must use block-style YAML before fallbacks can be edited")
+    end = len(lines)
+    for i in range(header + 1, len(lines)):
+        if lines[i].strip() and not lines[i].startswith((" ", "\t", "#")):
+            end = i
+            break
+    start = next((i for i in range(header + 1, end)
+                  if re.match(r"^  fallbacks\s*:", lines[i])), None)
+    if start is not None:
+        stop = end
+        for i in range(start + 1, end):
+            if lines[i].strip() and not lines[i].startswith(("    ", "\t", "#")):
+                stop = i
+                break
+        del lines[start:stop]
+        end -= stop - start
+    if rows:
+        dumped = yaml.safe_dump({"fallbacks": rows}, sort_keys=False,
+                                default_flow_style=False).rstrip("\n")
+        parts = dumped.splitlines()
+        block = ["  " + parts[0] + "\n",
+                 *("    " + part + "\n" for part in parts[1:])]
+        lines[end:end] = block
+    return "".join(lines)
+
+
+def _bounded_number(payload: dict, key: str, low: float, high: float,
+                    default, *, integer: bool = False):
+    raw = payload.get(key, default)
+    try:
+        value = int(raw) if integer else float(raw)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ConfigDenial(f"{key.replace('_', ' ')} must be a number") from exc
+    if not low <= value <= high:
+        raise ConfigDenial(
+            f"{key.replace('_', ' ')} must be between {low:g} and {high:g}")
+    return value
+
+
+def _optional_positive(payload: dict, key: str, default=None, *, integer: bool = False):
+    raw = payload.get(key, default)
+    if raw in (None, ""):
+        return None
+    try:
+        value = int(raw) if integer else float(raw)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ConfigDenial(f"{key.replace('_', ' ')} must be a positive number") from exc
+    if value <= 0:
+        raise ConfigDenial(f"{key.replace('_', ' ')} must be a positive number")
+    return value
+
+
 def update_runtime(current: Config, payload: dict) -> dict:
     """Atomically commit model, effort and loop-budget choices from the UI."""
     with _RUNTIME_CONFIG_LOCK:
@@ -770,11 +906,74 @@ def update_runtime(current: Config, payload: dict) -> dict:
                     f"for {model}. Choose Automatic.")
             choices[role] = (model, effort)
 
+        resilience = {
+            "max_attempts": _bounded_number(payload, "max_attempts", 1, 10,
+                                             current.resilience.max_attempts, integer=True),
+            "initial_backoff_seconds": _bounded_number(
+                payload, "initial_backoff_seconds", 0, 60,
+                current.resilience.initial_backoff_seconds),
+            "max_backoff_seconds": _bounded_number(
+                payload, "max_backoff_seconds", 0, 300,
+                current.resilience.max_backoff_seconds),
+            "retry_after_cap_seconds": _bounded_number(
+                payload, "retry_after_cap_seconds", 0, 900,
+                current.resilience.retry_after_cap_seconds),
+            "circuit_breaker_failures": _bounded_number(
+                payload, "circuit_breaker_failures", 1, 20,
+                current.resilience.circuit_breaker_failures, integer=True),
+            "circuit_breaker_cooldown_seconds": _bounded_number(
+                payload, "circuit_breaker_cooldown_seconds", 1, 3600,
+                current.resilience.circuit_breaker_cooldown_seconds),
+        }
+        if resilience["max_backoff_seconds"] < resilience["initial_backoff_seconds"]:
+            raise ConfigDenial("maximum retry delay cannot be below the initial delay")
+        budgets = {
+            "daily_token_warning": _optional_positive(
+                payload, "daily_token_warning", current.budgets.daily_token_warning,
+                integer=True),
+            "daily_token_limit": _optional_positive(
+                payload, "daily_token_limit", current.budgets.daily_token_limit,
+                integer=True),
+            "monthly_cost_warning_usd": _optional_positive(
+                payload, "monthly_cost_warning_usd",
+                current.budgets.monthly_cost_warning_usd),
+            "monthly_cost_limit_usd": _optional_positive(
+                payload, "monthly_cost_limit_usd",
+                current.budgets.monthly_cost_limit_usd),
+        }
+        if (budgets["daily_token_warning"] and budgets["daily_token_limit"] and
+                budgets["daily_token_warning"] > budgets["daily_token_limit"]):
+            raise ConfigDenial("daily token warning cannot exceed the hard limit")
+        if (budgets["monthly_cost_warning_usd"] and budgets["monthly_cost_limit_usd"] and
+                budgets["monthly_cost_warning_usd"] > budgets["monthly_cost_limit_usd"]):
+            raise ConfigDenial("monthly cost warning cannot exceed the hard limit")
+        existing_fallbacks = {
+            "generator": current.generator_fallbacks,
+            "auditor": current.auditor.fallbacks,
+        }
+        fallbacks = {}
+        for role in ("generator", "auditor"):
+            key = f"{role}_fallbacks"
+            if key in payload:
+                fallbacks[role] = _fallback_payload(payload[key], role)
+            else:
+                fallbacks[role] = [
+                    {"provider": item.provider, "model": item.model,
+                     "vendor": item.vendor, "key_env": item.key_env,
+                     **({"base_url": item.base_url} if item.base_url else {}),
+                     **({"reasoning_effort": item.reasoning_effort}
+                        if item.reasoning_effort else {})}
+                    for item in existing_fallbacks[role]]
+
         original = current.path.read_text(encoding="utf-8")
         revised = _replace_max_rounds(original, max_rounds)
         if current.generator_vendor != "human":
             revised = _replace_role_runtime(revised, "generator", *choices["generator"])
         revised = _replace_role_runtime(revised, "auditor", *choices["auditor"])
+        revised = _replace_role_fallbacks(revised, "generator", fallbacks["generator"])
+        revised = _replace_role_fallbacks(revised, "auditor", fallbacks["auditor"])
+        revised = _replace_top_mapping(revised, "resilience", resilience)
+        revised = _replace_top_mapping(revised, "budgets", budgets)
         if revised == original:
             return {**runtime_options(current), "changed": False, "commit": ""}
         temp = current.path.with_suffix(".runtime.tmp")
@@ -782,6 +981,9 @@ def update_runtime(current: Config, payload: dict) -> dict:
             temp.write_text(revised, encoding="utf-8", newline="")
             temp.replace(current.path)
             updated = load(current.path)
+            ok, why = heterogeneity(updated)
+            if not ok:
+                raise ConfigDenial(why)
             commit_message = (f"config: {choices['generator'][0] or 'human'} -> "
                               f"{choices['auditor'][0]}, {max_rounds} rounds")
             git("-c", "user.name=CrossAudit", "-c",

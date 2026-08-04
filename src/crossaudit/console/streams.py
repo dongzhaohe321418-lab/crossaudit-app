@@ -37,6 +37,7 @@ KIND_BY_SUFFIX = {
     ".csv": "CSV data",
     ".json": "JSON data",
     ".md": "Markdown",
+    ".docx": "Word document",
     ".pdf": "PDF document",
     ".py": "Python source",
     ".ts": "TypeScript source",

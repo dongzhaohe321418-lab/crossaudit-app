@@ -21,9 +21,9 @@ ISOLATION_DIMS = ("parametric", "contextual", "permissive")
 
 _ALLOWED_TOP = {"version", "science_repo", "audit_repo", "constitution", "max_rounds",
                 "auditor", "generator", "isolation", "state", "ledger", "scope",
-                "checks", "plugins"}
+                "checks", "plugins", "resilience", "budgets"}
 _ALLOWED_ROLE = {"provider", "model", "base_url", "key_env", "vendor",
-                 "reasoning_effort"}
+                 "reasoning_effort", "fallbacks"}
 _EFFORT_VALUES = {"none", "minimal", "low", "medium", "high", "xhigh", "max",
                   "ultra"}
 
@@ -36,6 +36,29 @@ class Role:
     key_env: str
     base_url: str | None = None
     reasoning_effort: str | None = None
+    fallbacks: tuple["Role", ...] = ()
+
+
+@dataclass(frozen=True)
+class Resilience:
+    """Provider-call recovery policy; retries never spend audit rounds."""
+
+    max_attempts: int = 3
+    initial_backoff_seconds: float = 1.0
+    max_backoff_seconds: float = 20.0
+    retry_after_cap_seconds: float = 120.0
+    circuit_breaker_failures: int = 3
+    circuit_breaker_cooldown_seconds: float = 60.0
+
+
+@dataclass(frozen=True)
+class Budgets:
+    """Local guardrails. None means visible metering without a limit."""
+
+    daily_token_warning: int | None = None
+    daily_token_limit: int | None = None
+    monthly_cost_warning_usd: float | None = None
+    monthly_cost_limit_usd: float | None = None
 
 
 @dataclass(frozen=True)
@@ -58,13 +81,16 @@ class Config:
     scope_dirs: list[str] | None
     checks: list[str]
     plugins: list[str] = field(default_factory=list)
+    generator_fallbacks: tuple[Role, ...] = ()
+    resilience: Resilience = field(default_factory=Resilience)
+    budgets: Budgets = field(default_factory=Budgets)
 
     @property
     def root(self) -> Path:
         return self.path.parent
 
 
-def _role(raw: dict, name: str, where: Path) -> Role:
+def _role(raw: dict, name: str, where: Path, *, allow_fallbacks: bool = True) -> Role:
     unknown = set(raw) - _ALLOWED_ROLE
     if unknown:
         raise ConfigDenial(f"{name}: unknown keys {sorted(unknown)}", file=str(where))
@@ -76,9 +102,38 @@ def _role(raw: dict, name: str, where: Path) -> Role:
         raise ConfigDenial(
             f"{name}.reasoning_effort must be one of {sorted(_EFFORT_VALUES)}",
             file=str(where))
+    fallback_rows = raw.get("fallbacks") or []
+    if not allow_fallbacks and fallback_rows:
+        raise ConfigDenial(f"{name}.fallbacks cannot contain nested fallbacks", file=str(where))
+    if not isinstance(fallback_rows, list):
+        raise ConfigDenial(f"{name}.fallbacks must be a list", file=str(where))
+    fallbacks = tuple(_role(item, f"{name}.fallbacks[{i}]", where,
+                            allow_fallbacks=False)
+                      for i, item in enumerate(fallback_rows)
+                      if isinstance(item, dict))
+    if len(fallbacks) != len(fallback_rows):
+        raise ConfigDenial(f"{name}.fallbacks entries must be mappings", file=str(where))
     return Role(provider=raw["provider"], model=raw["model"], vendor=raw["vendor"],
                 key_env=raw["key_env"], base_url=raw.get("base_url"),
-                reasoning_effort=effort)
+                reasoning_effort=effort, fallbacks=fallbacks)
+
+
+def _number(raw: dict, key: str, default: float, low: float, high: float,
+            where: Path) -> float:
+    value = raw.get(key, default)
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not low <= value <= high:
+        raise ConfigDenial(f"{key} must be between {low:g} and {high:g}", file=str(where))
+    return float(value)
+
+
+def _positive_optional(raw: dict, key: str, where: Path, *, integer: bool = False):
+    value = raw.get(key)
+    if value is None:
+        return None
+    valid_type = isinstance(value, int) if integer else isinstance(value, (int, float))
+    if isinstance(value, bool) or not valid_type or value <= 0:
+        raise ConfigDenial(f"budgets.{key} must be a positive number or null", file=str(where))
+    return int(value) if integer else float(value)
 
 
 def find(start: Path | None = None) -> Path:
@@ -122,6 +177,14 @@ def load(path: Path | None = None) -> Config:
         raise ConfigDenial(
             f"generator.reasoning_effort must be one of {sorted(_EFFORT_VALUES)}",
             file=str(p))
+    generator_fallbacks_raw = gen.get("fallbacks") or []
+    if not isinstance(generator_fallbacks_raw, list):
+        raise ConfigDenial("generator.fallbacks must be a list", file=str(p))
+    generator_fallbacks = tuple(
+        _role(item, f"generator.fallbacks[{i}]", p, allow_fallbacks=False)
+        for i, item in enumerate(generator_fallbacks_raw) if isinstance(item, dict))
+    if len(generator_fallbacks) != len(generator_fallbacks_raw):
+        raise ConfigDenial("generator.fallbacks entries must be mappings", file=str(p))
 
     iso_raw = raw.get("isolation") or {}
     minimum = iso_raw.get("minimum") or {}
@@ -159,6 +222,58 @@ def load(path: Path | None = None) -> Config:
     if not isinstance(checks, list) or not all(isinstance(c, str) for c in checks):
         raise ConfigDenial("checks must be a list of names", file=str(p))
 
+    resilience_raw = raw.get("resilience") or {}
+    if not isinstance(resilience_raw, dict):
+        raise ConfigDenial("resilience must be a mapping", file=str(p))
+    allowed_resilience = {"max_attempts", "initial_backoff_seconds",
+                          "max_backoff_seconds", "retry_after_cap_seconds",
+                          "circuit_breaker_failures", "circuit_breaker_cooldown_seconds"}
+    if set(resilience_raw) - allowed_resilience:
+        raise ConfigDenial(
+            f"resilience: unknown keys {sorted(set(resilience_raw) - allowed_resilience)}",
+            file=str(p))
+    resilience = Resilience(
+        max_attempts=int(_number(resilience_raw, "max_attempts", 3, 1, 10, p)),
+        initial_backoff_seconds=_number(
+            resilience_raw, "initial_backoff_seconds", 1, 0, 60, p),
+        max_backoff_seconds=_number(
+            resilience_raw, "max_backoff_seconds", 20, 0, 300, p),
+        retry_after_cap_seconds=_number(
+            resilience_raw, "retry_after_cap_seconds", 120, 0, 900, p),
+        circuit_breaker_failures=int(_number(
+            resilience_raw, "circuit_breaker_failures", 3, 1, 20, p)),
+        circuit_breaker_cooldown_seconds=_number(
+            resilience_raw, "circuit_breaker_cooldown_seconds", 60, 1, 3600, p),
+    )
+    if resilience.max_backoff_seconds < resilience.initial_backoff_seconds:
+        raise ConfigDenial(
+            "resilience.max_backoff_seconds cannot be below initial_backoff_seconds",
+            file=str(p))
+    budgets_raw = raw.get("budgets") or {}
+    if not isinstance(budgets_raw, dict):
+        raise ConfigDenial("budgets must be a mapping", file=str(p))
+    allowed_budgets = {"daily_token_warning", "daily_token_limit",
+                       "monthly_cost_warning_usd", "monthly_cost_limit_usd"}
+    if set(budgets_raw) - allowed_budgets:
+        raise ConfigDenial(f"budgets: unknown keys {sorted(set(budgets_raw) - allowed_budgets)}",
+                           file=str(p))
+    budgets = Budgets(
+        daily_token_warning=_positive_optional(
+            budgets_raw, "daily_token_warning", p, integer=True),
+        daily_token_limit=_positive_optional(
+            budgets_raw, "daily_token_limit", p, integer=True),
+        monthly_cost_warning_usd=_positive_optional(
+            budgets_raw, "monthly_cost_warning_usd", p),
+        monthly_cost_limit_usd=_positive_optional(
+            budgets_raw, "monthly_cost_limit_usd", p),
+    )
+    if (budgets.daily_token_warning and budgets.daily_token_limit and
+            budgets.daily_token_warning > budgets.daily_token_limit):
+        raise ConfigDenial("daily token warning cannot exceed the hard limit", file=str(p))
+    if (budgets.monthly_cost_warning_usd and budgets.monthly_cost_limit_usd and
+            budgets.monthly_cost_warning_usd > budgets.monthly_cost_limit_usd):
+        raise ConfigDenial("monthly cost warning cannot exceed the hard limit", file=str(p))
+
     return Config(
         path=p,
         science_repo=raw["science_repo"],
@@ -178,6 +293,9 @@ def load(path: Path | None = None) -> Config:
         scope_dirs=scope_dirs,
         checks=checks,
         plugins=raw.get("plugins") or [],
+        generator_fallbacks=generator_fallbacks,
+        resilience=resilience,
+        budgets=budgets,
     )
 
 
@@ -185,7 +303,12 @@ def heterogeneity(cfg: Config) -> tuple[bool, str]:
     """I1 asserted from configuration. Unknown generator vendor cannot assert it."""
     if not cfg.generator_vendor:
         return False, "generator vendor not declared: I1 cannot be asserted from config"
-    if cfg.generator_vendor.strip().lower() == cfg.auditor.vendor.strip().lower():
-        return False, (f"I1 violated: auditor vendor {cfg.auditor.vendor!r} equals "
-                       f"generator vendor {cfg.generator_vendor!r}")
+    generator_vendors = {cfg.generator_vendor.strip().lower(),
+                         *(r.vendor.strip().lower() for r in cfg.generator_fallbacks)}
+    auditor_vendors = {cfg.auditor.vendor.strip().lower(),
+                       *(r.vendor.strip().lower() for r in cfg.auditor.fallbacks)}
+    overlap = sorted(generator_vendors & auditor_vendors)
+    if overlap:
+        return False, ("I1 violated: generator and auditor recovery pools overlap at "
+                       + ", ".join(overlap))
     return True, f"{cfg.generator_vendor} -> {cfg.auditor.vendor}"

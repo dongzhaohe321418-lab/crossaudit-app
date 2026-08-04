@@ -1,10 +1,11 @@
-# CrossAudit 4.11.1
+# CrossAudit 4.13.0
 
-[![Version 4.11.1](https://img.shields.io/badge/version-4.11.1-6d5dfc)](https://github.com/dongzhaohe321418-lab/crossaudit_v4/releases/tag/v4.11.1)
+[![Version 4.13.0](https://img.shields.io/badge/version-4.13.0-6d5dfc)](https://github.com/dongzhaohe321418-lab/crossaudit_v4/releases/tag/v4.13.0)
 [![macOS 13+](https://img.shields.io/badge/macOS-13%2B-111111)](https://github.com/dongzhaohe321418-lab/crossaudit_v4#install)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776ab)](https://github.com/dongzhaohe321418-lab/crossaudit_v4#command-line-installation)
 
-**Latest release: [CrossAudit 4.11.1](https://github.com/dongzhaohe321418-lab/crossaudit_v4/releases/tag/v4.11.1).**
+**Latest release: CrossAudit 4.13.0.** The source on `main` is authoritative
+until the matching DMG is attached to a GitHub release.
 
 CrossAudit is a local, cross-vendor AI work loop. One model creates files, a
 model from a different provider audits the committed result, and every task,
@@ -133,12 +134,12 @@ official OpenAI Codex runtime.
 
 ### macOS application
 
-1. Download `CrossAudit-4.11.1-arm64.dmg` and its checksum from the
-   [V4.11.1 release](https://github.com/dongzhaohe321418-lab/crossaudit_v4/releases/tag/v4.11.1).
+1. Download `CrossAudit-4.13.0-arm64.dmg` and its checksum from the
+   [V4.13.0 release](https://github.com/dongzhaohe321418-lab/crossaudit_v4/releases/tag/v4.13.0).
 2. Optionally verify it in Terminal:
 
    ```bash
-   shasum -a 256 -c CrossAudit-4.11.1-arm64.dmg.sha256
+   shasum -a 256 -c CrossAudit-4.13.0-arm64.dmg.sha256
    ```
 
 3. Open the DMG and drag **CrossAudit** to **Applications**.
@@ -168,7 +169,7 @@ crossaudit --version
 Expected version output:
 
 ```text
-crossaudit 4.11.1 (receipt schema 2)
+crossaudit 4.13.0 (receipt schema 2)
 ```
 
 Use a virtual environment instead when developing CrossAudit, testing source
@@ -494,6 +495,14 @@ The local-first event normalization and explicit `≈ API value` presentation ar
 informed by the MIT-licensed [Agent Island](https://github.com/tristan666666/agent-island)
 project; CrossAudit maintains its own provider adapters and price snapshot.
 
+Open **Project controls → Usage guardrails** to set a daily token warning or
+hard limit and a monthly API-value warning or hard limit. Warnings appear live
+in Usage without interrupting work. A hard limit is checked before every model
+request and pauses the task before more tokens are sent. A dollar limit is
+fail-closed when an unpriced model has been used: CrossAudit will not pretend it
+can prove a cost ceiling from incomplete prices. These are local safeguards;
+the provider account remains the authority for quota and billing.
+
 #### Create and switch projects in the browser
 
 Click the CrossAudit name or the project switcher in the top bar to open the
@@ -601,6 +610,25 @@ the generator history recorded inside a configured `scope.dirs` directory. It
 cannot be used to read arbitrary project files, configuration, credentials, or
 paths outside the project. Downloads are streamed from disk without an
 application-level output-size cap instead of being buffered into server memory.
+
+Click an output card to open CrossAudit's built-in file preview. PDF pages and
+images render directly; DOCX content is reconstructed from the final Word
+binary; Markdown, source code, JSON, YAML, CSV, logs and other text formats use
+the reading view; and HTML runs in a sandbox with no script, application, or
+network permission. Unknown binaries are never executed and show a download
+action instead. Text previews are bounded for interface responsiveness, but the
+download always contains the complete file and has no CrossAudit size quota.
+
+PDF and Word are complete delivery formats, not browser placeholders. When the
+user chooses **PDF** or **DOCX** in the task options, the Generator authors one
+temporary Markdown source and the local controller converts it with a
+deterministic renderer. CrossAudit validates the final PDF/OOXML container,
+recovers its text from the exact final bytes, removes the temporary source, and
+commits only the requested document. The independent Auditor therefore reviews
+the same binary the user previews and downloads. Encrypted PDFs, unreadable or
+empty documents, corrupt ZIP members, and macro-enabled OOXML fail closed at a
+mandatory deterministic boundary. English and CJK text, headings, paragraphs,
+lists, block quotes, fenced code and pipe tables are supported.
 
 Manage the background console with:
 
@@ -729,6 +757,25 @@ generator:
   model: claude-sonnet-4-6
   reasoning_effort: medium
   key_env: CROSSAUDIT_GENERATOR_KEY
+  fallbacks:
+    - vendor: google
+      provider: google
+      model: gemini-3.5-pro
+      key_env: CROSSAUDIT_GOOGLE_KEY
+
+resilience:
+  max_attempts: 3
+  initial_backoff_seconds: 1
+  max_backoff_seconds: 20
+  retry_after_cap_seconds: 120
+  circuit_breaker_failures: 3
+  circuit_breaker_cooldown_seconds: 60
+
+budgets:
+  daily_token_warning: 500000
+  daily_token_limit: 1000000
+  monthly_cost_warning_usd: 50
+  monthly_cost_limit_usd: 100
 
 isolation:
   minimum:
@@ -748,6 +795,19 @@ scope:
 checks: [schema, units, convergence, provenance]
 ```
 
+All of these controls are available in **Project controls**; editing YAML is
+optional. Provider retries stay inside a single model turn and never consume an
+audit revision round. HTTP `Retry-After` is honored up to the configured cap,
+then exponential backoff is used. Repeated failures open a durable local
+circuit; the next configured fallback route is tried immediately. The actual
+vendor, provider, model, effort, and whether a fallback was used are recorded in
+usage and audit evidence.
+
+Fallback pools must preserve independence. No vendor may appear anywhere in
+both the Generator pool and the Auditor pool. CrossAudit validates the complete
+pair before committing UI changes and again before every build; an overlapping
+configuration is refused rather than silently weakening the audit boundary.
+
 The default local setup provides a replayable self-audit trail. It does not
 prevent the owner of the repository from rewriting Git history. For stronger
 organizational separation, use the two-repository deployment described below.
@@ -758,6 +818,12 @@ The macOS app exposes provider connection settings in the UI. API keys are
 stored in the current user's login Keychain. The UI can add, replace, or remove
 them, but it can query only whether a credential exists; it never reads a secret
 back into JavaScript.
+
+Each provider has independent **primary** and optional **backup** Keychain
+slots. A fallback route must explicitly select the backup slot before it can be
+used; merely saving a second key never causes silent rotation. Keys remain
+write-only, paste works in both fields, and route/circuit state stores only the
+environment-variable name—not the credential value.
 
 For OpenAI, **Connect ChatGPT** uses the documented Codex App Server browser
 flow. OpenAI documents both ChatGPT subscription and API-key sign-in for Codex,
@@ -953,13 +1019,13 @@ Exit codes are stable so scripts do not need to parse prose:
 
 V4 sends `max_completion_tokens` to the built-in OpenAI endpoint and retries
 once when a compatible endpoint explicitly asks for that field. Confirm that
-`crossaudit --version` reports 4.11.1 and reinstall if an older package is still
+`crossaudit --version` reports 4.13.0 and reinstall if an older package is still
 on your PATH. Restart a background console after upgrading because an existing
 daemon keeps the Python code that was loaded when it started.
 
 ### The macOS app is blocked on first launch
 
-V4.11.1 is structurally signed with the hardened runtime but is not notarized.
+V4.13.0 is structurally signed with the hardened runtime but is not notarized.
 Control-click **CrossAudit.app**, choose **Open**, and confirm only after you
 have verified the published SHA-256 checksum. An Apple Developer ID signed and
 notarized build is required before broad organizational deployment.
@@ -977,6 +1043,14 @@ installed/minimum versions and opens the official update guidance.
 The UI reconnects its event stream automatically. Use **View > Reload** if the
 web view was suspended for a long time. Project activity and cycle state are
 durable, so reloading or returning from Projects does not restart the work.
+
+If the background process itself is killed during a task, the workspace shows
+**Task interrupted safely**, including the last visible phase. **Retry task**
+starts from the last durable Git commit and preserves the original chat and any
+human-authorized continuation cycle. **Dismiss notice** leaves every file and
+ledger record untouched. CrossAudit cannot prove whether a remote provider
+finished a request after the local connection died, so it never claims an
+exactly-once API call; recovery is explicitly anchored to local durable state.
 
 ### The model menu looks old or does not contain my model
 
@@ -1007,7 +1081,11 @@ without printing the secret.
 ### A provider returns HTTP 429
 
 The provider rate limit, quota, or balance was reached. This is not a
-CrossAudit loop limit.
+CrossAudit loop limit. CrossAudit honors `Retry-After`, retries with bounded
+backoff without spending audit rounds, opens the route circuit after repeated
+failures, and then tries the next user-configured fallback. If every route is
+unavailable, the cycle escalates and no output is admitted. It never buys
+credit, rotates an undeclared credential, or substitutes the other audit role.
 
 ### `certificate verify failed`
 

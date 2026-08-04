@@ -18,7 +18,7 @@ from ..config import Config, load
 from ..controller import StateStore
 from ..errors import ConfigDenial, Denial
 from ..gitio import git, is_repo
-from ..providers import get_provider
+from ..providers import resilience as provider_resilience
 from ..usage import record_completion
 
 ROUTING_LOG = "routing.jsonl"
@@ -32,18 +32,16 @@ def _auditor_complete(cfg: Config):
     generator's internal narrative — so nothing here forwards anything but the
     user's own words (P2).
     """
-    fn = get_provider(cfg.auditor.provider)
-
     def complete(*, system: str, prompt: str):
-        reply = fn(model=cfg.auditor.model, system=system, prompt=prompt,
-                   key_env=cfg.auditor.key_env, base_url=cfg.auditor.base_url,
-                   allow_custom=bool(os.environ.get("CROSSAUDIT_ALLOW_CUSTOM_ENDPOINT")),
-                   reasoning_effort=cfg.auditor.reasoning_effort)
+        reply = provider_resilience.complete(
+            cfg, "auditor", cfg.auditor, system=system, prompt=prompt,
+            allow_custom=bool(os.environ.get("CROSSAUDIT_ALLOW_CUSTOM_ENDPOINT")))
+        route = provider_resilience.route_from_reply(reply, cfg.auditor)
         record_completion(root=cfg.root, state_dir=cfg.state_dir, role="auditor",
-                          phase="control", vendor=cfg.auditor.vendor,
-                          provider=cfg.auditor.provider, model=cfg.auditor.model,
+                          phase="control", vendor=route["vendor"],
+                          provider=route["provider"], model=route["model"],
                           reply=reply, system=system, prompt=prompt,
-                          base_url=cfg.auditor.base_url)
+                          base_url=route.get("base_url"))
         return reply
 
     return complete

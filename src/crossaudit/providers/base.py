@@ -11,6 +11,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
+from email.utils import parsedate_to_datetime
+from datetime import datetime, timezone
 
 from ..errors import ConfigDenial, ProviderDenial
 
@@ -144,7 +146,7 @@ def request_json(url: str, payload: dict, headers: dict, *, timeout: float = CON
     except urllib.error.HTTPError as exc:
         try:
             body = exc.read(4096).decode("utf-8", "replace")
-            denial = _http_denial(exc.code, body, url)
+            denial = _http_denial(exc.code, body, url, dict(exc.headers or {}))
         finally:
             exc.close()
         raise denial from exc
@@ -172,7 +174,7 @@ def get_json(url: str, headers: dict, *, timeout: float = CONNECT_TIMEOUT_S
     except urllib.error.HTTPError as exc:
         try:
             body = exc.read(4096).decode("utf-8", "replace")
-            denial = _http_denial(exc.code, body, url)
+            denial = _http_denial(exc.code, body, url, dict(exc.headers or {}))
         finally:
             exc.close()
         raise denial from exc
@@ -218,7 +220,27 @@ def vendor_message(body: str) -> str:
     return body.strip()[:300]
 
 
-def _http_denial(status: int, body: str, url: str) -> ProviderDenial:
+def _retry_after(headers: dict | None) -> float | None:
+    if not headers:
+        return None
+    value = next((str(v).strip() for k, v in headers.items()
+                  if str(k).casefold() == "retry-after"), "")
+    if not value:
+        return None
+    try:
+        return max(0.0, float(value))
+    except ValueError:
+        try:
+            target = parsedate_to_datetime(value)
+            if target.tzinfo is None:
+                target = target.replace(tzinfo=timezone.utc)
+            return max(0.0, (target - datetime.now(timezone.utc)).total_seconds())
+        except (TypeError, ValueError, OverflowError):
+            return None
+
+
+def _http_denial(status: int, body: str, url: str,
+                 headers: dict | None = None) -> ProviderDenial:
     said = vendor_message(body)
     lines = [f"provider returned HTTP {status}"]
     if said:
@@ -236,7 +258,8 @@ def _http_denial(status: int, body: str, url: str) -> ProviderDenial:
         category = "model"
     return ProviderDenial("\n".join(lines), status=status, detail=said,
                           endpoint=url, category=category,
-                          retryable=status == 429 or status >= 500)
+                          retryable=status == 429 or status >= 500,
+                          retry_after_seconds=_retry_after(headers))
 
 
 def _looks_like_a_model_problem(said: str) -> bool:

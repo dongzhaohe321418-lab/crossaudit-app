@@ -95,10 +95,12 @@ def status(*, force: bool = False) -> dict:
     result = {}
     for vendor, spec in SPECS.items():
         has_key = bool(keys.get(vendor, {}).get("configured"))
+        has_backup = bool(keys.get(vendor, {}).get("backup_configured"))
         result[vendor] = {
             "label": spec.label,
             "configured": has_key,
             "api_key": {"configured": has_key},
+            "backup_api_key": {"configured": has_backup},
             "console_url": spec.console_url,
             "docs_url": spec.api_docs_url,
             "subscription": {"supported": False,

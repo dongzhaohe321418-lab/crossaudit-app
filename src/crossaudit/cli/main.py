@@ -393,7 +393,8 @@ def cmd_audit(args: argparse.Namespace) -> int:
                         escalation_lock=bool(cycle.get("blocked_by_escalation")),
                         offline=args.offline,
                         allow_custom_endpoint=_allow_custom(args),
-                        retention=args.retention)
+                        retention=args.retention,
+                        on_event=getattr(args, "on_step", None))
 
     # Ledger write, in the only order that can be honest: report first, then a
     # receipt that binds the report's commit.

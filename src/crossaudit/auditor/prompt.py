@@ -10,6 +10,8 @@ import hashlib
 import json
 from typing import Mapping
 
+from ..document_export import extract_document
+
 MAX_INCREMENT_BYTES = 200_000
 MAX_TASK_BYTES = 20_000
 
@@ -53,8 +55,20 @@ def render_increment(files: Mapping[str, bytes]) -> tuple[str, bool]:
         try:
             text = files[path].decode("utf-8")
         except UnicodeDecodeError:
-            parts.append(f"--- {path} ---\n<binary, {len(files[path])} bytes, not shown>\n")
-            continue
+            if path.lower().endswith((".pdf", ".docx")):
+                view = extract_document(path, files[path])
+                if not view.valid:
+                    bounded = True
+                    parts.append(
+                        f"--- {path} ---\n<{view.format} validation failed: "
+                        f"{view.reason}>\n")
+                    continue
+                text = (f"<{view.format} recovered from final binary; "
+                        f"sha256={view.digest}; units={view.units}>\n{view.text}")
+            else:
+                parts.append(
+                    f"--- {path} ---\n<binary, {len(files[path])} bytes, not shown>\n")
+                continue
         room = MAX_INCREMENT_BYTES - used
         if room <= 0:
             bounded = True

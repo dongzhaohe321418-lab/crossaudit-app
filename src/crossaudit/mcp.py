@@ -297,7 +297,7 @@ class _StdioSession:
         result = self.request("initialize", {
             "protocolVersion": PROTOCOL_VERSION,
             "capabilities": {},
-            "clientInfo": {"name": "CrossAudit", "version": "4.11.1"},
+            "clientInfo": {"name": "CrossAudit", "version": "4.13.0"},
         })
         version = str(result.get("protocolVersion", ""))
         if version not in SUPPORTED_VERSIONS:
@@ -414,7 +414,7 @@ class _HTTPSession:
     def initialize(self) -> dict:
         result = self.request("initialize", {
             "protocolVersion": PROTOCOL_VERSION, "capabilities": {},
-            "clientInfo": {"name": "CrossAudit", "version": "4.11.1"},
+            "clientInfo": {"name": "CrossAudit", "version": "4.13.0"},
         }, initialization=True)
         version = str(result.get("protocolVersion", ""))
         if version not in SUPPORTED_VERSIONS:

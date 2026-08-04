@@ -29,6 +29,10 @@ def env_for_vendor(vendor: str) -> str:
     return PROVIDER_ENVS.get(vendor, f"CROSSAUDIT_{vendor.upper()}_KEY")
 
 
+def backup_env_for_vendor(vendor: str) -> str:
+    return f"CROSSAUDIT_{vendor.upper()}_BACKUP_KEY"
+
+
 def _security() -> str:
     path = shutil.which("security") or "/usr/bin/security"
     if not Path(path).is_file():
@@ -36,26 +40,29 @@ def _security() -> str:
     return path
 
 
-def _service(vendor: str) -> str:
+def _service(vendor: str, slot: str = "primary") -> str:
     if vendor not in PROVIDER_ENVS:
         raise ConfigDenial(f"unsupported credential provider {vendor!r}")
-    return f"{APP_SERVICE_PREFIX}.{vendor}"
+    if slot not in {"primary", "backup"}:
+        raise ConfigDenial("credential slot must be primary or backup")
+    suffix = "" if slot == "primary" else ".backup"
+    return f"{APP_SERVICE_PREFIX}.{vendor}{suffix}"
 
 
 def _account() -> str:
     return getpass.getuser() or "crossaudit-user"
 
 
-def read(vendor: str) -> str:
+def read(vendor: str, slot: str = "primary") -> str:
     """Read one key from Keychain for the private app process only."""
     proc = subprocess.run(
         [_security(), "find-generic-password", "-a", _account(),
-         "-s", _service(vendor), "-w"],
+         "-s", _service(vendor, slot), "-w"],
         capture_output=True, text=True, timeout=10)
     return proc.stdout.rstrip("\r\n") if proc.returncode == 0 else ""
 
 
-def write(vendor: str, secret: str) -> None:
+def write(vendor: str, secret: str, slot: str = "primary") -> None:
     """Replace a Keychain item without placing the secret in argv."""
     secret = str(secret)
     if not secret or len(secret.encode("utf-8")) > 16_384:
@@ -64,23 +71,27 @@ def write(vendor: str, secret: str) -> None:
         raise ConfigDenial(f"{vendor} API key contains control characters")
     proc = subprocess.run(
         [_security(), "add-generic-password", "-U", "-a", _account(),
-         "-s", _service(vendor), "-l", f"CrossAudit {vendor.title()} API key",
+         "-s", _service(vendor, slot), "-l",
+         f"CrossAudit {vendor.title()} {slot} API key",
          "-w"], input=secret + "\n" + secret + "\n",
         capture_output=True, text=True, timeout=15)
     if proc.returncode != 0:
         raise ConfigDenial(
             f"macOS Keychain refused the {vendor} key: {proc.stderr.strip()[:240]}")
-    os.environ[env_for_vendor(vendor)] = secret
-    if vendor in ROLE_FALLBACKS:
+    env_name = (env_for_vendor(vendor) if slot == "primary"
+                else backup_env_for_vendor(vendor))
+    os.environ[env_name] = secret
+    if slot == "primary" and vendor in ROLE_FALLBACKS:
         os.environ[ROLE_FALLBACKS[vendor]] = secret
 
 
-def remove(vendor: str) -> None:
+def remove(vendor: str, slot: str = "primary") -> None:
     subprocess.run(
         [_security(), "delete-generic-password", "-a", _account(),
-         "-s", _service(vendor)], capture_output=True, text=True, timeout=10)
-    os.environ.pop(env_for_vendor(vendor), None)
-    fallback = ROLE_FALLBACKS.get(vendor)
+         "-s", _service(vendor, slot)], capture_output=True, text=True, timeout=10)
+    os.environ.pop(env_for_vendor(vendor) if slot == "primary"
+                   else backup_env_for_vendor(vendor), None)
+    fallback = ROLE_FALLBACKS.get(vendor) if slot == "primary" else None
     if fallback:
         os.environ.pop(fallback, None)
 
@@ -97,11 +108,17 @@ def load_into_environment() -> None:
             os.environ[env_name] = secret
             if vendor in ROLE_FALLBACKS:
                 os.environ[ROLE_FALLBACKS[vendor]] = secret
+        backup_env = backup_env_for_vendor(vendor)
+        backup = os.environ.get(backup_env, "").strip() or read(vendor, "backup").strip()
+        if backup:
+            os.environ[backup_env] = backup
 
 
 def status() -> dict:
     return {
-        vendor: {"configured": bool(os.environ.get(env_name, "").strip())}
+        vendor: {"configured": bool(os.environ.get(env_name, "").strip()),
+                 "backup_configured": bool(os.environ.get(
+                     backup_env_for_vendor(vendor), "").strip())}
         for vendor, env_name in PROVIDER_ENVS.items()
     }
 
@@ -113,8 +130,12 @@ def apply(payload: object) -> dict:
     for vendor in PROVIDER_ENVS:
         if payload.get(f"remove_{vendor}") is True:
             remove(vendor)
-            continue
+        if payload.get(f"remove_{vendor}_backup") is True:
+            remove(vendor, "backup")
         value = payload.get(f"{vendor}_key")
         if value not in (None, ""):
             write(vendor, str(value).strip())
+        backup = payload.get(f"{vendor}_backup_key")
+        if backup not in (None, ""):
+            write(vendor, str(backup).strip(), "backup")
     return {"providers": status()}
