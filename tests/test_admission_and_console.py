@@ -13,6 +13,7 @@ import subprocess
 import tempfile
 import urllib.error
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -214,6 +215,33 @@ def test_the_console_serves_its_page_with_the_token(console):
     status, body, headers = fetch(console)
     assert status == 200 and "CrossAudit" in body
     assert "default-src 'none'" in headers["content-security-policy"]
+
+
+def test_console_health_is_tokened_and_constant_size(console):
+    status, body, headers = fetch(console.replace("/?", "/api/health?"))
+    assert status == 200 and json.loads(body) == {"ok": True}
+    assert int(headers["content-length"]) < 32
+    code, _body, _headers = rejected(
+        lambda: fetch(console.split("?", 1)[0] + "api/health"))
+    assert code == 403
+
+
+def test_console_remains_fail_closed_under_parallel_authorised_and_hostile_load(
+        console):
+    state = console.replace("/?", "/api/state?")
+    bare = state.split("?", 1)[0]
+
+    def request(index):
+        if index % 3 == 0:
+            return fetch(state)[0]
+        if index % 3 == 1:
+            return rejected(lambda: fetch(bare))[0]
+        return rejected(lambda: fetch(state, Host="attacker.example"))[0]
+
+    with ThreadPoolExecutor(max_workers=16) as pool:
+        statuses = list(pool.map(request, range(96)))
+    assert statuses.count(200) == 32
+    assert statuses.count(403) == 64
 
 
 def test_console_creates_and_pins_individual_chats(console):

@@ -11,6 +11,8 @@ import json
 import os
 import subprocess
 import threading
+import time
+import urllib.request
 from pathlib import Path
 
 import pytest
@@ -58,6 +60,29 @@ def test_a_running_console_can_be_found_by_a_later_invocation(running):
     assert info is not None
     assert daemon.url_for(info) == url          # the same URL, token and all
     assert info["pid"] == os.getpid()
+
+
+def test_liveness_uses_constant_time_health_not_the_expensive_state(running,
+                                                                    monkeypatch):
+    cfg, _url = running
+    from crossaudit.console import server as server_mod
+
+    monkeypatch.setattr(
+        server_mod, "snapshot",
+        lambda _cfg: (_ for _ in ()).throw(AssertionError("state must not run")))
+    started = time.monotonic()
+    assert daemon.live(cfg) is not None
+    assert time.monotonic() - started < 0.5
+
+
+def test_spawn_rechecks_liveness_inside_its_start_lock(cfg, monkeypatch):
+    existing = {"pid": 7, "port": 8, "token": "already-running"}
+    monkeypatch.setattr(daemon, "live", lambda _cfg: existing)
+    monkeypatch.setattr(
+        daemon.subprocess, "Popen",
+        lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("duplicate spawn")))
+    assert daemon.spawn(cfg, 0) == existing
+    assert not (cfg.root / cfg.state_dir / "console-start.lock").exists()
 
 
 def test_the_run_file_is_not_world_readable(running):
@@ -204,6 +229,24 @@ def test_closing_a_console_reclaims_its_idle_watcher(cfg):
 
     assert not serving.is_alive()
     assert httpd.idle_thread is not None and not httpd.idle_thread.is_alive()
+
+
+def test_an_open_realtime_stream_cannot_block_native_app_shutdown(cfg):
+    url, httpd = serve(cfg, port=0, idle_timeout=float("inf"))
+    serving = threading.Thread(target=httpd.serve_forever)
+    serving.start()
+    stream = urllib.request.urlopen(
+        url.replace("/?", "/api/stream?"), timeout=5)  # nosec B310
+    try:
+        assert stream.readline().startswith(b"data: ")
+        started = time.monotonic()
+        httpd.shutdown()
+        serving.join(timeout=2)
+        httpd.server_close()
+        assert not serving.is_alive()
+        assert time.monotonic() - started < 2
+    finally:
+        stream.close()
 
 
 # ------------------------------------------- stopping a background console

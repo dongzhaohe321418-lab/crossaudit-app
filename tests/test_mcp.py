@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import sys
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
@@ -116,6 +117,27 @@ def test_new_server_cannot_blanket_enable_tools_before_user_reviews_list(cfg, tm
     payload.pop("allowed_tools")
     with pytest.raises(ConfigDenial, match="review the advertised tool list"):
         mcp.Manager().register(cfg, payload)
+
+
+def test_stdio_server_timeout_is_bounded_and_kills_the_child(cfg, tmp_path):
+    script = tmp_path / "slow_mcp.py"
+    script.write_text("import time; time.sleep(30)\n")
+    payload = _stdio_payload(script)
+    payload["timeout"] = 1
+    started = time.monotonic()
+    with pytest.raises(ConfigDenial, match="timed out"):
+        mcp.Manager().register(cfg, payload)
+    assert time.monotonic() - started < 5
+
+
+def test_stdio_server_cannot_stream_an_unbounded_line(cfg, tmp_path):
+    script = tmp_path / "oversized_mcp.py"
+    script.write_text(
+        "import sys\n"
+        f"sys.stdout.buffer.write(b'x' * {mcp.MAX_MESSAGE_BYTES + 1} + b'\\n')\n"
+        "sys.stdout.buffer.flush()\n")
+    with pytest.raises(ConfigDenial, match="exceeded the safety limit"):
+        mcp.Manager().register(cfg, _stdio_payload(script))
 
 
 class HTTPFixture(BaseHTTPRequestHandler):

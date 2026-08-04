@@ -5,6 +5,12 @@ from PyInstaller.utils.hooks import collect_data_files
 
 root = Path(SPECPATH).parents[1]
 datas = collect_data_files("crossaudit.scaffold")
+# python-docx computes template paths relative to ``docx.parts.__file__``.
+# Modules normally live only inside PyInstaller's PYZ archive, leaving that
+# intermediate directory absent even when the template XML files were copied.
+# Keep the package tree physical so ``parts/../templates`` resolves in the
+# frozen runtime on a clean machine.
+datas += collect_data_files("docx", include_py_files=True)
 datas.append((str(root / "build" / "macos" / "crossaudit-build.json"), "."))
 
 a = Analysis(

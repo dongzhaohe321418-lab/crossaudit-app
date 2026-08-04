@@ -700,7 +700,7 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
 <body>
 <section class="project-hub" id="project-hub" aria-label="Projects">
   <header class="hub-bar"><button class="brand-button" id="hub-brand"><span class="brand-mark">◇</span>
-    CrossAudit <span class="version" id="hub-version">V4.13.0</span></button><span class="spacer"></span>
+    CrossAudit <span class="version" id="hub-version">V4.14.0</span></button><span class="spacer"></span>
     <button class="icon-button" id="hub-locale" aria-label="Switch to Chinese" title="Switch language">中文</button>
     <button class="icon-button" id="hub-settings" aria-label="Settings" title="Settings">⚙</button>
     <button class="icon-button" id="hub-theme" aria-label="Switch theme">◐</button>
@@ -1020,7 +1020,7 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
       aria-controls="sidebar-panel" aria-expanded="false">☰</button>
     <button class="icon-button" id="back-projects" aria-label="Back to projects" title="Back to projects">←</button>
     <button class="brand-button" id="projects-home"><span class="brand-mark">◇</span>CrossAudit
-      <span class="version" id="version-badge">V4.13.0</span></button>
+      <span class="version" id="version-badge">V4.14.0</span></button>
     <button class="top-project" id="project-switcher"><b id="proj">…</b> <span id="branch-label">/ project folder</span>⌄</button>
     <button class="icon-button" id="current-project-pin" aria-label="Pin project" title="Pin project">☆</button>
     <span class="spacer"></span>
@@ -3081,9 +3081,32 @@ document.getElementById('escalations').onclick=ev=>{const button=ev.target.close
   const cycle=button.getAttribute('data-cycle');const row=lastState&&(lastState.escalations||[]).find(item=>item.cycle_id===cycle);
   openResolution(row||cycle,button.getAttribute('data-resolve'),button.getAttribute('data-sha'));};
 scrim.onclick=closePanels;
-document.addEventListener('keydown',ev=>{if(ev.key==='Escape'){
-  if(filePreviewModal.classList.contains('on'))closeFilePreview();else closePanels();
-}});
+const modalReturnFocus=new WeakMap();
+const modalObserver=new MutationObserver(records=>records.forEach(record=>{
+  const modal=record.target;const wasOpen=(record.oldValue||'').split(/\s+/).includes('on');
+  const isOpen=modal.classList.contains('on');
+  if(isOpen&&!wasOpen)modalReturnFocus.set(modal,document.activeElement);
+  if(wasOpen&&!isOpen){const trigger=modalReturnFocus.get(modal);modalReturnFocus.delete(modal);
+    if(trigger&&trigger.isConnected)setTimeout(()=>trigger.focus(),0);}
+}));
+document.querySelectorAll('.project-modal').forEach(modal=>modalObserver.observe(modal,{attributes:true,attributeOldValue:true,attributeFilter:['class']}));
+function activeModal(){const rows=[...document.querySelectorAll('.project-modal.on')];return rows.at(-1)||null;}
+function closeActiveModal(modal){
+  if(modal===filePreviewModal)closeFilePreview();
+  else if(modal===projectModal)closeProjectModal();else if(modal===recoveryModal)closeRecovery();
+  else if(modal===deleteProjectModal)closeDeleteProject();else if(modal===deleteChatModal)closeDeleteChat();
+  else if(modal===runtimeModal)closeRuntime();else if(modal===resolutionModal)closeResolution();
+  else if(modal===settingsModal)closeSettings();else if(modal===computeHostModal)closeComputeHost();
+  else if(modal===computeJobModal)closeComputeJob();else if(modal===mcpModal)closeMcp();
+}
+document.addEventListener('keydown',ev=>{const modal=activeModal();
+  if(ev.key==='Tab'&&modal){const controls=[...modal.querySelectorAll('button:not([disabled]),a[href],input:not([disabled]):not([type="hidden"]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])')]
+      .filter(element=>element.getClientRects().length);if(!controls.length){ev.preventDefault();return;}
+    const first=controls[0],last=controls.at(-1);if(ev.shiftKey&&(document.activeElement===first||!modal.contains(document.activeElement))){ev.preventDefault();last.focus();}
+    else if(!ev.shiftKey&&(document.activeElement===last||!modal.contains(document.activeElement))){ev.preventDefault();first.focus();}return;}
+  if(ev.key==='Escape'){if(modal){ev.preventDefault();closeActiveModal(modal);}
+    else if(filePreviewModal.classList.contains('on'))closeFilePreview();else closePanels();}
+});
 window.addEventListener('resize',()=>{if(innerWidth>1120)closePanels();});
 form.onsubmit=async ev=>{ev.preventDefault();const rawText=say.value.trim();if(!rawText)return;
   const continuing=pendingContinuation.chat===activeChatId&&Boolean(pendingContinuation.cycle);

@@ -107,6 +107,41 @@ def test_app_bootstrap_creates_a_clean_hidden_controller(tmp_path):
                           capture_output=True, text=True, check=True).stdout == ""
 
 
+def test_packaged_runtime_self_test_is_isolated_and_exercises_documents(
+        tmp_path, monkeypatch):
+    support = tmp_path / "real-support-must-stay-empty"
+    monkeypatch.setenv("CROSSAUDIT_APP_SUPPORT", str(support))
+
+    result = app.self_test()
+
+    assert result["ok"] is True
+    assert result["loopback_token_enforced"] is True
+    assert result["documents"]["pdf"]["bytes"] > 100
+    assert result["documents"]["docx"]["bytes"] > 100
+    assert not support.exists()
+
+
+def test_packaged_runtime_self_test_has_a_machine_readable_cli(monkeypatch, capsys):
+    monkeypatch.setattr(app.sys, "argv", ["CrossAuditCore", "--self-test"])
+    monkeypatch.setattr(app, "self_test", lambda: {"ok": True, "version": "test"})
+
+    assert app.main() == 0
+    assert json.loads(capsys.readouterr().out) == {"ok": True, "version": "test"}
+
+
+def test_packaged_runtime_self_test_fails_closed_without_a_traceback(
+        monkeypatch, capsys):
+    monkeypatch.setattr(app.sys, "argv", ["CrossAuditCore", "--self-test"])
+    monkeypatch.setattr(app, "self_test",
+                        lambda: (_ for _ in ()).throw(RuntimeError("broken runtime")))
+
+    assert app.main() == 1
+    output = capsys.readouterr()
+    assert output.out == ""
+    assert json.loads(output.err) == {
+        "ok": False, "error": "RuntimeError", "detail": "broken runtime"}
+
+
 def test_app_workspace_override_is_trusted_process_state(tmp_path, monkeypatch, cfg):
     monkeypatch.setenv("CROSSAUDIT_WORKSPACE_ROOT", str(tmp_path))
     assert projects.workspace_base(cfg) == tmp_path.resolve()
@@ -146,12 +181,25 @@ def test_native_shell_exposes_only_the_local_workspace_picker_bridge():
     source = (Path(__file__).parents[1] / "packaging" / "macos" /
               "CrossAuditApp.swift").read_text()
     assert "WKScriptMessageHandler" in source
-    assert 'body["action"] as? String == "chooseWorkspace"' in source
+    assert 'action == "chooseWorkspace"' in source
     assert '["127.0.0.1", "localhost"]' in source
+    assert "message.frameInfo.isMainFrame" in source
     assert "canChooseDirectories = true" in source
     assert "canChooseFiles = false" in source
     assert "DispatchSource.makeSignalSource" in source
     assert "[SIGINT, SIGTERM]" in source
+
+
+def test_native_shell_has_bounded_startup_recovery_and_log_retention():
+    source = (Path(__file__).parents[1] / "packaging" / "macos" /
+              "CrossAuditApp.swift").read_text()
+    assert "asyncAfter(deadline: .now() + 20)" in source
+    assert 'send(\'restartCore\')' in source
+    assert 'action == "restartCore"' in source
+    assert 'action == "openDiagnosticLog"' in source
+    assert "size > 5 * 1024 * 1024" in source
+    assert 'appendingPathExtension("1")' in source
+    assert "if self.core === process { self.core = nil }" in source
 
 
 def test_native_shell_keeps_projects_running_after_the_window_closes():

@@ -7,6 +7,9 @@ DIST="$ROOT/dist"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 VERSION="$($PYTHON_BIN -c 'import sys;sys.path.insert(0,"src");import crossaudit;print(crossaudit.__version__)' 2>/dev/null)"
 BUILD_NUMBER="${CROSSAUDIT_BUILD_NUMBER:-1}"
+SIGN_IDENTITY="${CROSSAUDIT_CODESIGN_IDENTITY:--}"
+NOTARY_PROFILE="${CROSSAUDIT_NOTARY_PROFILE:-}"
+PUBLIC_RELEASE="${CROSSAUDIT_PUBLIC_RELEASE:-0}"
 ARCH="$(uname -m)"
 CODEX_VERSION="0.146.0"
 CODEX_TAG="rust-v$CODEX_VERSION"
@@ -17,6 +20,15 @@ CODEX_LICENSE_SHA256="d17f227e4df5da1600391338865ce0f3055211760a36688f816941d582
 if [[ "$ARCH" != "arm64" ]]; then
   echo "This build currently targets Apple Silicon; found $ARCH." >&2
   exit 2
+fi
+
+if [[ "$PUBLIC_RELEASE" == "1" && "$SIGN_IDENTITY" == "-" ]]; then
+  echo "A public release requires CROSSAUDIT_CODESIGN_IDENTITY." >&2
+  exit 7
+fi
+if [[ "$PUBLIC_RELEASE" == "1" && -z "$NOTARY_PROFILE" ]]; then
+  echo "A public release requires CROSSAUDIT_NOTARY_PROFILE." >&2
+  exit 8
 fi
 
 STAGE="$(mktemp -d "${TMPDIR:-/tmp}/crossaudit-v4-release.XXXXXX")"
@@ -91,12 +103,29 @@ sed -e "s/@VERSION@/$VERSION/g" -e "s/@BUILD@/$BUILD_NUMBER/g" \
 xcrun swift packaging/macos/make_icon.swift "$BUILD/icon.iconset"
 iconutil -c icns "$BUILD/icon.iconset" -o "$APP/Contents/Resources/AppIcon.icns"
 
+# Run the exact frozen core before it is signed. This validates bundled imports,
+# controller bootstrap, PDF/DOCX round-trips, and loopback-token enforcement.
+SELF_TEST="$($APP/Contents/Resources/core/CrossAuditCore --self-test)"
+SELF_TEST_JSON="$SELF_TEST" "$PYTHON_BIN" - <<'PY'
+import json, os
+result = json.loads(os.environ["SELF_TEST_JSON"])
+if result.get("ok") is not True or result.get("loopback_token_enforced") is not True:
+    raise SystemExit("frozen runtime self-test did not pass")
+if not all(result.get("documents", {}).get(kind, {}).get("valid")
+           for kind in ("pdf", "docx")):
+    raise SystemExit("frozen document round-trip did not pass")
+PY
+
 # Finder tags, quarantine state, and AppleDouble/resource-fork metadata are not
 # application resources. Copying a source tree from a user workspace can attach
 # them to nested files, and strict code signing must fail rather than seal that
 # machine-local detritus into a release.
 xattr -cr "$APP"
-codesign --force --deep --sign - --options runtime --timestamp=none "$APP"
+if [[ "$SIGN_IDENTITY" == "-" ]]; then
+  codesign --force --deep --sign - --options runtime --timestamp=none "$APP"
+else
+  codesign --force --deep --sign "$SIGN_IDENTITY" --options runtime --timestamp "$APP"
+fi
 codesign --verify --deep --strict --verbose=2 "$APP"
 plutil -lint "$APP/Contents/Info.plist"
 
@@ -105,9 +134,16 @@ ditto "$APP" "$DMG_ROOT/CrossAudit.app"
 ln -s /Applications "$DMG_ROOT/Applications"
 hdiutil create -quiet -volname "CrossAudit $VERSION" -srcfolder "$DMG_ROOT" \
   -ov -format UDZO "$DIST/CrossAudit-$VERSION-arm64.dmg"
+if [[ -n "$NOTARY_PROFILE" ]]; then
+  xcrun notarytool submit "$DIST/CrossAudit-$VERSION-arm64.dmg" \
+    --keychain-profile "$NOTARY_PROFILE" --wait
+  xcrun stapler staple "$DIST/CrossAudit-$VERSION-arm64.dmg"
+fi
 hdiutil verify "$DIST/CrossAudit-$VERSION-arm64.dmg"
 (cd "$DIST" && shasum -a 256 "CrossAudit-$VERSION-arm64.dmg" > \
   "CrossAudit-$VERSION-arm64.dmg.sha256")
+
+packaging/macos/verify_dmg.sh "$DIST/CrossAudit-$VERSION-arm64.dmg" "$VERSION"
 
 echo
 echo "Built $DIST/CrossAudit-$VERSION-arm64.dmg"

@@ -227,7 +227,7 @@ def clear_run(cfg: Config) -> None:
 
 def responding(port: int, token: str, timeout: float = 1.5) -> bool:
     """Liveness is proven by the port answering, never by the file existing."""
-    url = f"http://127.0.0.1:{port}/api/state?t={token}"
+    url = f"http://127.0.0.1:{port}/api/health?t={token}"
     try:
         # URL is constructed here from a validated integer and loopback literal.
         with urllib.request.urlopen(url, timeout=timeout) as r:  # nosec B310
@@ -272,28 +272,55 @@ def spawn(cfg: Config, port: int) -> dict:
     A new session means the daemon does not receive the terminal's SIGHUP when
     the window closes, which is the whole point.
     """
-    env = dict(os.environ, CROSSAUDIT_CONSOLE_CHILD="1")
-    log = cfg.root / cfg.state_dir / "console.log"
-    log.parent.mkdir(parents=True, exist_ok=True)
-    if os.environ.get("CROSSAUDIT_APP_MODE") == "1":
-        command = ([sys.executable, "--project-console", str(cfg.root), str(port)]
-                   if getattr(sys, "frozen", False) else
-                   [sys.executable, "-m", "crossaudit.app", "--project-console",
-                    str(cfg.root), str(port)])
-    else:
-        command = [sys.executable, "-m", "crossaudit.cli.main", "console",
-                   "--port", str(port), "--foreground"]
-    with open(log, "ab") as fh:
-        subprocess.Popen(
-            command,
-            cwd=str(cfg.root), env=env, stdout=fh, stderr=fh,
-            stdin=subprocess.DEVNULL, start_new_session=True)
-    for _ in range(60):                # up to ~6s for the port to come up
-        time.sleep(0.1)
-        info = read_run(cfg)
-        if info and responding(info["port"], info["token"]):
-            return info
-    raise TimeoutError(f"the console did not come up; see {log}")
+    lock = cfg.root / cfg.state_dir / "console-start.lock"
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    deadline = time.monotonic() + 10
+    while True:
+        try:
+            lock.mkdir()
+            break
+        except FileExistsError:
+            try:
+                if time.time() - lock.stat().st_mtime > 15:
+                    lock.rmdir()
+                    continue
+            except OSError:
+                pass
+            if time.monotonic() >= deadline:
+                raise TimeoutError("another process is still starting this project")
+            time.sleep(0.05)
+    try:
+        # The caller normally checked before entering spawn, but another click
+        # or app process may have won the lock in between.
+        running = live(cfg)
+        if running:
+            return running
+        env = dict(os.environ, CROSSAUDIT_CONSOLE_CHILD="1")
+        log = cfg.root / cfg.state_dir / "console.log"
+        if os.environ.get("CROSSAUDIT_APP_MODE") == "1":
+            command = ([sys.executable, "--project-console", str(cfg.root), str(port)]
+                       if getattr(sys, "frozen", False) else
+                       [sys.executable, "-m", "crossaudit.app", "--project-console",
+                        str(cfg.root), str(port)])
+        else:
+            command = [sys.executable, "-m", "crossaudit.cli.main", "console",
+                       "--port", str(port), "--foreground"]
+        with open(log, "ab") as fh:
+            subprocess.Popen(
+                command,
+                cwd=str(cfg.root), env=env, stdout=fh, stderr=fh,
+                stdin=subprocess.DEVNULL, start_new_session=True)
+        for _ in range(60):                # up to ~6s for the port to come up
+            time.sleep(0.1)
+            info = read_run(cfg)
+            if info and responding(info["port"], info["token"]):
+                return info
+        raise TimeoutError(f"the console did not come up; see {log}")
+    finally:
+        try:
+            lock.rmdir()
+        except OSError:
+            pass
 
 
 def stop(cfg: Config) -> str:

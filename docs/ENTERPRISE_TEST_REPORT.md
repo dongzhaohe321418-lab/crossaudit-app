@@ -1,14 +1,14 @@
-# CrossAudit 4.13.0 enterprise release assessment
+# CrossAudit 4.14.0 enterprise release assessment
 
 Date: 2026-08-04
 
 Target: Apple Silicon macOS 13 or later
 
-Release candidate: 4.13.0
+Release candidate: 4.14.0
 
 ## Executive result
 
-CrossAudit 4.13.0 is suitable for local evaluation and controlled pilot use. It
+CrossAudit 4.14.0 is suitable for local evaluation and controlled pilot use. It
 preserves the V3.2 audited protocol while adding a native AppKit/WebKit shell,
 Keychain credentials, UI-first project creation, independent background
 projects, GitHub connection, chunked file transfer, final-artifact downloads,
@@ -24,7 +24,7 @@ Policy rather than hidden behind an installation workaround.
 
 | Area | Release gate | Result |
 |---|---|---|
-| Python regression | Complete automated suite | Passed: 474, with 2 paid checks skipped |
+| Python regression | Complete automated suite | Passed: 554, with 2 paid checks skipped |
 | Provider compatibility | Protocol mocks plus opt-in live checks | Passed; paid API checks remain opt-in |
 | Native packaging | Swift typecheck, PyInstaller analysis, arm64 binaries | Passed |
 | App structure | `plutil` and deep strict `codesign` validation | Passed |
@@ -53,6 +53,40 @@ Policy rather than hidden behind an installation workaround.
 The final command outputs and artifact hashes are recorded in the GitHub release
 and CI logs. Tests that spend provider credits remain explicitly opt-in and use
 repository secrets in CI.
+
+## V4.14.0 product-readiness evidence
+
+- The release gate now tests installed wheels rather than editable source
+  layouts across Python 3.10–3.13 on Linux, macOS, and Windows. It enforces a
+  per-test timeout, branch-coverage floor, critical static checks, dependency
+  vulnerability audit, wheel inspection, and a fresh-environment self-test.
+- Windows stdio MCP no longer passes subprocess pipes to `select()`. A bounded
+  reader queue preserves timeouts and message-size limits on every platform;
+  timeout, oversized-line, policy, and real fixture-server paths are tested.
+- The exact frozen core renders and reopens PDF and DOCX, bootstraps an isolated
+  controller, and proves loopback token refusal before a DMG can be produced.
+  This gate found and fixed a missing python-docx template tree that source-only
+  tests did not reveal.
+- The final DMG is verified, mounted read-only, inspected for bundle version,
+  arm64 architecture and deep signature, then its mounted frozen core repeats
+  the self-test. Public-release mode refuses ad-hoc signing and requires a
+  Developer ID identity plus successful notarization and stapling.
+- Background shutdown now terminates open SSE streams instead of waiting on a
+  WebView forever. Daemon discovery uses a constant-time authenticated health
+  endpoint rather than an expensive state snapshot, and a filesystem start
+  lock plus second liveness check prevents duplicate workers.
+- Native startup has a 20-second readiness deadline, Retry and diagnostic-log
+  actions, unexpected-core recovery, and bounded log rotation. File uploads
+  turn physical disk exhaustion into an actionable HTTP 507 response.
+- Browser acceptance on the frozen runtime exercised project discovery,
+  Keychain-backed credential input without saving a test value, Environment
+  Doctor, first-project native required-field behavior, Compute/HPC layout and
+  global localization. Custom modals now trap keyboard focus, close with Escape
+  and return focus to their trigger.
+- Final Apple Silicon DMG: `CrossAudit-4.14.0-arm64.dmg`, SHA-256
+  `ab78dd5545313191c75f9b28b09bbbd0d9f0c9ea4a27f0dad0086342ead7b052`.
+  The mounted 4.14.0 core repeated the document and loopback-security self-test;
+  a final browser pass found no console errors or warnings.
 
 ## V4.13.0 release-candidate evidence
 

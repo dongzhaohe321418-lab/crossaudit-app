@@ -4,6 +4,7 @@ from __future__ import annotations
 from functools import partial
 from typing import Callable
 
+from .. import __version__
 from ..errors import ConfigDenial
 from . import anthropic, codex_subscription, openai_compat, replay
 from .specs import SPECS, endpoints
@@ -20,7 +21,7 @@ for _vendor, _spec in SPECS.items():
             openai_compat.complete, _builtin_base=_spec.api_base,
             _official_bases=tuple(row[2] for row in endpoints(_vendor)),
             _temperature=(1.0 if _vendor == "minimax" else 0),
-            _extra_headers=({"x-goog-api-client": "crossaudit/4.13.0"}
+            _extra_headers=({"x-goog-api-client": f"crossaudit/{__version__}"}
                             if _vendor == "google" else None))
 
 #: Providers that make no external claim about a model's judgement.

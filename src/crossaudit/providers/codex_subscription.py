@@ -24,10 +24,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urlparse
 
+from .. import __version__
 from ..errors import ConfigDenial, ProviderDenial
 from .base import Reply
 
-CLIENT = {"name": "crossaudit", "title": "CrossAudit", "version": "4.13.0"}
+CLIENT = {"name": "crossaudit", "title": "CrossAudit", "version": __version__}
 DEFAULT_TIMEOUT_S = 300.0
 FORBIDDEN_ITEM_TYPES = {
     "commandExecution", "fileChange", "mcpToolCall", "dynamicToolCall",

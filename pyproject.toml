@@ -12,7 +12,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "crossaudit"
-version = "4.13.0"
+version = "4.14.0"
 description = "Cross-vendor AI supervision: one conversation, two adversarial agents, one replayable ledger"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -38,7 +38,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=7.0"]
+dev = [
+  "build>=1.2",
+  "coverage[toml]>=7.6",
+  "pytest>=7.0",
+  "pytest-timeout>=2.3",
+  "ruff>=0.12",
+]
 
 [project.scripts]
 crossaudit = "crossaudit.cli.main:main"
@@ -58,3 +64,17 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+timeout = 30
+
+[tool.coverage.run]
+branch = true
+source = ["crossaudit"]
+
+[tool.coverage.report]
+fail_under = 68
+show_missing = true
+skip_covered = true
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100

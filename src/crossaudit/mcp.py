@@ -16,9 +16,9 @@ import hashlib
 import ipaddress
 import json
 import os
+import queue
 import re
 import secrets
-import selectors
 import shutil
 import signal
 import socket
@@ -31,6 +31,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
+from . import __version__
 from .config import Config
 from .errors import ConfigDenial
 
@@ -209,9 +210,31 @@ class _StdioSession:
         self.sequence = 0
         self.buffer = b""
         self.stderr = bytearray()
+        # ``select()`` can wait on pipes on POSIX, but Windows only accepts
+        # sockets and raises WinError 10038 for a subprocess stdout handle.
+        # A bounded reader queue gives every platform the same timeout and
+        # memory behaviour without polling or platform-specific overlapped IO.
+        self._stdout_queue: queue.Queue[bytes | None] = queue.Queue(maxsize=8)
+        self._stdout_thread = threading.Thread(target=self._drain_stdout,
+                                               daemon=True)
         self._stderr_thread = threading.Thread(target=self._drain_stderr, daemon=True)
+        self._stdout_thread.start()
         self._stderr_thread.start()
         self.protocol = PROTOCOL_VERSION
+
+    def _drain_stdout(self) -> None:
+        assert self.process.stdout is not None
+        try:
+            while True:
+                # readline's limit prevents a server that omits delimiters
+                # from growing an unbounded allocation in this process.
+                block = self.process.stdout.readline(MAX_MESSAGE_BYTES + 2)
+                if not block:
+                    self._stdout_queue.put(None)
+                    return
+                self._stdout_queue.put(block)
+        except OSError:
+            self._stdout_queue.put(None)
 
     def _drain_stderr(self) -> None:
         assert self.process.stderr is not None
@@ -234,36 +257,31 @@ class _StdioSession:
             raise ConfigDenial(f"MCP server closed its input. {detail}".strip()) from exc
 
     def _message(self, deadline: float) -> dict:
-        assert self.process.stdout is not None
-        selector = selectors.DefaultSelector()
-        selector.register(self.process.stdout, selectors.EVENT_READ)
-        try:
-            while True:
-                if b"\n" in self.buffer:
-                    line, self.buffer = self.buffer.split(b"\n", 1)
-                    if not line:
-                        continue
-                    try:
-                        value = json.loads(line)
-                    except (UnicodeDecodeError, ValueError) as exc:
-                        raise ConfigDenial("MCP server wrote non-JSON data to stdout") from exc
-                    if not isinstance(value, dict):
-                        raise ConfigDenial("MCP server returned a non-object JSON-RPC message")
-                    return value
-                remaining = deadline - time.monotonic()
-                if remaining <= 0:
-                    raise ConfigDenial("MCP request timed out")
-                if not selector.select(remaining):
-                    raise ConfigDenial("MCP request timed out")
-                block = os.read(self.process.stdout.fileno(), 65536)
-                if not block:
-                    detail = bytes(self.stderr).decode("utf-8", "replace")[-1000:]
-                    raise ConfigDenial(f"MCP server exited before replying. {detail}".strip())
-                self.buffer += block
-                if len(self.buffer) > MAX_MESSAGE_BYTES:
-                    raise ConfigDenial("MCP server response exceeded the safety limit")
-        finally:
-            selector.close()
+        while True:
+            if b"\n" in self.buffer:
+                line, self.buffer = self.buffer.split(b"\n", 1)
+                if not line:
+                    continue
+                try:
+                    value = json.loads(line)
+                except (UnicodeDecodeError, ValueError) as exc:
+                    raise ConfigDenial("MCP server wrote non-JSON data to stdout") from exc
+                if not isinstance(value, dict):
+                    raise ConfigDenial("MCP server returned a non-object JSON-RPC message")
+                return value
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise ConfigDenial("MCP request timed out")
+            try:
+                block = self._stdout_queue.get(timeout=remaining)
+            except queue.Empty as exc:
+                raise ConfigDenial("MCP request timed out") from exc
+            if block is None:
+                detail = bytes(self.stderr).decode("utf-8", "replace")[-1000:]
+                raise ConfigDenial(f"MCP server exited before replying. {detail}".strip())
+            self.buffer += block
+            if len(self.buffer) > MAX_MESSAGE_BYTES:
+                raise ConfigDenial("MCP server response exceeded the safety limit")
 
     def request(self, method: str, params: dict | None = None) -> dict:
         self.sequence += 1
@@ -297,7 +315,7 @@ class _StdioSession:
         result = self.request("initialize", {
             "protocolVersion": PROTOCOL_VERSION,
             "capabilities": {},
-            "clientInfo": {"name": "CrossAudit", "version": "4.13.0"},
+            "clientInfo": {"name": "CrossAudit", "version": __version__},
         })
         version = str(result.get("protocolVersion", ""))
         if version not in SUPPORTED_VERSIONS:
@@ -316,11 +334,17 @@ class _StdioSession:
         except (OSError, subprocess.TimeoutExpired):
             pass
         try:
-            os.killpg(process.pid, signal.SIGTERM)
+            if os.name == "nt":
+                process.terminate()
+            else:
+                os.killpg(process.pid, signal.SIGTERM)
             process.wait(timeout=2)
         except (OSError, subprocess.TimeoutExpired):
             try:
-                os.killpg(process.pid, signal.SIGKILL)
+                if os.name == "nt":
+                    process.kill()
+                else:
+                    os.killpg(process.pid, signal.SIGKILL)
             except OSError:
                 pass
 
@@ -414,7 +438,7 @@ class _HTTPSession:
     def initialize(self) -> dict:
         result = self.request("initialize", {
             "protocolVersion": PROTOCOL_VERSION, "capabilities": {},
-            "clientInfo": {"name": "CrossAudit", "version": "4.13.0"},
+            "clientInfo": {"name": "CrossAudit", "version": __version__},
         }, initialization=True)
         version = str(result.get("protocolVersion", ""))
         if version not in SUPPORTED_VERSIONS:

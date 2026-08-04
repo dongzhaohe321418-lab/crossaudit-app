@@ -163,6 +163,11 @@ MODEL_SWITCH_LOCK = threading.Lock()
 class _ConsoleHTTPServer(ThreadingHTTPServer):
     """HTTP server whose idle watcher has the same lifetime as the socket."""
 
+    # A WebView deliberately holds SSE requests open. They must never prevent
+    # an explicit native-app quit or recovery restart from ending the core.
+    daemon_threads = True
+    block_on_close = False
+
     def __init__(self, *args, **kwargs) -> None:
         self.stop_event = threading.Event()
         self.idle_thread: threading.Thread | None = None
@@ -653,6 +658,11 @@ def make_handler(cfg: Config, token: str, touch) -> type:
             touch()
             if parsed.path == "/":
                 self._send(PAGE.encode(), "text/html; charset=utf-8")
+            elif parsed.path == "/api/health":
+                # Keep daemon discovery constant-time. The full state snapshot
+                # may include Git, provider, HPC and sibling-project probes and
+                # must never make a healthy background worker look dead.
+                self._send(b'{"ok":true}', "application/json")
             elif parsed.path == "/api/state":
                 self._send(json.dumps(snapshot(self._config())).encode(), "application/json")
             elif parsed.path == "/api/stream":
@@ -714,7 +724,7 @@ def make_handler(cfg: Config, token: str, touch) -> type:
             last_beat = time.monotonic()
             change_version = STREAM_CHANGES.current()
             try:
-                while True:
+                while not self.server.stop_event.is_set():
                     payload = json.dumps(projects.snapshot(self._config()), sort_keys=True)
                     digest = hashlib.sha256(payload.encode()).hexdigest()
                     now = time.monotonic()
@@ -745,7 +755,7 @@ def make_handler(cfg: Config, token: str, touch) -> type:
             last_beat = time.monotonic()
             change_version = STREAM_CHANGES.current()
             try:
-                while True:
+                while not self.server.stop_event.is_set():
                     payload = json.dumps(app_settings(self._config()), sort_keys=True)
                     digest = hashlib.sha256(payload.encode()).hexdigest()
                     now = time.monotonic()
@@ -786,7 +796,7 @@ def make_handler(cfg: Config, token: str, touch) -> type:
             progress_version = PROGRESS_CHANGES.current()
             last_state = None
             try:
-                while True:
+                while not self.server.stop_event.is_set():
                     current_progress_version = PROGRESS_CHANGES.current()
                     if (last_state is not None and
                             current_progress_version != progress_version):

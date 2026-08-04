@@ -15,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
     private var statusItem: NSStatusItem?
     private var backgroundStatusItem: NSMenuItem?
     private var isTerminating = false
+    private var logURL: URL?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         installTerminationHandlers()
@@ -190,6 +191,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
             .appendingPathComponent("CrossAudit", isDirectory: true)
         try? FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
         let logURL = support.appendingPathComponent("CrossAudit.log")
+        self.logURL = logURL
+        rotateLogIfNeeded(logURL)
         _ = FileManager.default.createFile(atPath: logURL.path, contents: nil)
         logHandle = try? FileHandle(forWritingTo: logURL)
         _ = try? logHandle?.seekToEnd()
@@ -220,6 +223,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
         process.terminationHandler = { [weak self] process in
             DispatchQueue.main.async {
                 guard let self, !self.isTerminating else { return }
+                if self.core === process { self.core = nil }
                 self.loadedURL = false
                 self.backgroundStatusItem?.title = "Background core stopped"
                 self.statusItem?.button?.toolTip = "CrossAudit needs attention"
@@ -231,9 +235,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
         do {
             try process.run()
             core = process
+            DispatchQueue.main.asyncAfter(deadline: .now() + 20) { [weak self, weak process] in
+                guard let self, let process, self.core === process,
+                      process.isRunning, !self.loadedURL else { return }
+                process.terminate()
+                self.showFailure("The local core did not become ready within 20 seconds. Retry, or open the diagnostic log for details.")
+            }
         } catch {
             showFailure("CrossAudit could not launch its core: \(error.localizedDescription)")
         }
+    }
+
+    private func rotateLogIfNeeded(_ url: URL) {
+        guard let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize,
+              size > 5 * 1024 * 1024 else { return }
+        let previous = url.appendingPathExtension("1")
+        try? FileManager.default.removeItem(at: previous)
+        try? FileManager.default.moveItem(at: url, to: previous)
     }
 
     private func consumeCoreOutput(_ data: Data) {
@@ -265,8 +283,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
         webView.loadHTMLString("""
         <!doctype html><meta name=viewport content="width=device-width,initial-scale=1">
         <style>html,body{height:100%;margin:0;background:#191a18;color:#f4f4f1;font:14px -apple-system;display:grid;place-items:center}
-        main{max-width:620px;padding:40px;text-align:center}h1{font-size:20px}p{color:#b6b7b2;line-height:1.6}</style>
-        <main><h1>CrossAudit could not open</h1><p>\(htmlEscape(message))</p></main>
+        main{max-width:620px;padding:40px;text-align:center}h1{font-size:20px}p{color:#b6b7b2;line-height:1.6}
+        nav{display:flex;gap:10px;justify-content:center;margin-top:22px}button{border:1px solid #555751;border-radius:10px;padding:9px 14px;background:#f4f4f1;color:#191a18;font:inherit;font-weight:600;cursor:pointer}button+button{background:transparent;color:#f4f4f1}</style>
+        <main><h1>CrossAudit needs attention</h1><p>\(htmlEscape(message))</p><nav>
+        <button onclick="send('restartCore')">Retry startup</button>
+        <button onclick="send('openDiagnosticLog')">Open diagnostic log</button>
+        </nav></main><script>function send(action){window.webkit?.messageHandlers?.crossaudit?.postMessage({action})}</script>
         """, baseURL: nil)
     }
 
@@ -291,10 +313,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
 
     func userContentController(_ userContentController: WKUserContentController,
                                didReceive message: WKScriptMessage) {
-        guard message.name == "crossaudit",
-              ["127.0.0.1", "localhost"].contains(message.frameInfo.securityOrigin.host),
+        guard message.name == "crossaudit", message.frameInfo.isMainFrame,
               let body = message.body as? [String: Any],
-              body["action"] as? String == "chooseWorkspace" else { return }
+              let action = body["action"] as? String else { return }
+        let origin = message.frameInfo.securityOrigin
+        let local = ["127.0.0.1", "localhost"].contains(origin.host)
+        let internalPage = origin.protocol == "file" || origin.protocol == "about" || origin.host.isEmpty
+        guard local || internalPage else { return }
+        if action == "restartCore" {
+            guard core?.isRunning != true else { return }
+            stdoutBuffer.removeAll(keepingCapacity: true)
+            loadedURL = false
+            showLoading("Restarting the supervised workspace…")
+            launchCore()
+            return
+        }
+        if action == "openDiagnosticLog" {
+            if let logURL, FileManager.default.fileExists(atPath: logURL.path) {
+                NSWorkspace.shared.open(logURL)
+            } else if let support = logURL?.deletingLastPathComponent() {
+                NSWorkspace.shared.open(support)
+            }
+            return
+        }
+        guard local, action == "chooseWorkspace" else { return }
         let panel = NSOpenPanel()
         panel.title = "Choose CrossAudit Workspace"
         panel.message = "New projects will be created as folders inside this location."

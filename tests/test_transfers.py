@@ -9,6 +9,7 @@ from dataclasses import replace
 
 import pytest
 
+from crossaudit.console import transfers
 from crossaudit.console.transfers import (
     TransferError,
     decode_attachments,
@@ -53,6 +54,19 @@ def test_legacy_inline_decoder_adds_no_count_or_file_size_quota():
     rows = decode_attachments([envelope(f"{i}.txt", b"x") for i in range(25)]
                               + [envelope("large.txt", b"x" * 900_000)])
     assert len(rows) == 26 and rows[-1].size == 900_000
+
+
+def test_chunk_upload_reports_physical_disk_exhaustion_as_actionable_507(
+        cfg, monkeypatch):
+    monkeypatch.setattr(transfers.shutil, "disk_usage",
+                        lambda _path: type("Usage", (), {"free": 2})())
+    with pytest.raises(TransferError, match="free disk space") as caught:
+        receive_upload_chunk(cfg, {
+            "id": "a" * 32, "name": "large.bin",
+            "type": "application/octet-stream", "offset": 0, "total": 3,
+            "data": base64.b64encode(b"abc").decode(),
+        })
+    assert caught.value.status == 507
 
 
 def test_names_are_unique_case_insensitively():

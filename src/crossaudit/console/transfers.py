@@ -174,6 +174,14 @@ def receive_upload_chunk(cfg: Config, raw: object) -> dict:
         raise TransferError("upload chunk exceeds the declared file size")
 
     root = _upload_root(cfg)
+    try:
+        free = shutil.disk_usage(root).free
+    except OSError:
+        free = None
+    if free is not None and len(chunk) > free:
+        raise TransferError(
+            "the selected workspace does not have enough free disk space for this upload",
+            507)
     part, data_path, meta_path = (root / f"{upload_id}.part",
                                   root / f"{upload_id}.data",
                                   root / f"{upload_id}.json")
@@ -200,8 +208,14 @@ def receive_upload_chunk(cfg: Config, raw: object) -> dict:
     current = part.stat().st_size if part.is_file() else -1
     if current != offset:
         raise TransferError(f"upload expected offset {current}, got {offset}", 409)
-    with open(part, "ab") as handle:
-        handle.write(chunk)
+    try:
+        with open(part, "ab") as handle:
+            handle.write(chunk)
+    except OSError as exc:
+        if getattr(exc, "errno", None) == 28:  # ENOSPC on POSIX
+            raise TransferError(
+                "the selected workspace ran out of disk space during upload", 507) from exc
+        raise
     received = offset + len(chunk)
     complete = received == total
     meta.update(received=received, complete=complete)

@@ -6,12 +6,16 @@ for the shell, then remains in the foreground until the application exits.
 """
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import threading
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 from . import __version__
@@ -102,7 +106,64 @@ def _controller_project(workspace: Path) -> Path:
     return root
 
 
+def self_test() -> dict:
+    """Exercise the frozen runtime without credentials or persistent writes.
+
+    This is intentionally broader than ``--version``: release verification must
+    prove that bundled document libraries import, both output formats round-trip,
+    the controller can bootstrap, and the loopback UI enforces its session
+    token. Everything lives in a temporary directory and no provider is called.
+    """
+    from .document_export import extract_document, render_docx, render_pdf
+
+    with tempfile.TemporaryDirectory(prefix="crossaudit-self-test-") as temporary:
+        root = Path(temporary)
+        project = _controller_project(root / "workspace")
+        cfg = load(project / CONFIG_NAME)
+        source = "# CrossAudit self-test\n\nEnglish and 中文 survive export.\n"
+        formats = {}
+        for suffix, renderer in (("pdf", render_pdf), ("docx", render_docx)):
+            target = root / f"roundtrip.{suffix}"
+            renderer(source, target)
+            view = extract_document(target.name, target.read_bytes())
+            if not view.valid or "CrossAudit self-test" not in view.text:
+                raise RuntimeError(f"{suffix.upper()} round-trip validation failed")
+            formats[suffix] = {"valid": True, "bytes": target.stat().st_size}
+
+        url, httpd = serve(cfg, port=0)
+        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+        thread.start()
+        try:
+            with urllib.request.urlopen(url, timeout=5) as response:  # nosec B310
+                authenticated = response.status == 200 and b"CrossAudit" in response.read()
+            bare = url.split("?", 1)[0]
+            try:
+                urllib.request.urlopen(bare, timeout=5)  # nosec B310
+            except urllib.error.HTTPError as exc:
+                refused_without_token = exc.code == 403
+            else:
+                refused_without_token = False
+        finally:
+            httpd.shutdown()
+            thread.join(timeout=5)
+            httpd.server_close()
+            daemon.clear_run(cfg)
+        if not authenticated or not refused_without_token:
+            raise RuntimeError("loopback UI authentication self-test failed")
+        return {"ok": True, "version": __version__, "documents": formats,
+                "loopback_token_enforced": True}
+
+
 def main() -> int:
+    if len(sys.argv) == 2 and sys.argv[1] == "--self-test":
+        try:
+            print(json.dumps(self_test(), sort_keys=True), flush=True)
+            return 0
+        except Exception as exc:
+            print(json.dumps({"ok": False, "error": type(exc).__name__,
+                              "detail": str(exc)[:300]}, sort_keys=True),
+                  file=sys.stderr, flush=True)
+            return 1
     if len(sys.argv) >= 3 and sys.argv[1] == "--project-console":
         root = Path(sys.argv[2]).expanduser().resolve()
         port = int(sys.argv[3]) if len(sys.argv) > 3 else 0
