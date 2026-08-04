@@ -63,9 +63,12 @@ def test_release_scripts_verify_frozen_runtime_and_public_notarization():
     assert "notarytool submit" in build and "stapler staple" in build
     assert "hdiutil attach" in verifier and "codesign --verify" in verifier
     assert "$CORE --self-test" in verifier
+    assert "trusted_certificate_authorities" in build
+    assert "trusted_certificate_authorities" in verifier
     assert "coverage run" in gate and "verify_python_package.py" in gate
     spec = (ROOT / "packaging/macos/CrossAuditCore.spec").read_text()
     assert 'collect_data_files("docx", include_py_files=True)' in spec
+    assert 'collect_data_files("certifi")' in spec
 
 
 def test_static_ui_has_unique_ids_and_named_modal_and_progress_contracts():

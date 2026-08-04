@@ -142,6 +142,7 @@ def test_permanent_github_delete_needs_a_second_phrase_and_exact_repositories(
 
     calls = []
     monkeypatch.setattr(pair, "gh", lambda: "/usr/bin/gh")
+    monkeypatch.setattr(pair, "github_scopes", lambda: {"repo", "delete_repo"})
     monkeypatch.setattr(pair, "_exists", lambda _repo: True)
     monkeypatch.setattr(pair, "_gh", lambda *args, **_kwargs: calls.append(args) or "")
     result = projects.delete_project(current, str(victim), {
@@ -151,6 +152,65 @@ def test_permanent_github_delete_needs_a_second_phrase_and_exact_repositories(
     assert result["github_complete"] is True
     assert calls == [("repo", "delete", "owner/victim", "--yes"),
                      ("repo", "delete", "owner/victim-audit", "--yes")]
+
+
+@pytest.mark.parametrize(("selection", "expected"), [
+    ({"delete_working_repo": True}, "owner/victim"),
+    ({"delete_audit_repo": True}, "owner/victim-audit"),
+])
+def test_project_delete_can_remove_either_github_repository_independently(
+        tmp_path, monkeypatch, selection, expected):
+    monkeypatch.delenv("CROSSAUDIT_AUDITOR_KEY", raising=False)
+    control = Path(projects.create_project(
+        tmp_path, payload(name="control"), lambda *_: None)["root"])
+    victim = Path(projects.create_project(
+        tmp_path, payload(name="victim"), lambda *_: None)["root"])
+    config = victim / "crossaudit.yml"
+    config.write_text(config.read_text().replace(
+        "science_repo: victim",
+        "science_repo: owner/victim\naudit_repo: owner/victim-audit"))
+    current = load(control / "crossaudit.yml")
+    preview = projects.project_deletion_preview(current, str(victim))
+    assert preview["working_repository"] == "owner/victim"
+    assert preview["audit_repository"] == "owner/victim-audit"
+
+    calls = []
+    monkeypatch.setattr(pair, "gh", lambda: "/usr/bin/gh")
+    monkeypatch.setattr(pair, "github_scopes", lambda: {"repo", "delete_repo"})
+    monkeypatch.setattr(pair, "_exists", lambda _repo: True)
+    monkeypatch.setattr(pair, "_gh", lambda *args, **_kwargs: calls.append(args) or "")
+    result = projects.delete_project(current, str(victim), {
+        "confirmation": "victim", "github_confirmation": "DELETE GITHUB",
+        **selection,
+    })
+
+    assert result["github_complete"] is True
+    assert calls == [("repo", "delete", expected, "--yes")]
+
+
+def test_project_delete_requests_delete_repo_scope_before_archiving(
+        tmp_path, monkeypatch):
+    monkeypatch.delenv("CROSSAUDIT_AUDITOR_KEY", raising=False)
+    control = Path(projects.create_project(
+        tmp_path, payload(name="control"), lambda *_: None)["root"])
+    victim = Path(projects.create_project(
+        tmp_path, payload(name="victim"), lambda *_: None)["root"])
+    config = victim / "crossaudit.yml"
+    config.write_text(config.read_text().replace(
+        "science_repo: victim",
+        "science_repo: owner/victim\naudit_repo: owner/victim-audit"))
+    current = load(control / "crossaudit.yml")
+    monkeypatch.setattr(pair, "gh", lambda: "/usr/bin/gh")
+    monkeypatch.setattr(pair, "github_scopes", lambda: {"repo"})
+
+    with pytest.raises(ConfigDenial) as caught:
+        projects.delete_project(current, str(victim), {
+            "confirmation": "victim", "github_confirmation": "DELETE GITHUB",
+            "delete_audit_repo": True,
+        })
+
+    assert caught.value.detail["action"] == "authorize_delete"
+    assert victim.is_dir()
 
 
 @pytest.mark.parametrize("changes,why", [
@@ -306,7 +366,7 @@ def test_project_page_contains_the_control_plane_contract():
                  'aria-label="Back to projects"',
                  "document.getElementById('back-projects').onclick=returnToProjects",
                  "Connect GitHub", "/api/github/connect", "Open GitHub",
-                 "Local workspace folder", "Choose folder…",
+                 "Local project folder", "Choose folder…",
                  "/api/workspace/select", "/api/github/check",
                  "Check names", "Edit repository names", "recovery-modal"):
         assert text in PAGE
@@ -315,9 +375,13 @@ def test_project_page_contains_the_control_plane_contract():
                  "current-project-pin", "chat_id:activeChatId"):
         assert text in PAGE
     for text in ("Delete project", "/api/projects/delete", "data-delete-project",
-                 "DELETE GITHUB", "Move project to Trash", "Delete chat?",
+                 "DELETE GITHUB", "Move project to Trash",
+                 "Permanently delete working repository",
+                 "Permanently delete audit repository", "Delete chat?",
                  "/api/chats/delete", "data-delete-chat", "evidence remains"):
         assert text in PAGE
+    assert "Local project folder" in PAGE
+    assert "payload.use_selected_folder=true" in PAGE
     for text in ("Models, reasoning & audit loop", "/api/runtime/options",
                  "/api/runtime", "Save for next call", "Reasoning effort",
                  "Automatic revision limit", "Committed project controls",
@@ -369,6 +433,135 @@ def test_repository_check_preserves_editable_names_and_requires_explicit_adoptio
     assert caught.value.detail["issue"] == "repo_exists"
     selected["adopt_existing"] = True
     assert projects.check_repositories(selected, enforce=True)["ready"] is True
+
+
+def test_existing_working_repository_can_use_the_selected_folder_directly(
+        tmp_path, monkeypatch):
+    monkeypatch.delenv("CROSSAUDIT_AUDITOR_KEY", raising=False)
+    subprocess.run(["git", "init", "-q", "-b", "main"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "remote", "add", "origin",
+                    "https://github.com/owner/customer-work.git"],
+                   cwd=tmp_path, check=True)
+    (tmp_path / "README.md").write_text("existing work\n")
+    subprocess.run(["git", "add", "README.md"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "-c", "user.name=Test", "-c", "user.email=t@example.com",
+                    "commit", "-q", "-m", "existing"], cwd=tmp_path, check=True)
+    (tmp_path / ".crossaudit-home").mkdir()
+    (tmp_path / ".crossaudit-home" / "controller.json").write_text("{}\n")
+    (tmp_path / ".crossaudit-trash").mkdir()
+    monkeypatch.setattr(projects, "github_status", lambda force=False: {
+        "connected": True, "owner": "owner", "detail": "Connected as owner"})
+    monkeypatch.setattr(pair, "_exists", lambda _repo: True)
+    synced = []
+    monkeypatch.setattr(pair, "_sync_existing_main", lambda root: synced.append(root))
+    paired = []
+    monkeypatch.setattr(pair, "apply_pair", lambda cfg, science, audit, **kwargs:
+                        paired.append((cfg.root, science, audit)) or {})
+
+    result = projects.create_project(tmp_path, payload(
+        name="customer-work", github=True,
+        science_repo="owner/customer-work", audit_repo="owner/customer-work-audit",
+        adopt_existing=True, use_existing_local_folder=True), lambda *_: None)
+
+    assert Path(result["root"]) == tmp_path
+    assert (tmp_path / "README.md").read_text() == "existing work\n"
+    ignored = (tmp_path / ".gitignore").read_text()
+    assert ".crossaudit-home/" in ignored and ".crossaudit-trash/" in ignored
+    assert not (tmp_path / "customer-work").exists()
+    assert synced == [tmp_path]
+    assert paired == [(tmp_path, "owner/customer-work", "owner/customer-work-audit")]
+
+
+def test_selected_local_project_folder_never_adds_a_name_subfolder(
+        tmp_path, monkeypatch):
+    monkeypatch.delenv("CROSSAUDIT_AUDITOR_KEY", raising=False)
+    subprocess.run(["git", "init", "-q", "-b", "main"], cwd=tmp_path, check=True)
+    (tmp_path / ".gitignore").write_text("build/\n")
+    subprocess.run(["git", "add", ".gitignore"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "-c", "user.name=Test", "-c", "user.email=t@example.com",
+                    "commit", "-q", "-m", "existing ignore"], cwd=tmp_path, check=True)
+
+    result = projects.create_project(
+        tmp_path, payload(name="logical-name", use_selected_folder=True),
+        lambda *_: None)
+
+    assert Path(result["root"]) == tmp_path
+    assert not (tmp_path / "logical-name").exists()
+    assert ".crossaudit/" in (tmp_path / ".gitignore").read_text()
+    assert subprocess.run(["git", "status", "--porcelain"], cwd=tmp_path,
+                          capture_output=True, text=True, check=True).stdout == ""
+
+
+def test_empty_selected_folder_clones_existing_working_repo_before_setup(
+        tmp_path, monkeypatch):
+    target = tmp_path / "chosen"
+    target.mkdir()
+    monkeypatch.delenv("CROSSAUDIT_AUDITOR_KEY", raising=False)
+    monkeypatch.setattr(projects, "github_status", lambda force=False: {
+        "connected": True, "owner": "owner", "detail": "Connected as owner"})
+    monkeypatch.setattr(pair, "_exists", lambda _repo: True)
+    events = []
+
+    def fake_gh(*args, **_kwargs):
+        assert args[:3] == ("repo", "clone", "owner/customer-work")
+        assert Path(args[3]) == target
+        subprocess.run(["git", "init", "-q", "-b", "main"], cwd=target, check=True)
+        subprocess.run(["git", "remote", "add", "origin",
+                        "https://github.com/owner/customer-work.git"], cwd=target,
+                       check=True)
+        (target / "existing.txt").write_text("remote content\n")
+        subprocess.run(["git", "add", "existing.txt"], cwd=target, check=True)
+        subprocess.run(["git", "-c", "user.name=Test", "-c", "user.email=t@example.com",
+                        "commit", "-q", "-m", "remote"], cwd=target, check=True)
+        events.append("clone")
+        return ""
+
+    monkeypatch.setattr(pair, "_gh", fake_gh)
+    monkeypatch.setattr(pair, "apply_pair", lambda *_args, **_kwargs:
+                        events.append("pair") or {})
+
+    result = projects.create_project(target, payload(
+        name="customer-work", github=True, use_selected_folder=True,
+        science_repo="owner/customer-work", audit_repo="owner/customer-work-audit",
+        adopt_existing=True), lambda *_: None)
+
+    assert Path(result["root"]) == target
+    assert (target / "existing.txt").read_text() == "remote content\n"
+    assert events == ["clone", "pair"]
+
+
+def test_adopted_remote_history_is_merged_before_push_without_force(
+        tmp_path):
+    remote = tmp_path / "remote.git"
+    seed = tmp_path / "seed"
+    local = tmp_path / "local"
+    subprocess.run(["git", "init", "-q", "--bare", str(remote)], check=True)
+    subprocess.run(["git", "init", "-q", "-b", "main", str(seed)], check=True)
+    (seed / "existing.txt").write_text("remote work\n")
+    (seed / ".gitignore").write_text("build/\n")
+    subprocess.run(["git", "add", "existing.txt", ".gitignore"], cwd=seed, check=True)
+    subprocess.run(["git", "-c", "user.name=Test", "-c", "user.email=t@example.com",
+                    "commit", "-q", "-m", "remote"], cwd=seed, check=True)
+    subprocess.run(["git", "remote", "add", "origin", str(remote)], cwd=seed, check=True)
+    subprocess.run(["git", "push", "-q", "-u", "origin", "main"], cwd=seed, check=True)
+
+    subprocess.run(["git", "init", "-q", "-b", "main", str(local)], check=True)
+    (local / "crossaudit.yml").write_text("version: 1\n")
+    (local / ".gitignore").write_text(".crossaudit/\n")
+    subprocess.run(["git", "add", "crossaudit.yml", ".gitignore"], cwd=local,
+                   check=True)
+    subprocess.run(["git", "-c", "user.name=Test", "-c", "user.email=t@example.com",
+                    "commit", "-q", "-m", "local setup"], cwd=local, check=True)
+    subprocess.run(["git", "remote", "add", "origin", str(remote)], cwd=local, check=True)
+
+    pair._sync_existing_main(local)
+
+    assert (local / "existing.txt").read_text() == "remote work\n"
+    ignored = (local / ".gitignore").read_text()
+    assert "build/" in ignored and ".crossaudit/" in ignored
+    parents = subprocess.run(["git", "show", "-s", "--format=%P", "HEAD"], cwd=local,
+                             capture_output=True, text=True, check=True).stdout.split()
+    assert len(parents) == 2
 
 
 def test_workspace_selection_is_app_only_and_immediately_changes_project_base(
@@ -466,6 +659,46 @@ def test_github_connection_job_surfaces_device_code_then_account(monkeypatch):
     assert notified
 
 
+def test_github_delete_authorization_refreshes_only_delete_repo_scope(monkeypatch):
+    monkeypatch.setattr(projects, "github_status", lambda force=False: {
+        "connected": True, "owner": "release-user", "detail": "Connected"})
+    scopes = iter([{"repo"}, {"repo", "delete_repo"}])
+    monkeypatch.setattr(pair, "github_scopes", lambda: next(scopes))
+    monkeypatch.setattr(projects.shutil, "which", lambda _name: "/usr/bin/gh")
+    command = []
+
+    class FakeProcess:
+        stdout = iter(["Copy your one-time code: TEST-CODE\n"])
+
+        def poll(self):
+            return 0
+
+        def wait(self, timeout=None):
+            return 0
+
+        def terminate(self):
+            pass
+
+        def kill(self):
+            pass
+
+    def popen(args, **_kwargs):
+        command.extend(args)
+        return FakeProcess()
+
+    monkeypatch.setattr(projects.subprocess, "Popen", popen)
+    auth = projects.GithubAuthJobs()
+    result = auth.start(lambda: None, scopes=("delete_repo",))
+    deadline = time.monotonic() + 1
+    while auth.snapshot()["status"] == "running" and time.monotonic() < deadline:
+        time.sleep(0.01)
+
+    assert result["job"] == auth.snapshot()["id"]
+    assert auth.snapshot()["status"] == "complete"
+    assert command[:3] == ["/usr/bin/gh", "auth", "refresh"]
+    assert command[-2:] == ["--scopes", "delete_repo"]
+
+
 def test_project_menu_projects_a_sibling_daemons_live_progress(tmp_path, monkeypatch):
     monkeypatch.delenv("CROSSAUDIT_AUDITOR_KEY", raising=False)
     projects.create_project(tmp_path, payload(name="one"), lambda *_: None)
@@ -516,6 +749,9 @@ def test_failed_github_setup_is_visible_and_resumes_idempotently(tmp_path, monke
     assert setup["status"] == "failed" and setup["github"] is True
     row = next(p for p in projects.snapshot(current)["items"] if p["name"] == "recover")
     assert row["status"] == "setup_failed" and row["setup"]["recoverable"] is True
+    # Simulate a project created by the older app, which modified only the
+    # first ignore entry and left that file dirty during recovery.
+    (tmp_path / "recover" / ".gitignore").write_text(".crossaudit/\n")
 
     def succeed(cfg, science, audit, *, private, progress, allow_existing=True):
         attempts.append((science, audit))
@@ -527,6 +763,8 @@ def test_failed_github_setup_is_visible_and_resumes_idempotently(tmp_path, monke
     resumed = projects.resume_project(tmp_path, tmp_path / "recover", lambda *_: None)
     assert resumed["resumed"] is True
     assert projects._read_setup(tmp_path / "recover")["status"] == "complete"
+    assert subprocess.run(["git", "status", "--porcelain"], cwd=tmp_path / "recover",
+                          capture_output=True, text=True, check=True).stdout == ""
     assert attempts == [("owner/recover", "owner/recover-audit")] * 2
 
 

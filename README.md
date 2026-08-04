@@ -226,10 +226,13 @@ main Projects view only when setup, audited work, and remote compute are idle.
 By default CrossAudit atomically moves the complete local folder—including
 uncommitted and unpushed work—into that workspace's hidden
 `.crossaudit-trash/` recovery directory and shows the exact recovery path.
-Connected GitHub repositories remain untouched. Permanent GitHub deletion is a
-separate opt-in that requires both the exact Project name and the phrase
-`DELETE GITHUB`; partial remote failures never remove the recoverable local
-archive.
+Connected GitHub repositories remain untouched. The working and audit
+repositories have separate permanent-delete choices, both off by default, so a
+user can remove only the audit ledger while preserving the delivered working
+repository. Either irreversible choice requires both the exact Project name and
+the phrase `DELETE GITHUB`. GitHub additionally requires its `delete_repo`
+scope; CrossAudit exposes the official device flow when that permission is
+missing. Partial remote failures never remove the recoverable local archive.
 
 Closing the main CrossAudit window does **not** stop the application or an
 active loop. CrossAudit remains visible as a diamond in the macOS menu bar;
@@ -551,7 +554,12 @@ work repository and a separate audit repository. Both names are independently
 editable. **Check names** verifies the exact connected account and both names
 before any local or remote mutation. If an accessible repository exists,
 CrossAudit requires the user to explicitly choose adoption; it never silently
-reuses it. Before reporting success,
+reuses it. The folder selected in the Project form is always the exact local
+project root; the Project name never creates another nested directory. An
+unbound empty folder receives a clone before CrossAudit adds its owned setup
+files, while a matching bound clone is fetched before those files are written.
+Existing remote `main` history is never force-pushed. Before
+reporting success,
 CrossAudit verifies every step: repository creation or adoption, the science
 `origin` and initial push, the audit Constitution and ledger push, and auditor
 secret upload. Creation progress is sent live to the Projects view.
@@ -568,7 +576,8 @@ GitHub setup is explicit: leave **Create and connect two repositories** off for
 a local-only project. Turning it on and submitting the final form creates both
 named repositories in one guided action. Existing repositories are adopted
 idempotently only after explicit consent, and an unrelated local `origin` is
-never replaced. Setup steps are persisted locally. If authentication, SSO,
+never replaced. Merge conflicts abort safely and leave both histories intact.
+Setup steps are persisted locally. If authentication, SSO,
 permissions, rate limits, push, seeding, or secret upload fails after one
 repository has already been created, the project row shows the exact failed
 step and a **Fix & retry** action. The recovery dialog preserves both names,

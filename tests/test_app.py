@@ -118,6 +118,7 @@ def test_packaged_runtime_self_test_is_isolated_and_exercises_documents(
     assert result["loopback_token_enforced"] is True
     assert result["documents"]["pdf"]["bytes"] > 100
     assert result["documents"]["docx"]["bytes"] > 100
+    assert result["tls"]["trusted_certificate_authorities"] > 0
     assert not support.exists()
 
 

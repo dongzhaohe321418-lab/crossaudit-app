@@ -56,6 +56,8 @@ for kind in ("pdf", "docx"):
     row = result.get("documents", {}).get(kind, {})
     if row.get("valid") is not True or int(row.get("bytes", 0)) < 100:
         raise SystemExit(f"{kind} round-trip failed")
+if int(result.get("tls", {}).get("trusted_certificate_authorities", 0)) < 1:
+    raise SystemExit("installed frozen runtime has no trusted TLS certificate authorities")
 PY
 
 if [[ "${CROSSAUDIT_PUBLIC_RELEASE:-0}" == "1" ]]; then

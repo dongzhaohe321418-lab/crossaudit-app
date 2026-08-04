@@ -69,7 +69,35 @@ def workspace_roots(current: Config) -> tuple[Path, ...]:
 
 
 def _trusted_project(current: Config, path: Path) -> bool:
-    return path.parent in workspace_roots(current)
+    roots = workspace_roots(current)
+    return path in roots or path.parent in roots
+
+
+def _project_target(base: Path, name: str, payload: dict) -> Path:
+    """Resolve the chosen project folder without escaping the approved picker path."""
+    direct = (payload.get("use_selected_folder") is True or
+              payload.get("use_existing_local_folder") is True)
+    if direct:
+        if base.name == ".crossaudit-home":
+            raise ConfigDenial("choose the local project folder")
+        return base.resolve()
+    target = (base / name).resolve()
+    if target.parent != base.resolve():
+        raise ConfigDenial("projects can only be created inside this workspace")
+    return target
+
+
+def _user_worktree_changes(root: Path) -> list[str]:
+    """Return changes except app-owned local control directories."""
+    local_state = (".crossaudit/", ".crossaudit-home/", ".crossaudit-trash/")
+    changes = []
+    for line in pair_mod._git(root, "status", "--porcelain", check=False).splitlines():
+        path = line[3:].split(" -> ")[-1]
+        if any(path == prefix.rstrip("/") or path.startswith(prefix)
+               for prefix in local_state):
+            continue
+        changes.append(line)
+    return changes
 
 
 def _setup_path(root: Path) -> Path:
@@ -152,9 +180,12 @@ class ProjectJobs:
     def start(self, current: Config, payload: dict, notify) -> dict:
         project = str(payload.get("name", ""))[:80]
         base = workspace_base(current)
-        candidate = (base / project).resolve()
-        failure_root = (candidate if NAME.fullmatch(project or "") and
-                        candidate.parent == base else None)
+        try:
+            candidate = _project_target(base, project, payload)
+        except Denial:
+            candidate = None
+        failure_root = (candidate if candidate is not None and
+                        NAME.fullmatch(project or "") else None)
         return self._start(
             current, project, notify,
             lambda step: create_project(base, payload, step),
@@ -165,11 +196,13 @@ class ProjectJobs:
 
     def resume(self, current: Config, root: str, payload: dict, notify) -> dict:
         path = Path(root).resolve()
-        base = path.parent if _trusted_project(current, path) else workspace_base(current)
+        roots = workspace_roots(current)
+        base = (path if path in roots else path.parent
+                if _trusted_project(current, path) else workspace_base(current))
         return self._start(
             current, path.name[:80], notify,
             lambda step: resume_project(base, path, step, payload),
-            failure_root=(path if path.parent == base
+            failure_root=(path if path == base or path.parent == base
                           else None), context={"science": str(payload.get("science_repo", ""))[:170],
                                               "audit": str(payload.get("audit_repo", ""))[:170],
                                               "github": True})
@@ -386,9 +419,12 @@ class GithubAuthJobs:
         self._job: dict | None = None
         self._proc = None
 
-    def start(self, notify) -> dict:
+    def start(self, notify, *, scopes: tuple[str, ...] = ()) -> dict:
         status = github_status(force=True)
-        if status["connected"]:
+        requested = tuple(dict.fromkeys(scope for scope in scopes if scope))
+        missing = (set(requested) - pair_mod.github_scopes()
+                   if status["connected"] and requested else set())
+        if status["connected"] and not missing:
             return {"connected": True, "owner": status["owner"]}
         path = shutil.which("gh")
         if not path:
@@ -400,7 +436,9 @@ class GithubAuthJobs:
             if self._job and self._job["status"] == "running":
                 return {"job": self._job["id"]}
             row = {"id": uuid.uuid4().hex[:12], "status": "running",
-                   "detail": "Starting GitHub authorization", "code": "",
+                   "detail": ("Starting GitHub repository-deletion authorization"
+                              if missing else "Starting GitHub authorization"),
+                   "scopes": sorted(missing), "code": "",
                    "url": "https://github.com/login/device",
                    "started": time.time()}
             self._job = row
@@ -410,9 +448,13 @@ class GithubAuthJobs:
             timer = None
             timed_out = threading.Event()
             try:
+                command = ([path, "auth", "refresh", "--hostname", "github.com",
+                            "--scopes", ",".join(sorted(missing))]
+                           if missing else
+                           [path, "auth", "login", "--hostname", "github.com",
+                            "--git-protocol", "https", "--web", "--skip-ssh-key"])
                 proc = subprocess.Popen(
-                    [path, "auth", "login", "--hostname", "github.com",
-                     "--git-protocol", "https", "--web", "--skip-ssh-key"],
+                    command,
                     stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT, text=True, bufsize=1,
                     env=dict(os.environ, GH_PROMPT_DISABLED="1",
@@ -434,12 +476,17 @@ class GithubAuthJobs:
                         if match:
                             with self._lock:
                                 row["code"] = match.group(0)
-                                row["detail"] = "Authorize CrossAudit in GitHub"
+                                row["detail"] = ("Authorize permanent repository deletion"
+                                                 if missing else
+                                                 "Authorize CrossAudit in GitHub")
                             notify()
                 result = proc.wait()
                 connected = github_status(force=True)
+                authorized = False
+                if result == 0 and connected["connected"]:
+                    authorized = not missing or missing <= pair_mod.github_scopes()
                 with self._lock:
-                    if result == 0 and connected["connected"]:
+                    if result == 0 and connected["connected"] and authorized:
                         row.update(status="complete", detail=connected["detail"],
                                    owner=connected["owner"], finished=time.time())
                     else:
@@ -447,7 +494,7 @@ class GithubAuthJobs:
                                   else "GitHub authorization was not completed")
                         row.update(status="failed", detail=detail,
                                    finished=time.time())
-            except (OSError, ValueError) as exc:
+            except (Denial, OSError, ValueError) as exc:
                 with self._lock:
                     row.update(status="failed",
                                detail=f"Could not start GitHub authorization: {exc}"[:300],
@@ -1049,6 +1096,8 @@ def snapshot(current: Config) -> dict:
     rows = []
     candidates = []
     for root in workspace_roots(current):
+        if (root / CONFIG_NAME).is_file():
+            candidates.append(root)
         try:
             candidates.extend(p for p in root.iterdir() if p.is_dir())
         except OSError:
@@ -1207,9 +1256,7 @@ def create_project(base: Path, payload: dict, progress) -> dict:
             "The workspace changed in another window. Review the selected folder "
             "and create the project again.",
             issue="workspace_changed", action="choose_workspace")
-    target = (base / name).resolve()
-    if target.parent != base.resolve():
-        raise ConfigDenial("projects can only be created inside this workspace")
+    target = _project_target(base, name, payload)
     if (target / CONFIG_NAME).exists():
         raise ConfigDenial(f"{name} is already a CrossAudit project")
 
@@ -1222,9 +1269,47 @@ def create_project(base: Path, payload: dict, progress) -> dict:
         owner = checked["owner"]
         science, audit = checked["science"], checked["audit"]
 
+        existing_science = next(
+            (row["exists"] for row in checked["repositories"]
+             if row["repo"] == science), False)
+        if existing_science and payload.get("adopt_existing") is True:
+            if (target / ".git").is_dir():
+                current_origin = pair_mod._git(
+                    target, "remote", "get-url", "origin", check=False)
+                expected_origin = pair_mod._github_url(science)
+                if (current_origin and pair_mod._normalise_remote(current_origin) !=
+                        pair_mod._normalise_remote(expected_origin)):
+                    raise ConfigDenial(
+                        f"selected local folder uses origin {current_origin}, not "
+                        f"{expected_origin}; choose the matching working repository",
+                        issue="origin_conflict", action="choose_workspace")
+                dirty = _user_worktree_changes(target)
+                if dirty:
+                    raise ConfigDenial(
+                        "the selected working repository has uncommitted changes; "
+                        "commit or stash them before CrossAudit setup",
+                        issue="workspace", action="choose_workspace")
+                if not current_origin:
+                    pair_mod._git(target, "remote", "add", "origin", expected_origin)
+                progress("github", f"Synchronizing existing working repository {science}")
+                pair_mod._sync_existing_main(target)
+            else:
+                if target.exists() and any(target.iterdir()):
+                    raise ConfigDenial(
+                        "the selected project folder is not empty and is not the "
+                        "matching Git working repository",
+                        issue="workspace", action="choose_workspace")
+                progress("github", f"Cloning existing working repository {science}")
+                target.parent.mkdir(parents=True, exist_ok=True)
+                pair_mod._gh("repo", "clone", science, str(target), "--", "-q")
+
     progress("local", f"Creating {target}")
-    gitignore_existed = (target / ".gitignore").exists()
+    gitignore_path = target / ".gitignore"
+    gitignore_before = (gitignore_path.read_bytes() if gitignore_path.is_file()
+                        else None)
     wizard.prepare(target)
+    gitignore_changed = (gitignore_path.read_bytes() if gitignore_path.is_file()
+                         else None) != gitignore_before
     setup = {"version": 1, "name": name, "project_type": project_type,
              "status": "running",
              "detail": "Creating the local project", "started": time.time(),
@@ -1296,7 +1381,7 @@ def create_project(base: Path, payload: dict, progress) -> dict:
         "```text\n" + describe_checks(checks) + "\n```\n",
         encoding="utf-8", newline="\n")
     owned = [CONFIG_NAME, const_name, "DETERMINISTIC_CHECKS.md"]
-    if not gitignore_existed:
+    if gitignore_changed:
         owned.append(".gitignore")
     owned.extend(write_tree(target, tree))
     commit = wizard.commit_setup(target, owned)
@@ -1320,11 +1405,18 @@ def create_project(base: Path, payload: dict, progress) -> dict:
 def resume_project(base: Path, target: Path, progress,
                    payload: dict | None = None) -> dict:
     target = target.resolve()
-    if target.parent != base.resolve():
+    if target != base.resolve() and target.parent != base.resolve():
         raise ConfigDenial("that project is outside this workspace")
     setup = _read_setup(target)
     if not setup or setup.get("status") != "failed" or not setup.get("github"):
         raise ConfigDenial("this project has no recoverable GitHub setup")
+    gitignore_path = target / ".gitignore"
+    gitignore_before = (gitignore_path.read_bytes() if gitignore_path.is_file()
+                        else None)
+    wizard.prepare(target)
+    if ((gitignore_path.read_bytes() if gitignore_path.is_file() else None) !=
+            gitignore_before):
+        wizard.commit_setup(target, [".gitignore"])
     cfg = load(target / CONFIG_NAME)
     payload = payload or {}
     checked = check_repositories({
@@ -1390,6 +1482,17 @@ def _remote_repositories(cfg: Config) -> list[str]:
         if GITHUB_REPO.fullmatch(value)))
 
 
+def _remote_repository_roles(cfg: Config) -> dict[str, str | None]:
+    """Return paired repository identities without mistaking a local project label for one."""
+    if not cfg.audit_repo:
+        return {"working": None, "audit": None}
+    return {
+        "working": (cfg.science_repo if GITHUB_REPO.fullmatch(cfg.science_repo)
+                    else None),
+        "audit": (cfg.audit_repo if GITHUB_REPO.fullmatch(cfg.audit_repo) else None),
+    }
+
+
 def _project_activity(cfg: Config) -> list[str]:
     reasons = []
     if JOBS.running_for(cfg.root):
@@ -1418,6 +1521,7 @@ def project_deletion_preview(current: Config, root: str) -> dict:
     if upstream.returncode == 0 and upstream.stdout.strip().isdigit():
         ahead = int(upstream.stdout.strip())
     trash = path.parent / ".crossaudit-trash"
+    repository_roles = _remote_repository_roles(cfg)
     return {
         "root": str(path), "name": path.name,
         "trash": str(trash), "recoverable": True,
@@ -1426,6 +1530,8 @@ def project_deletion_preview(current: Config, root: str) -> dict:
         "dirty_sample": [line[3:][:120] for line in dirty_lines[:6]],
         "unpushed_commits": ahead,
         "repositories": _remote_repositories(cfg),
+        "working_repository": repository_roles["working"],
+        "audit_repository": repository_roles["audit"],
     }
 
 
@@ -1442,17 +1548,34 @@ def delete_project(current: Config, root: str, payload: dict) -> dict:
     activity = _project_activity(cfg)
     if activity:
         raise ConfigDenial("project cannot be deleted while " + "; ".join(activity))
-    delete_github = payload.get("delete_github") is True
-    repositories = _remote_repositories(cfg)
-    existing_repositories = {repo: True for repo in repositories}
-    if delete_github:
+    repository_roles = _remote_repository_roles(cfg)
+    legacy_delete_both = payload.get("delete_github") is True
+    delete_working = (payload.get("delete_working_repo") is True or legacy_delete_both)
+    delete_audit = (payload.get("delete_audit_repo") is True or legacy_delete_both)
+    selected_repositories = list(dict.fromkeys(
+        repo for selected, repo in (
+            (delete_working, repository_roles["working"]),
+            (delete_audit, repository_roles["audit"]),
+        ) if selected and repo))
+    if delete_working and not repository_roles["working"]:
+        raise ConfigDenial("this project has no configured working GitHub repository")
+    if delete_audit and not repository_roles["audit"]:
+        raise ConfigDenial("this project has no configured audit GitHub repository")
+    existing_repositories = {repo: True for repo in selected_repositories}
+    if selected_repositories:
         if str(payload.get("github_confirmation", "")) != "DELETE GITHUB":
             raise ConfigDenial("type DELETE GITHUB to confirm permanent repository deletion")
-        if not repositories:
-            raise ConfigDenial("this project has no configured GitHub repositories")
         # Complete every read-only remote preflight before touching local data.
         pair_mod.gh()
-        existing_repositories = {repo: pair_mod._exists(repo) for repo in repositories}
+        if "delete_repo" not in pair_mod.github_scopes():
+            raise ConfigDenial(
+                "Authorize GitHub repository deletion, then submit this dialog again. "
+                "CrossAudit will request only the delete_repo scope through the official "
+                "GitHub device flow.",
+                issue="github_delete_scope", action="authorize_delete",
+                url="https://github.com/login/device")
+        existing_repositories = {
+            repo: pair_mod._exists(repo) for repo in selected_repositories}
 
     info = daemon.live(cfg)
     if info:
@@ -1472,8 +1595,8 @@ def delete_project(current: Config, root: str, payload: dict) -> dict:
     _invalidate_runtime(path)
 
     remote_results = []
-    if delete_github:
-        for repo in repositories:
+    if selected_repositories:
+        for repo in selected_repositories:
             if not existing_repositories[repo]:
                 remote_results.append({"repo": repo, "status": "already_absent"})
                 continue
@@ -1487,7 +1610,7 @@ def delete_project(current: Config, root: str, payload: dict) -> dict:
         "deleted": True, "name": path.name, "root": str(path),
         "archive": str(destination), "recoverable": True,
         "github": remote_results,
-        "github_complete": (not delete_github or
+        "github_complete": (not selected_repositories or
                             all(row["status"] in {"deleted", "already_absent"}
                                 for row in remote_results)),
     }

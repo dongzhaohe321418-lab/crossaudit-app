@@ -115,11 +115,15 @@ def self_test() -> dict:
     token. Everything lives in a temporary directory and no provider is called.
     """
     from .document_export import extract_document, render_docx, render_pdf
+    from .providers.base import tls_context
 
     with tempfile.TemporaryDirectory(prefix="crossaudit-self-test-") as temporary:
         root = Path(temporary)
         project = _controller_project(root / "workspace")
         cfg = load(project / CONFIG_NAME)
+        trusted_roots = len(tls_context().get_ca_certs())
+        if not trusted_roots:
+            raise RuntimeError("TLS trust store is empty")
         source = "# CrossAudit self-test\n\nEnglish and 中文 survive export.\n"
         formats = {}
         for suffix, renderer in (("pdf", render_pdf), ("docx", render_docx)):
@@ -151,6 +155,7 @@ def self_test() -> dict:
         if not authenticated or not refused_without_token:
             raise RuntimeError("loopback UI authentication self-test failed")
         return {"ok": True, "version": __version__, "documents": formats,
+                "tls": {"trusted_certificate_authorities": trusted_roots},
                 "loopback_token_enforced": True}
 
 

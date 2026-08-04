@@ -116,6 +116,24 @@ def _owner() -> str:
     return json.loads(_gh("api", "user", timeout=GH_IDENTITY_TIMEOUT))["login"]
 
 
+def github_scopes() -> set[str]:
+    """Read OAuth scope names from GitHub response headers without exposing the token."""
+    try:
+        proc = subprocess.run([gh(), "api", "-i", "user"], capture_output=True,
+                              text=True, timeout=GH_IDENTITY_TIMEOUT)
+    except subprocess.TimeoutExpired as exc:
+        raise _timed_out("GitHub", GH_IDENTITY_TIMEOUT) from exc
+    if proc.returncode != 0:
+        raise ConfigDenial(
+            "GitHub could not verify authorization scopes: "
+            f"{(proc.stderr or proc.stdout).strip()[:240]}",
+            issue="github_auth", action="connect_github",
+            url="https://github.com/login/device")
+    match = re.search(r"(?im)^x-oauth-scopes:\s*(.*)$", proc.stdout)
+    return ({scope.strip() for scope in match.group(1).split(",") if scope.strip()}
+            if match else set())
+
+
 def _exists(repo: str) -> bool:
     try:
         proc = subprocess.run([gh(), "repo", "view", repo], capture_output=True,
@@ -153,6 +171,79 @@ def _normalise_remote(value: str) -> str:
     value = value.strip().removesuffix(".git")
     value = re.sub(r"^git@github\.com:", "https://github.com/", value)
     return value.rstrip("/").lower()
+
+
+def _record_local_state_ignores(root: Path) -> None:
+    path = root / ".gitignore"
+    current = path.read_text(encoding="utf-8") if path.is_file() else ""
+    entries = (".crossaudit/", ".crossaudit-home/", ".crossaudit-trash/")
+    missing = [entry for entry in entries if entry not in current]
+    if not missing:
+        return
+    with open(path, "a", encoding="utf-8", newline="\n") as stream:
+        stream.write("\n# CrossAudit's local state. The ledger is committed; this is not.\n"
+                     + "\n".join(missing) + "\n")
+    _git(root, "add", "--", ".gitignore")
+    parents = _git(root, "rev-list", "--parents", "-n", "1", "HEAD").split()
+    if len(parents) >= 3:
+        _git(root, "commit", "-q", "--amend", "--no-edit")
+    else:
+        _git(root, "-c", "user.name=CrossAudit", "-c",
+             "user.email=crossaudit@local.invalid", "commit", "-q", "-m",
+             "crossaudit: ignore local state", "--", ".gitignore")
+
+
+def _sync_existing_main(root: Path) -> None:
+    """Bring an adopted remote main into the local history without discarding either side."""
+    remote = subprocess.run(
+        ["git", "ls-remote", "--exit-code", "--heads", "origin", "main"],
+        cwd=str(root), capture_output=True, text=True, timeout=GIT_COMMAND_TIMEOUT)
+    if remote.returncode == 2:
+        return  # An accessible but empty repository has no main branch yet.
+    if remote.returncode != 0:
+        raise ConfigDenial(
+            "could not inspect the existing working repository main branch: "
+            f"{(remote.stderr or remote.stdout).strip()[:240]}",
+            issue="github_check", action="retry")
+    local_state = (".crossaudit/", ".crossaudit-home/", ".crossaudit-trash/")
+    dirty = []
+    for line in _git(root, "status", "--porcelain", check=False).splitlines():
+        path = line[3:].split(" -> ")[-1]
+        if any(path == prefix.rstrip("/") or path.startswith(prefix)
+               for prefix in local_state):
+            continue
+        dirty.append(line)
+    if dirty:
+        raise ConfigDenial(
+            "the local working repository has uncommitted changes; commit or stash "
+            "them before adopting its remote history",
+            issue="remote_history", action="retry")
+    _git(root, "fetch", "-q", "origin", "main")
+    head = subprocess.run(
+        ["git", "rev-parse", "--verify", "HEAD"], cwd=str(root),
+        capture_output=True, text=True, timeout=GIT_COMMAND_TIMEOUT)
+    if head.returncode != 0:
+        _git(root, "checkout", "-q", "-B", "main", "origin/main")
+        return
+    ancestor = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", "origin/main", "HEAD"],
+        cwd=str(root), capture_output=True, text=True, timeout=GIT_COMMAND_TIMEOUT)
+    if ancestor.returncode == 0:
+        return
+    merged = subprocess.run(
+        ["git", "merge", "--no-edit", "--allow-unrelated-histories",
+         "-X", "theirs", "origin/main"],
+        cwd=str(root), capture_output=True, text=True, timeout=GIT_COMMAND_TIMEOUT)
+    if merged.returncode == 0:
+        _record_local_state_ignores(root)
+        return
+    subprocess.run(["git", "merge", "--abort"], cwd=str(root),
+                   capture_output=True, text=True, timeout=GIT_COMMAND_TIMEOUT)
+    raise ConfigDenial(
+        "the local and remote working repository histories conflict; the merge was "
+        "aborted without changing either history. Resolve the local files or choose "
+        "a clean matching clone, then retry",
+        issue="remote_history", action="retry")
 
 
 def _write_pair_config(cfg, science: str, audit: str) -> None:
@@ -216,6 +307,7 @@ def apply_pair(cfg, science: str, audit: str, *, private: bool,
     gh()  # all local preflights passed; remote mutations may now begin
     tell("github", "GitHub authentication verified")
     created = []
+    adopted = set()
     for repo in (science, audit):
         if _exists(repo):
             if not allow_existing:
@@ -224,6 +316,7 @@ def apply_pair(cfg, science: str, audit: str, *, private: bool,
                     "allow CrossAudit to use repositories you can access",
                     issue="repo_exists", action="edit_repositories",
                     repositories=[repo])
+            adopted.add(repo)
             tell("github", f"Adopting existing {repo}")
         else:
             _gh("repo", "create", repo, "--private" if private else "--public")
@@ -248,6 +341,9 @@ def apply_pair(cfg, science: str, audit: str, *, private: bool,
 
     if not current:
         _git(cfg.root, "remote", "add", "origin", expected)
+    if science in adopted:
+        tell("github", f"Synchronizing existing history from {science}")
+        _sync_existing_main(cfg.root)
     _git(cfg.root, "push", "-u", "origin", "HEAD:main")
     tell("science", f"Pushed the local project to {science}")
 

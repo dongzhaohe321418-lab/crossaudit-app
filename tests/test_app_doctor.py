@@ -118,6 +118,24 @@ def test_doctor_identity_repair_is_project_local(cfg, monkeypatch):
             "name": "Ada", "email": "not-an-email"})
 
 
+def test_doctor_checks_the_provider_certificate_context(cfg, monkeypatch, tmp_path):
+    class TrustContext:
+        @staticmethod
+        def get_ca_certs():
+            return [{"subject": "bundled-test-root"}]
+
+    monkeypatch.setenv("CROSSAUDIT_WORKSPACE_ROOT", str(tmp_path))
+    monkeypatch.setattr(app_doctor, "tls_context", lambda: TrustContext())
+    monkeypatch.setattr(app_doctor.shutil, "which", lambda _name: None)
+
+    result = app_doctor.collect(cfg, online=False)
+    tls = next(row for row in result["checks"] if row["id"] == "tls")
+
+    assert tls["status"] == "ready"
+    assert tls["blocking"] is False
+    assert tls["detail"] == "1 trusted certificate authorities"
+
+
 def test_unknown_doctor_repair_is_refused(cfg):
     with pytest.raises(ConfigDenial, match="not supported"):
         app_doctor.repair(cfg, "run_arbitrary_command", {})

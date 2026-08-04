@@ -949,7 +949,12 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                     self._send(json.dumps(result).encode(), "application/json")
                     return
                 if parsed.path == "/api/github/connect":
-                    result = projects.GITHUB_AUTH.start(STREAM_CHANGES.notify)
+                    requested_scope = str(payload.get("scope", "")).strip()
+                    if requested_scope not in {"", "delete_repo"}:
+                        raise ConfigDenial("unsupported GitHub authorization scope")
+                    result = projects.GITHUB_AUTH.start(
+                        STREAM_CHANGES.notify,
+                        scopes=((requested_scope,) if requested_scope else ()))
                     self._send(json.dumps(result).encode(), "application/json")
                     return
                 if parsed.path == "/api/github/check":

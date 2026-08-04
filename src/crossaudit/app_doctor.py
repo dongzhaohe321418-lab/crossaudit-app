@@ -24,6 +24,7 @@ from pathlib import Path
 from . import __version__
 from .config import CONFIG_NAME, Config
 from .errors import ConfigDenial
+from .providers.base import tls_context
 
 LATEST_RELEASE_API = (
     "https://api.github.com/repos/dongzhaohe321418-lab/crossaudit_v4/releases/latest"
@@ -188,7 +189,10 @@ def collect(cfg: Config, *, online: bool = True) -> dict:
                 "url": LATEST_RELEASE_URL}))
 
     try:
-        roots = len(ssl.create_default_context().get_ca_certs())
+        # Check the same verified context used for provider HTTPS calls. Frozen
+        # Python builds often have no compiled-in CA path, so tls_context()
+        # deliberately falls back to the certifi bundle shipped in the app.
+        roots = len(tls_context().get_ca_certs())
     except (OSError, ssl.SSLError):
         roots = 0
     checks.append({

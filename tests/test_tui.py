@@ -202,6 +202,8 @@ def test_the_local_state_directory_is_ignored_but_the_ledger_is_not(tmp_path: Pa
     wizard.prepare(target)
     ignored = (target / ".gitignore").read_text()
     assert ".crossaudit/" in ignored
+    assert ".crossaudit-home/" in ignored
+    assert ".crossaudit-trash/" in ignored
     assert "cycles" not in ignored          # the ledger is committed, deliberately
 
 

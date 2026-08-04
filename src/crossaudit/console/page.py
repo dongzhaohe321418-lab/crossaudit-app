@@ -723,7 +723,7 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
     <div class="wizard-body"><section class="form-section"><div class="form-title">Project</div><div class="form-grid">
       <label class="field"><span>Project name</span><input name="name" id="project-name" maxlength="80" required placeholder="chem-agent"></label>
       <label class="field"><span>Automatic revision limit</span><select name="max_rounds" id="max-rounds-choice"><option value="1">1 — quick stop</option><option value="3" selected>3 — recommended</option><option value="5">5 — persistent</option><option value="10">10 — maximum</option></select><small class="field-help" id="round-limit-help">Up to 3 generator → auditor rounds, then the task pauses for you. It never auto-passes.</small></label>
-      <label class="field full"><span>Local workspace folder</span><div class="path-picker"><input id="project-workspace" readonly aria-label="Selected local workspace"><button type="button" class="secondary" id="choose-project-workspace">Choose folder…</button></div><small class="path-preview" id="project-path-preview">Choose where this project's local folder will be created.</small></label>
+      <label class="field full"><span>Local project folder</span><div class="path-picker"><input id="project-workspace" readonly required aria-label="Selected local project folder"><button type="button" class="secondary" id="choose-project-workspace">Choose folder…</button></div><small class="path-preview" id="project-path-preview">Choose the exact folder CrossAudit should use. The project name will not create another subfolder.</small></label>
       <label class="field full"><span>Project type</span><select name="project_type" id="project-type">
         <option value="general" selected>General work — documents, reviews, code</option>
         <option value="science">Scientific / data workflow — structured experiment outputs</option></select></label>
@@ -786,10 +786,14 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
       <div class="delete-warning" style="margin-top:12px">The local folder will move to CrossAudit Trash and can be recovered. GitHub repositories remain untouched unless you explicitly select permanent deletion below.</div>
       <label class="field" style="margin-top:14px"><span>Type the project name to confirm</span>
         <input id="delete-project-confirmation" autocomplete="off" required></label>
-      <label class="toggle-line" style="margin-top:14px"><input type="checkbox" id="delete-project-github"><span><b>Also permanently delete the connected GitHub repositories</b>
-        <small id="delete-project-repositories">No GitHub repositories detected.</small></span></label>
+      <label class="toggle-line" style="margin-top:14px"><input type="checkbox" id="delete-working-repository"><span><b>Permanently delete working repository</b>
+        <small id="delete-working-repository-name">No working repository detected.</small></span></label>
+      <label class="toggle-line" style="margin-top:10px"><input type="checkbox" id="delete-audit-repository"><span><b>Permanently delete audit repository</b>
+        <small id="delete-audit-repository-name">No audit repository detected.</small></span></label>
       <label class="field conditional-field off" id="delete-github-confirm-wrap" style="margin-top:12px"><span>Type DELETE GITHUB</span>
         <input id="delete-github-confirmation" autocomplete="off" placeholder="DELETE GITHUB"></label>
+      <div class="connection" id="delete-github-authorization"></div>
+      <button type="button" class="secondary" id="authorize-delete-repositories" hidden>Authorize GitHub deletion</button>
       <div class="wizard-error" id="delete-project-error"></div></div>
     <div class="wizard-foot"><span>Running tasks and remote compute block deletion.</span>
       <button type="button" class="secondary" id="cancel-delete-project">Cancel</button>
@@ -1138,8 +1142,8 @@ const ZH={
   "Automatic revision limit":"自动修订轮数上限","1 — quick stop":"1 — 快速停止","3 — recommended":"3 — 推荐",
   "5 — persistent":"5 — 持续修订","10 — maximum":"10 — 最大值",
   "Up to 3 generator → auditor rounds, then the task pauses for you. It never auto-passes.":"最多进行 3 轮生成者 → 审计者循环，随后暂停并等待你决定；绝不会自动通过。",
-  "Local workspace folder":"本地工作区文件夹","Choose folder…":"选择文件夹…","Selected local workspace":"已选择的本地工作区",
-  "Choose where this project's local folder will be created.":"选择创建该项目本地文件夹的位置。",
+  "Local workspace folder":"本地工作区文件夹","Local project folder":"本地项目文件夹","Choose folder…":"选择文件夹…","Selected local workspace":"已选择的本地工作区","Selected local project folder":"已选择的本地项目文件夹",
+  "Choose where this project's local folder will be created.":"选择创建该项目本地文件夹的位置。","Choose the exact folder CrossAudit should use. The project name will not create another subfolder.":"请选择 CrossAudit 直接使用的文件夹；项目名称不会再创建子文件夹。",
   "Independent roles":"独立角色","Generator":"生成者","Independent auditor":"独立审计者","Provider":"供应商","Connection":"连接方式",
   "API region":"API 区域","The region must match the API key.":"区域必须与 API key 匹配。","Model":"模型",
   "Model available to your account":"你的账户可用的模型","Custom model ID":"自定义模型 ID","Exact provider model ID":"准确的供应商模型 ID",
@@ -1241,12 +1245,13 @@ const ZH={
   "Close":"关闭","Close settings":"关闭设置","No matching projects.":"没有匹配的项目。","Switch to dark theme":"切换到深色主题","Switch to light theme":"切换到浅色主题",
   "Delete project":"删除项目","Review the local and GitHub impact before anything is changed.":"更改任何内容前，请检查本地与 GitHub 影响。",
   "Checking project state…":"正在检查项目状态…","The local folder will move to CrossAudit Trash and can be recovered. GitHub repositories remain untouched unless you explicitly select permanent deletion below.":"本地文件夹会移到 CrossAudit 废纸篓并可恢复。除非你在下方明确选择永久删除，否则 GitHub 仓库保持不变。",
-  "Type the project name to confirm":"输入项目名称以确认","Also permanently delete the connected GitHub repositories":"同时永久删除已连接的 GitHub 仓库",
-  "No GitHub repositories detected.":"未检测到 GitHub 仓库。","Type DELETE GITHUB":"输入 DELETE GITHUB","Running tasks and remote compute block deletion.":"运行中的任务和远程计算会阻止删除。",
+  "Type the project name to confirm":"输入项目名称以确认","Permanently delete working repository":"永久删除工作仓库","Permanently delete audit repository":"永久删除审计仓库",
+  "No working repository detected.":"未检测到工作仓库。","No audit repository detected.":"未检测到审计仓库。","Type DELETE GITHUB":"输入 DELETE GITHUB","Running tasks and remote compute block deletion.":"运行中的任务和远程计算会阻止删除。",
+  "Authorize GitHub deletion":"授权 GitHub 删除仓库","GitHub requires the delete_repo permission before it can delete a repository.":"GitHub 需要 delete_repo 权限才能删除仓库。","GitHub deletion authorized. Submit again.":"GitHub 删除权限已授权，请再次提交。","GitHub deletion authorized. Submit again to delete the selected repositories.":"GitHub 删除权限已授权，请再次提交以删除所选仓库。",
   "Move project to Trash":"将项目移到废纸篓","Delete chat?":"删除对话？","This chat will disappear from the project sidebar.":"此对话将从项目侧栏消失。",
   "Audit reports, receipts, commits and delivered files are preserved in the project ledger. Deleting a chat never rewrites evidence that may already have admitted a result.":"审计报告、收据、提交和交付文件会保留在项目账本中。删除对话绝不会重写可能已经准入结果的证据。",
   "This only removes the individual chat from navigation.":"此操作只会从导航中移除该独立对话。","Delete chat":"删除对话","Delete chat from project":"从项目中删除对话","Delete project from CrossAudit":"从 CrossAudit 删除项目",
-  "Return to the main Projects window to delete this open project":"请返回主项目窗口后删除当前打开的项目","Move to Trash & delete GitHub repositories":"移到废纸篓并删除 GitHub 仓库","Deleting…":"正在删除…","Project moved to Trash":"项目已移到废纸篓",
+  "Return to the main Projects window to delete this open project":"请返回主项目窗口后删除当前打开的项目","Move to Trash & delete selected GitHub repositories":"移到废纸篓并删除所选 GitHub 仓库","Deleting…":"正在删除…","Project moved to Trash":"项目已移到废纸篓",
   "ChatGPT subscription":"ChatGPT 订阅","Default":"默认","Enter a custom model ID…":"输入自定义模型 ID…",
   "highest capability":"最高能力","balanced · recommended":"均衡 · 推荐","fastest, lowest cost":"最快、成本最低",
   "API access.":"API 访问。","Use an official developer API key.":"请使用官方开发者 API key。",
@@ -1446,15 +1451,14 @@ async function api(path, body){
   return data||{};
 }
 
-let workspacePickerContext='project';
+let workspacePickerContext='project',selectedProjectFolder='';
 function updateWorkspaceFields(path){
   const value=path||'Not selected';
-  document.getElementById('project-workspace').value=value;
+  document.getElementById('project-workspace').value=selectedProjectFolder;
   document.getElementById('settings-workspace').value=value;
-  const name=document.getElementById('project-name').value.trim()||'your-project';
-  document.getElementById('project-path-preview').textContent=value==='Not selected'
-    ?'Choose where this project\'s local folder will be created.'
-    :'Local project: '+value.replace(/\/$/,'')+'/'+name;
+  document.getElementById('project-path-preview').textContent=selectedProjectFolder
+    ?'Local project: '+selectedProjectFolder
+    :'Choose the exact folder CrossAudit should use. The project name will not create another subfolder.';
 }
 function workspaceError(message){
   const id=workspacePickerContext==='settings'?'settings-error':'wizard-error';
@@ -1467,7 +1471,8 @@ function showInlineError(id,error){
 }
 function chooseWorkspace(context){
   workspacePickerContext=context;
-  const current=(projectState&&projectState.workspace)||document.getElementById('settings-workspace').value||'';
+  const current=(context==='project'?selectedProjectFolder:'')||
+    (projectState&&projectState.workspace)||document.getElementById('settings-workspace').value||'';
   const bridge=window.webkit&&window.webkit.messageHandlers&&window.webkit.messageHandlers.crossaudit;
   if(!bridge){workspaceError('Use the CrossAudit macOS app to choose a local folder. The browser console cannot read arbitrary folder paths.');return;}
   bridge.postMessage({action:'chooseWorkspace',current});
@@ -1475,6 +1480,7 @@ function chooseWorkspace(context){
 window.crossauditWorkspaceSelected=async choice=>{
   if(!choice||!choice.path)return;
   try{const result=await api('/api/workspace/select',{path:choice.path});
+    if(workspacePickerContext==='project')selectedProjectFolder=result.workspace;
     if(projectState)projectState.workspace=result.workspace;updateWorkspaceFields(result.workspace);
     await refreshProjects();
   }catch(e){showInlineError(workspacePickerContext==='settings'?'settings-error':'wizard-error',e);}
@@ -1855,7 +1861,7 @@ const recoveryModal=document.getElementById('recovery-modal');
 const recoveryForm=document.getElementById('recovery-form');
 const deleteProjectModal=document.getElementById('delete-project-modal');
 const deleteProjectForm=document.getElementById('delete-project-form');
-let deleteProjectPreview=null;
+let deleteProjectPreview=null,deleteNeedsGithubAuthorization=false;
 const auditorVendor=document.getElementById('auditor-vendor');
 const generatorVendor=document.getElementById('generator-vendor');
 const auditorConnection=document.getElementById('auditor-connection');
@@ -2040,7 +2046,7 @@ function renderProjects(d){
       +(p.current?'disabled ':'')+'aria-label="Delete project from CrossAudit" title="'
       +(p.current?'Return to the main Projects window to delete this open project':'Delete project from CrossAudit')+'">⌫</button>'
     +'<span class="project-arrow">›</span></div>').join(''):'<div class="hub-empty">No matching projects.</div>';
-  renderProjectJob(d.jobs);configureProjectForm();
+  renderProjectJob(d.jobs);configureProjectForm();renderDeleteGithubAuthorization();
 }
 async function refreshProjects(){try{renderProjects(await api('/api/projects'));}catch(e){
   document.getElementById('project-list').innerHTML='<div class="hub-empty">'+esc(e.message)+'</div>';}}
@@ -2063,15 +2069,34 @@ async function openProject(root,current){
     document.getElementById('job-title').textContent='Could not open project';document.getElementById('job-detail').textContent=e.message;}
 }
 function closeDeleteProject(){deleteProjectModal.className='project-modal';deleteProjectForm.reset();
-  deleteProjectPreview=null;document.getElementById('delete-project-error').className='wizard-error';}
-function syncDeleteProject(){const github=document.getElementById('delete-project-github').checked;
+  deleteProjectPreview=null;deleteNeedsGithubAuthorization=false;
+  document.getElementById('delete-project-error').className='wizard-error';}
+function renderDeleteGithubAuthorization(){
+  const box=document.getElementById('delete-github-authorization');
+  const button=document.getElementById('authorize-delete-repositories');
+  if(!deleteProjectModal.classList.contains('on')||!deleteNeedsGithubAuthorization){box.textContent='';button.hidden=true;return;}
+  const auth=projectState&&projectState.github_auth||{},scopes=auth.scopes||[];
+  if(scopes.includes('delete_repo')&&auth.status==='running'){
+    button.hidden=true;box.className='connection';box.innerHTML='<div class="github-device"><b>'+esc(auth.detail||'Authorize permanent repository deletion')+'</b>'
+      +(auth.code?'<div class="github-device-actions"><span class="device-code">'+esc(auth.code)+'</span>'
+      +'<button type="button" class="secondary" data-copy-delete-github="'+esc(auth.code)+'">Copy code</button>'
+      +(auth.url?'<a href="'+esc(auth.url)+'" target="_blank" rel="noopener">Open GitHub ↗</a>':'')+'</div>':'')+'</div>';return;
+  }
+  if(scopes.includes('delete_repo')&&auth.status==='complete'){
+    deleteNeedsGithubAuthorization=false;button.hidden=true;box.className='connection ok';
+    box.textContent='GitHub deletion authorized. Submit again to delete the selected repositories.';return;
+  }
+  box.className='connection bad';box.textContent='GitHub requires the delete_repo permission before it can delete a repository.';
+  button.hidden=false;button.disabled=false;button.textContent='Authorize GitHub deletion';
+}
+function syncDeleteProject(){const working=document.getElementById('delete-working-repository').checked;
+  const audit=document.getElementById('delete-audit-repository').checked,github=working||audit;
   document.getElementById('delete-github-confirm-wrap').className='field conditional-field'+(github?'':' off');
-  const localReady=Boolean(deleteProjectPreview)&&document.getElementById('delete-project-confirmation').value===deleteProjectPreview.name;
-  const remoteReady=!github||document.getElementById('delete-github-confirmation').value==='DELETE GITHUB';
-  const button=document.getElementById('confirm-delete-project');button.disabled=!(localReady&&remoteReady&&deleteProjectPreview.can_delete);
-  button.textContent=github?(currentLocale==='zh'?'移到废纸篓并永久删除 GitHub 仓库':'Move to Trash & delete GitHub repositories')
+  const button=document.getElementById('confirm-delete-project');
+  button.disabled=!(deleteProjectPreview&&deleteProjectPreview.can_delete);
+  button.textContent=github?(currentLocale==='zh'?'移到废纸篓并删除所选 GitHub 仓库':'Move to Trash & delete selected GitHub repositories')
     :(currentLocale==='zh'?'将项目移到废纸篓':'Move project to Trash');}
-async function openDeleteProject(root){deleteProjectForm.reset();deleteProjectPreview=null;
+async function openDeleteProject(root){deleteProjectForm.reset();deleteProjectPreview=null;deleteNeedsGithubAuthorization=false;
   document.getElementById('delete-project-root').value=root;document.getElementById('delete-project-name').textContent='Project';
   document.getElementById('delete-project-path').textContent=root;document.getElementById('delete-project-impact').textContent='Checking project state…';
   document.getElementById('delete-project-error').className='wizard-error';document.getElementById('confirm-delete-project').disabled=true;
@@ -2085,15 +2110,33 @@ async function openDeleteProject(root){deleteProjectForm.reset();deleteProjectPr
     if(preview.unpushed_commits)impact.push(currentLocale==='zh'?preview.unpushed_commits+' 个未推送提交会一同归档':preview.unpushed_commits+' unpushed commits will be archived');
     if(preview.activity.length)impact.push((currentLocale==='zh'?'目前不能删除：':'Cannot delete now: ')+preview.activity.join('; '));
     document.getElementById('delete-project-impact').textContent=impact.join(' · ');
-    const repos=preview.repositories||[],remote=document.getElementById('delete-project-github');remote.disabled=!repos.length;
-    document.getElementById('delete-project-repositories').textContent=repos.length
-      ?(currentLocale==='zh'?'永久删除：':'Permanently delete: ')+repos.join(', ')
-      :(currentLocale==='zh'?'未检测到 GitHub 仓库。':'No GitHub repositories detected.');
+    const working=preview.working_repository||'',audit=preview.audit_repository||'';
+    const workingBox=document.getElementById('delete-working-repository');workingBox.disabled=!working;
+    const auditBox=document.getElementById('delete-audit-repository');auditBox.disabled=!audit;
+    document.getElementById('delete-working-repository-name').textContent=working
+      ?(currentLocale==='zh'?'保留为默认；选择后永久删除：':'Preserved by default; select to permanently delete: ')+working
+      :(currentLocale==='zh'?'未检测到工作仓库。':'No working repository detected.');
+    document.getElementById('delete-audit-repository-name').textContent=audit
+      ?(currentLocale==='zh'?'选择后永久删除：':'Select to permanently delete: ')+audit
+      :(currentLocale==='zh'?'未检测到审计仓库。':'No audit repository detected.');
     document.getElementById('delete-project-confirmation').placeholder=preview.name;syncDeleteProject();
   }catch(e){showInlineError('delete-project-error',e);}}
 document.getElementById('delete-project-confirmation').oninput=syncDeleteProject;
 document.getElementById('delete-github-confirmation').oninput=syncDeleteProject;
-document.getElementById('delete-project-github').onchange=syncDeleteProject;
+document.getElementById('delete-working-repository').onchange=syncDeleteProject;
+document.getElementById('delete-audit-repository').onchange=syncDeleteProject;
+document.getElementById('delete-github-authorization').onclick=async ev=>{
+  const copy=ev.target.closest('[data-copy-delete-github]');if(!copy)return;
+  try{await navigator.clipboard.writeText(copy.getAttribute('data-copy-delete-github'));copy.textContent='Copied';}catch(e){}
+};
+document.getElementById('authorize-delete-repositories').onclick=async()=>{
+  const button=document.getElementById('authorize-delete-repositories');button.disabled=true;button.textContent='Starting…';
+  try{const result=await api('/api/github/connect',{scope:'delete_repo'});
+    if(result.connected){deleteNeedsGithubAuthorization=false;button.hidden=true;
+      const box=document.getElementById('delete-github-authorization');box.className='connection ok';box.textContent='GitHub deletion authorized. Submit again.';}
+    else renderDeleteGithubAuthorization();}
+  catch(e){showInlineError('delete-project-error',e);button.disabled=false;button.textContent='Authorize GitHub deletion';}
+};
 document.getElementById('close-delete-project').onclick=closeDeleteProject;
 document.getElementById('cancel-delete-project').onclick=closeDeleteProject;
 deleteProjectModal.addEventListener('click',ev=>{if(ev.target===deleteProjectModal)closeDeleteProject();});
@@ -2101,7 +2144,8 @@ deleteProjectForm.onsubmit=async ev=>{ev.preventDefault();if(!deleteProjectPrevi
   const button=document.getElementById('confirm-delete-project');button.disabled=true;button.textContent=currentLocale==='zh'?'正在删除…':'Deleting…';
   try{const result=await api('/api/projects/delete',{action:'delete',root:deleteProjectPreview.root,
       confirmation:document.getElementById('delete-project-confirmation').value,
-      delete_github:document.getElementById('delete-project-github').checked,
+      delete_working_repo:document.getElementById('delete-working-repository').checked,
+      delete_audit_repo:document.getElementById('delete-audit-repository').checked,
       github_confirmation:document.getElementById('delete-github-confirmation').value});
     closeDeleteProject();await refreshProjects();const panel=document.getElementById('project-job');panel.className='job-panel on complete';
     document.getElementById('open-created').hidden=true;
@@ -2110,11 +2154,12 @@ deleteProjectForm.onsubmit=async ev=>{ev.preventDefault();if(!deleteProjectPrevi
     document.getElementById('job-detail').textContent=(currentLocale==='zh'?'可从以下位置恢复：':'Recover from: ')+result.archive
       +(failed.length?(currentLocale==='zh'?' · GitHub 删除未完全成功：':' · GitHub deletion incomplete: ')+failed.map(row=>row.repo).join(', '):'');
     document.getElementById('job-steps').innerHTML='';document.getElementById('job-guidance').className='job-guidance';
-  }catch(e){showInlineError('delete-project-error',e);syncDeleteProject();}};
+  }catch(e){if(e.action==='authorize_delete'){deleteNeedsGithubAuthorization=true;renderDeleteGithubAuthorization();}
+    showInlineError('delete-project-error',e);syncDeleteProject();}};
 function openProjectModal(){projectForm.reset();document.getElementById('wizard-error').className='wizard-error';
   if(settingsState&&settingsState.doctor&&settingsState.doctor.status==='blocked'){
     openSettings();doctorMessage('Fix the required Environment Doctor items before creating a project.',true);return;}
-  repoNameTouched={science:false,audit:false};resetRepositoryCheck();
+  repoNameTouched={science:false,audit:false};selectedProjectFolder='';resetRepositoryCheck();
   configureProjectForm();const vendors=Object.keys((projectState&&projectState.models)||{});
   auditorVendor.value=vendors.includes('openai')?'openai':vendors[0];
   generatorVendor.value=vendors.includes('anthropic')?'anthropic':vendors.find(v=>v!==auditorVendor.value);
@@ -2234,7 +2279,8 @@ projectForm.onsubmit=async ev=>{ev.preventDefault();const submit=document.getEle
   payload.generator_model=generatorModel.value==='__custom__'?document.getElementById('generator-custom').value.trim():generatorModel.value;
   payload.github=document.getElementById('github-toggle').checked;payload.public=fd.has('public');
   payload.adopt_existing=document.getElementById('adopt-existing').checked;
-  payload.workspace=projectState&&projectState.workspace||'';
+  payload.use_selected_folder=true;
+  payload.workspace=selectedProjectFolder;
   payload.max_rounds=Number(payload.max_rounds);
   try{if(payload.github){const checked=await checkRepositoryNames(false);if(!checked.ready){
       throw new Error('Choose unused names, or explicitly allow CrossAudit to use the accessible repositories.');}}

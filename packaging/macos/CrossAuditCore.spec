@@ -5,6 +5,7 @@ from PyInstaller.utils.hooks import collect_data_files
 
 root = Path(SPECPATH).parents[1]
 datas = collect_data_files("crossaudit.scaffold")
+datas += collect_data_files("certifi")
 # python-docx computes template paths relative to ``docx.parts.__file__``.
 # Modules normally live only inside PyInstaller's PYZ archive, leaving that
 # intermediate directory absent even when the template XML files were copied.
@@ -18,7 +19,7 @@ a = Analysis(
     pathex=[str(root / "src")],
     binaries=[],
     datas=datas,
-    hiddenimports=["yaml", "docx", "pypdf", "reportlab"],
+    hiddenimports=["yaml", "certifi", "docx", "pypdf", "reportlab"],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

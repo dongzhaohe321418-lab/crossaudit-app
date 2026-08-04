@@ -169,11 +169,13 @@ def prepare(target: Path) -> list[str]:
         done.append("git init — the ledger is git, and an audit reads commits")
     gitignore = target / ".gitignore"
     current = gitignore.read_text(encoding="utf-8") if gitignore.is_file() else ""
-    if ".crossaudit/" not in current:
+    local_state = (".crossaudit/", ".crossaudit-home/", ".crossaudit-trash/")
+    missing_state = [entry for entry in local_state if entry not in current]
+    if missing_state:
         with open(gitignore, "a", encoding="utf-8", newline="\n") as fh:
             fh.write("\n# CrossAudit's local state. The ledger is committed; this is not.\n"
-                     ".crossaudit/\n")
-        done.append("ignored .crossaudit/ — local state, not the ledger")
+                     + "\n".join(missing_state) + "\n")
+        done.append("ignored CrossAudit local state directories — not the ledger")
     return done
 
 

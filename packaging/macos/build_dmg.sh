@@ -14,6 +14,7 @@ ARCH="$(uname -m)"
 CODEX_VERSION="0.146.0"
 CODEX_TAG="rust-v$CODEX_VERSION"
 CODEX_ARCHIVE="$BUILD/codex-aarch64-apple-darwin-$CODEX_VERSION.tar.gz"
+CODEX_LICENSE="$BUILD/OpenAI-Codex-LICENSE-$CODEX_VERSION"
 CODEX_SHA256="2750132d300e64f1dbffb95e3d913fd9c9dc7812bc8e1bce5c61357248b7929e"
 CODEX_LICENSE_SHA256="d17f227e4df5da1600391338865ce0f3055211760a36688f816941d58232d8dc"
 
@@ -88,13 +89,22 @@ if [[ ! -x "$CODEX_BIN" ]]; then
 fi
 cp "$CODEX_BIN" "$APP/Contents/Resources/bin/codex"
 chmod 755 "$APP/Contents/Resources/bin/codex"
-curl -fsSL --retry 3 -o "$STAGE/OpenAI-Codex-LICENSE" \
-  "https://raw.githubusercontent.com/openai/codex/$CODEX_TAG/LICENSE"
-if [[ "$(shasum -a 256 "$STAGE/OpenAI-Codex-LICENSE" | awk '{print $1}')" != "$CODEX_LICENSE_SHA256" ]]; then
+if [[ ! -f "$CODEX_LICENSE" ]] || \
+   [[ "$(shasum -a 256 "$CODEX_LICENSE" | awk '{print $1}')" != "$CODEX_LICENSE_SHA256" ]]; then
+  INSTALLED_CODEX_LICENSE="/Applications/CrossAudit.app/Contents/Resources/licenses/OpenAI-Codex-LICENSE"
+  if [[ -f "$INSTALLED_CODEX_LICENSE" ]] && \
+     [[ "$(shasum -a 256 "$INSTALLED_CODEX_LICENSE" | awk '{print $1}')" == "$CODEX_LICENSE_SHA256" ]]; then
+    cp "$INSTALLED_CODEX_LICENSE" "$CODEX_LICENSE"
+  else
+    curl -fsSL --retry 3 -o "$CODEX_LICENSE" \
+      "https://raw.githubusercontent.com/openai/codex/$CODEX_TAG/LICENSE"
+  fi
+fi
+if [[ "$(shasum -a 256 "$CODEX_LICENSE" | awk '{print $1}')" != "$CODEX_LICENSE_SHA256" ]]; then
   echo "The pinned OpenAI Codex license failed its SHA-256 check." >&2
   exit 6
 fi
-cp "$STAGE/OpenAI-Codex-LICENSE" "$APP/Contents/Resources/licenses/OpenAI-Codex-LICENSE"
+cp "$CODEX_LICENSE" "$APP/Contents/Resources/licenses/OpenAI-Codex-LICENSE"
 cp packaging/macos/GITHUB_CLI_LICENSE "$APP/Contents/Resources/licenses/GitHub-CLI-LICENSE"
 cp LICENSE "$APP/Contents/Resources/licenses/CrossAudit-LICENSE"
 
@@ -114,6 +124,8 @@ if result.get("ok") is not True or result.get("loopback_token_enforced") is not 
 if not all(result.get("documents", {}).get(kind, {}).get("valid")
            for kind in ("pdf", "docx")):
     raise SystemExit("frozen document round-trip did not pass")
+if int(result.get("tls", {}).get("trusted_certificate_authorities", 0)) < 1:
+    raise SystemExit("frozen runtime has no trusted TLS certificate authorities")
 PY
 
 # Finder tags, quarantine state, and AppleDouble/resource-fork metadata are not
