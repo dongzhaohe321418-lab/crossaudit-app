@@ -55,6 +55,10 @@ structured content.
 
 - A native Apple Silicon macOS application: no terminal or separate browser is
   required for normal use.
+- An Apple-style spatial interface with translucent navigation and transient
+  controls, calm opaque work and evidence surfaces, native system typography,
+  light/dark themes, and explicit reduced-transparency, reduced-motion,
+  high-contrast, and narrow-window fallbacks.
 - Standard macOS editing commands—including Undo, Cut, Copy, Paste, and Select
   All—work in task, configuration, and write-only API-key fields.
 - The complete app interface switches between English and Simplified Chinese;

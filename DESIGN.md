@@ -1,9 +1,9 @@
-# CrossAudit V3 — Design Core
+# CrossAudit V4 — Design Core
 
 > 一个对话面,两个互相制衡的 agent,一本可回放的账。
 > One conversation, two adversarial agents, one replayable ledger.
 
-**Status**: V3 product baseline, released from the validated V2 implementation.
+**Status**: V4 product baseline, evolved from the validated V2/V3 protocol.
 This is the project's core design record; where another description disagrees
 with it, this file wins unless a dated amendment supersedes it.
 
@@ -65,6 +65,22 @@ rulebook stops being the user's obligation and becomes the system's output.
 and a ledger. The user speaks as they normally would, and **the cognitive
 burden of sorting is moved off the user and onto the program** — that is the
 entire meaning of "black box" here.
+
+### 2.1 空间界面 · Spatial interface
+
+**中文** — V4 的界面遵循“内容清晰，控制层有深度”。毛玻璃只用于顶栏、侧栏、
+浮动输入框和临时弹窗；任务正文、审计证据、finding 与交付文件保持不透明，避免
+装饰效果削弱可读性。明暗主题、降低动态效果、降低透明度、高对比度以及 320px
+窄窗口都有明确降级路径。视觉层级不能隐藏协议状态：实时进度、角色、人工介入和
+停止原因始终以文字与状态共同表达。
+
+**EN** — V4 follows a “clear content, dimensional controls” rule. Translucent
+materials are limited to navigation, floating composition and temporary
+dialogs; task content, audit evidence, findings and deliverables stay opaque.
+Light and dark themes, reduced motion, reduced transparency, forced colors and
+320-pixel windows all have explicit fallbacks. Visual hierarchy may never hide
+protocol state: live progress, role ownership, human intervention and stop
+reasons remain available as text as well as status styling.
 
 ---
 

@@ -40,6 +40,7 @@ def test_release_version_has_one_consistent_public_identity():
     assert f"V{__version__}" in PAGE
     assert f'__version__ = "{__version__}"' in (
         ROOT / "src/crossaudit/__init__.py").read_text()
+    assert '"pypdf>=6.15,<7"' in pyproject
 
 
 def test_ci_tests_installed_wheels_with_timeouts_coverage_and_audit():
@@ -66,9 +67,13 @@ def test_release_scripts_verify_frozen_runtime_and_public_notarization():
     assert "trusted_certificate_authorities" in build
     assert "trusted_certificate_authorities" in verifier
     assert "coverage run" in gate and "verify_python_package.py" in gate
+    assert "#egg=crossaudit$" in gate
     spec = (ROOT / "packaging/macos/CrossAuditCore.spec").read_text()
     assert 'collect_data_files("docx", include_py_files=True)' in spec
     assert 'collect_data_files("certifi")' in spec
+    package_verifier = (ROOT / "packaging/verify_python_package.py").read_text()
+    assert '"--install-timeout"' in package_verifier
+    assert "default=600" in package_verifier
 
 
 def test_static_ui_has_unique_ids_and_named_modal_and_progress_contracts():
@@ -86,6 +91,27 @@ def test_static_ui_has_unique_ids_and_named_modal_and_progress_contracts():
     for contract in ("function activeModal()", "function closeActiveModal(modal)",
                      "modalReturnFocus", "ev.key==='Tab'", "ev.key==='Escape'"):
         assert contract in PAGE
+
+
+def test_spatial_ui_keeps_glass_contextual_and_accessible():
+    """The Apple-style shell must remain legible when visual effects are unavailable."""
+    for contract in (
+        'font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text"',
+        ".topbar,.hub-bar{",
+        ".sidebar,.inspector{",
+        ".composer{",
+        "@media(prefers-reduced-transparency:reduce)",
+        "@media(prefers-reduced-motion:reduce)",
+        "@media(forced-colors:active)",
+        "@supports not ((-webkit-backdrop-filter:blur(1px))",
+        "button:focus-visible",
+        ".top-project,#current-project-pin,.live-pill,.version{display:none}",
+    ):
+        assert contract in PAGE
+
+    # Audit evidence and deliverables are opaque content, not decorative glass.
+    assert ".run-card{border-color:var(--line);border-radius:16px;background:var(--surface)" in PAGE
+    assert ".finding,.output-file,.usage-card" in PAGE
 
 
 def test_embedded_ui_javascript_is_valid_when_node_is_available():

@@ -54,7 +54,7 @@ def inspect_wheel(path: Path, expected_version: str = "") -> dict:
         return {"version": version, "files": len(names), "bytes": path.stat().st_size}
 
 
-def installed_smoke(path: Path, expected_version: str) -> dict:
+def installed_smoke(path: Path, expected_version: str, *, install_timeout: int = 600) -> dict:
     with tempfile.TemporaryDirectory(prefix="crossaudit-wheel-") as temporary:
         root = Path(temporary)
         environment = root / "venv"
@@ -70,7 +70,7 @@ def installed_smoke(path: Path, expected_version: str) -> dict:
         (root / "home").mkdir()
         subprocess.run(
             [str(python), "-m", "pip", "install", "--no-cache-dir", str(path)],
-            env=env, check=True, timeout=180)
+            env=env, check=True, timeout=install_timeout)
         subprocess.run([str(python), "-m", "pip", "check"], env=env,
                        check=True, timeout=30)
         version = subprocess.run(
@@ -93,9 +93,16 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("wheel", type=Path)
     parser.add_argument("--expected-version", default="")
+    parser.add_argument(
+        "--install-timeout", type=int, default=600,
+        help="seconds allowed for a fresh environment to download and install dependencies",
+    )
     args = parser.parse_args(argv)
+    if args.install_timeout < 30:
+        parser.error("--install-timeout must be at least 30 seconds")
     package = inspect_wheel(args.wheel.resolve(), args.expected_version)
-    installed = installed_smoke(args.wheel.resolve(), package["version"])
+    installed = installed_smoke(
+        args.wheel.resolve(), package["version"], install_timeout=args.install_timeout)
     print(json.dumps({"ok": True, "package": package, "installed": installed},
                      sort_keys=True))
     return 0

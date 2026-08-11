@@ -40,7 +40,8 @@ $PYTHON_BIN packaging/verify_python_package.py "$WHEEL" --expected-version "$VER
 
 echo "[6/7] Installed dependency audit"
 if $PYTHON_BIN -c 'import pip_audit' 2>/dev/null; then
-  $PYTHON_BIN -m pip freeze | grep -viE '^crossaudit([=@ ]|$)' > "$GATE_TMP/audit-requirements.txt"
+  $PYTHON_BIN -m pip freeze | \
+    grep -viE '(^crossaudit([=@ ]|$)|#egg=crossaudit$)' > "$GATE_TMP/audit-requirements.txt"
   $PYTHON_BIN -m pip_audit --strict -r "$GATE_TMP/audit-requirements.txt"
 else
   echo "pip-audit is not installed locally; CI remains authoritative for this gate."
