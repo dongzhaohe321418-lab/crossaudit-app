@@ -186,7 +186,9 @@ def _record_local_state_ignores(root: Path) -> None:
     _git(root, "add", "--", ".gitignore")
     parents = _git(root, "rev-list", "--parents", "-n", "1", "HEAD").split()
     if len(parents) >= 3:
-        _git(root, "commit", "-q", "--amend", "--no-edit")
+        _git(root, "-c", "user.name=CrossAudit", "-c",
+             "user.email=crossaudit@local.invalid", "commit", "-q", "--amend",
+             "--no-edit")
     else:
         _git(root, "-c", "user.name=CrossAudit", "-c",
              "user.email=crossaudit@local.invalid", "commit", "-q", "-m",
@@ -231,8 +233,9 @@ def _sync_existing_main(root: Path) -> None:
     if ancestor.returncode == 0:
         return
     merged = subprocess.run(
-        ["git", "merge", "--no-edit", "--allow-unrelated-histories",
-         "-X", "theirs", "origin/main"],
+        ["git", "-c", "user.name=CrossAudit", "-c",
+         "user.email=crossaudit@local.invalid", "merge", "--no-edit",
+         "--allow-unrelated-histories", "-X", "theirs", "origin/main"],
         cwd=str(root), capture_output=True, text=True, timeout=GIT_COMMAND_TIMEOUT)
     if merged.returncode == 0:
         _record_local_state_ignores(root)

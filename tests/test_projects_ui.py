@@ -531,7 +531,11 @@ def test_empty_selected_folder_clones_existing_working_repo_before_setup(
 
 
 def test_adopted_remote_history_is_merged_before_push_without_force(
-        tmp_path):
+        tmp_path, monkeypatch):
+    empty_global_config = tmp_path / "empty-global-gitconfig"
+    empty_global_config.write_text("")
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(empty_global_config))
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
     remote = tmp_path / "remote.git"
     seed = tmp_path / "seed"
     local = tmp_path / "local"
