@@ -800,3 +800,92 @@ def test_external_process_fallback_is_subsecond():
 
 def test_the_console_binds_to_loopback_only(console):
     assert console.startswith("http://127.0.0.1:")
+
+
+# ------------------------------------------------------- deliverable previews
+@pytest.fixture()
+def deliverables(tmp_path: Path):
+    """A served project with two generator-recorded deliverables in scope.
+
+    Exercises the real download boundary: what may be served inline versus
+    forced to download, and the sandbox CSP that isolates every byte.
+    """
+    from crossaudit.config import load
+    from crossaudit.console import serve
+    from crossaudit.document_export import render_pdf
+    import threading
+
+    root = tmp_path / "proj"
+    (root / "work").mkdir(parents=True)
+    subprocess.run(["git", "init", "-q", "-b", "main"], cwd=root, check=True)
+    subprocess.run(["git", "config", "user.email", "t@e"], cwd=root, check=True)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=root, check=True)
+    (root / "AUDIT_RULES.md").write_text("### CA-X-001\n**BLOCKER.** be exact\n\nx\n")
+    (root / "crossaudit.yml").write_text(
+        "version: 1\nscience_repo: t/p\nconstitution: AUDIT_RULES.md\n"
+        "auditor: {vendor: openai, provider: openai_compat, model: m,"
+        " key_env: CROSSAUDIT_AUDITOR_KEY}\ngenerator: {vendor: anthropic}\n"
+        "ledger: {dir: cycles}\nstate: {dir: .crossaudit}\n"
+        "scope: {dirs: [work]}\nchecks: [parseable]\n")
+    (root / "work" / "page.html").write_text("<h1>Audited page</h1><script>alert(1)</script>")
+    render_pdf("# Audited report\n\nbody 中文\n", root / "work" / "report.pdf")
+    subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "produce deliverables (round 1)"],
+                   cwd=root, check=True)
+
+    cfg = load(root / "crossaudit.yml")
+    url, httpd = serve(cfg, port=0)
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield url
+    finally:
+        httpd.shutdown()
+        thread.join(timeout=5)
+        httpd.server_close()
+
+
+def _headers_and_body(url: str):
+    req = urllib.request.Request(url)
+    with urllib.request.urlopen(req, timeout=5) as response:
+        return response.status, dict(response.headers), response.read()
+
+
+def test_html_deliverable_is_forced_to_download_and_sandboxed(deliverables):
+    """§11 preview safety: HTML is outside the inline allow-list, so even a
+    ``view=1`` request downloads it under a sandbox CSP rather than executing it."""
+    base = deliverables.replace("/?t=", "/api/file?t=")
+    status, headers, body = _headers_and_body(base + "&path=work/page.html&view=1")
+    assert status == 200
+    assert headers["content-disposition"].startswith("attachment")
+    assert headers["content-security-policy"] == "default-src 'none'; sandbox"
+    assert b"<script>" in body      # bytes are preserved, just never executed here
+
+
+def test_pdf_deliverable_is_served_inline_under_the_same_sandbox(deliverables):
+    base = deliverables.replace("/?t=", "/api/file?t=")
+    status, headers, body = _headers_and_body(base + "&path=work/report.pdf&view=1")
+    assert status == 200
+    assert headers["content-disposition"].startswith("inline")
+    assert headers["content-type"] == "application/pdf"
+    assert headers["content-security-policy"] == "default-src 'none'; sandbox"
+    assert body.startswith(b"%PDF-")
+
+
+def test_preview_and_download_refuse_files_outside_scope(deliverables):
+    api = deliverables.replace("/?t=", "/api/file?t=")
+    preview = deliverables.replace("/?t=", "/api/preview?t=")
+    for probe in ("&path=crossaudit.yml", "&path=work/../AUDIT_RULES.md",
+                  "&path=work/notrecorded.txt"):
+        assert rejected(lambda u=api + probe: urllib.request.urlopen(u, timeout=5))[0] == 404
+        assert rejected(lambda u=preview + probe: urllib.request.urlopen(u, timeout=5))[0] == 404
+
+
+def test_html_preview_returns_inert_text_for_client_side_sandboxing(deliverables):
+    preview = deliverables.replace("/?t=", "/api/preview?t=")
+    status, _headers, body = _headers_and_body(preview + "&path=work/page.html")
+    payload = json.loads(body)
+    # The server returns HTML as data, never as a live document; the page renders
+    # it inside a scriptless sandboxed iframe.
+    assert payload["kind"] == "html"
+    assert payload["text"] == "<h1>Audited page</h1><script>alert(1)</script>"

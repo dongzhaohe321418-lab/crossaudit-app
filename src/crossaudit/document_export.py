@@ -481,12 +481,19 @@ def _pdf_font() -> str:
     return "STSong-Light"
 
 
-def _pdf_inline(value: str) -> str:
+def _pdf_inline(value: str, code_font: str = "Courier") -> str:
     escaped = html.escape(value)
     escaped = re.sub(r"\[([^]]+)\]\(([^)]+)\)", r"\1 (\2)", escaped)
     escaped = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", escaped)
     escaped = re.sub(r"(?<!\*)\*([^*]+)\*", r"<i>\1</i>", escaped)
-    escaped = re.sub(r"`([^`]+)`", r'<font face="Courier">\1</font>', escaped)
+    # Courier carries no CJK glyphs, so monospaced runs holding non-Latin text
+    # would render as unextractable tofu and vanish from the audited document.
+    # Keep Courier for ASCII code and fall back to the Unicode face otherwise.
+    escaped = re.sub(
+        r"`([^`]+)`",
+        lambda m: (f'<font face="Courier">{m.group(1)}</font>' if m.group(1).isascii()
+                   else f'<font face="{code_font}">{m.group(1)}</font>'),
+        escaped)
     return escaped.replace("\\|", "|")
 
 
@@ -520,6 +527,9 @@ def render_pdf(source: str, output: Path) -> None:
     code = ParagraphStyle("CrossAuditCode", parent=body, fontName="Courier", fontSize=8.5,
                           leading=11, leftIndent=8, rightIndent=8, borderPadding=8,
                           backColor=colors.HexColor("#F2F4F7"))
+    # A code block containing CJK cannot use Courier without dropping those
+    # characters; the Unicode face keeps them at the cost of monospacing.
+    code_unicode = ParagraphStyle("CrossAuditCodeUnicode", parent=code, fontName=font)
     first_heading = next((b for b in blocks if b.kind != "rule"), None)
     story = []
     list_kind = None
@@ -530,7 +540,7 @@ def render_pdf(source: str, output: Path) -> None:
         if not list_items:
             return
         story.append(ListFlowable(
-            [ListItem(Paragraph(_pdf_inline(item), body), leftIndent=8)
+            [ListItem(Paragraph(_pdf_inline(item, font), body), leftIndent=8)
              for item in list_items],
             bulletType="bullet" if list_kind == "bullet" else "1",
             start="circle" if list_kind == "bullet" else 1,
@@ -547,19 +557,21 @@ def render_pdf(source: str, output: Path) -> None:
         flush_list()
         if block.kind == "heading":
             chosen = title if block is first_heading and block.level == 1 else headings[min(3, max(1, block.level - 1))]
-            story.append(Paragraph(_pdf_inline(block.text), chosen))
+            story.append(Paragraph(_pdf_inline(block.text, font), chosen))
         elif block.kind == "paragraph":
-            story.append(Paragraph(_pdf_inline(block.text), body))
+            story.append(Paragraph(_pdf_inline(block.text, font), body))
         elif block.kind == "quote":
-            story.append(Paragraph(_pdf_inline(block.text), quote))
+            story.append(Paragraph(_pdf_inline(block.text, font), quote))
         elif block.kind == "code":
-            story.append(Preformatted(block.text, code, maxLineLength=100))
+            story.append(Preformatted(block.text,
+                                      code if block.text.isascii() else code_unicode,
+                                      maxLineLength=100))
         elif block.kind == "rule":
             story.append(HRFlowable(width="100%", thickness=0.5,
                                     color=colors.HexColor("#D1D5DB"), spaceBefore=4,
                                     spaceAfter=10))
         elif block.kind == "table":
-            rows = [[Paragraph(_pdf_inline(cell), body) for cell in row]
+            rows = [[Paragraph(_pdf_inline(cell, font), body) for cell in row]
                     for row in block.rows]
             widths = [value / 1440 * inch for value in _column_widths(block.rows)]
             table = Table(rows, colWidths=widths, repeatRows=1, hAlign="LEFT")
