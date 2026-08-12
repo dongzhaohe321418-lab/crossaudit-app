@@ -846,7 +846,7 @@ export function CrossAuditLanding() {
               <p className="flow-now" aria-live="polite">
                 <span>0{auditState + 1}</span>
                 <em>{t.evidenceLabel}</em>
-                <strong>{t.flowSteps[auditState][3]}</strong>
+                <strong key={auditState}>{t.flowSteps[auditState][3]}</strong>
               </p>
               <div className="flow-events" aria-label={t.eventsLabel}>
                 <span className="flow-events-label">{t.eventsLabel}</span>

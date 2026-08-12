@@ -36,10 +36,103 @@
   --text-faint: var(--text-tertiary);
   --shadow: rgba(0, 0, 0, 0.5);
 
-  --sans: var(--font-geist-sans), "PingFang SC", "Hiragino Sans GB", -apple-system, sans-serif;
-  --mono: var(--font-geist-mono), "SFMono-Regular", Menlo, Consolas, monospace;
   --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.32, 0.72, 0, 1);
   color-scheme: dark;
+}
+
+/* ------------------------------------------------------------ typography
+   Three complete directions, switched by html[data-type-variant] (set from
+   ?type=a|b|c before first paint; A is the default). Every direction tunes
+   family, size, weight, tracking and leading together; calibration numbers
+   were measured from linear.app (64-72px / 510 / -0.022em / lh 1.0, body
+   15-16px) and apple.com/macbook-pro (80px / 600 / -0.015em / lh 1.05,
+   body 17px) on 2026-08-12. */
+
+:root {
+  /* A - Apple system stack: native macOS product voice. SF Pro Display
+     engages automatically at display sizes; precise small text below. */
+  --display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue",
+    "PingFang SC", "Hiragino Sans GB", sans-serif;
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue",
+    "PingFang SC", "Hiragino Sans GB", sans-serif;
+  --mono: var(--font-plex-mono), "SFMono-Regular", ui-monospace, Menlo, Consolas, monospace;
+
+  --fs-hero: clamp(2.6rem, 1.35rem + 2.95vw, 4rem);          /* 64px at 1440 */
+  --fw-hero: 640;
+  --ls-hero: -0.019em;
+  --lh-hero: 1.05;
+  --fs-h2: clamp(1.85rem, 1.2rem + 1.55vw, 2.6rem);          /* 42px at 1440 */
+  --fw-h2: 620;
+  --ls-h2: -0.017em;
+  --lh-h2: 1.09;
+  --fs-statement: clamp(2.15rem, 1.4rem + 1.9vw, 3.1rem);    /* 50px at 1440 */
+  --fw-h3: 600;
+  --ls-h3: -0.012em;
+  --fs-body-lg: 1.0625rem;                                   /* 17px intro/section body */
+  --lh-body-lg: 1.58;
+  --fw-strong: 600;
+  --fw-medium: 560;
+  --hero-cols: minmax(0, 1fr) minmax(0, 1.16fr);
+}
+
+html[data-type-variant="b"] {
+  /* B - original identity: Space Grotesk display, DM Sans body,
+     IBM Plex Mono data. Geometric confidence, softer body voice. */
+  --display: var(--font-space-grotesk), "PingFang SC", "Hiragino Sans GB", sans-serif;
+  --sans: var(--font-dm-sans), "PingFang SC", "Hiragino Sans GB", -apple-system, sans-serif;
+
+  --fs-hero: clamp(2.5rem, 1.3rem + 2.6vw, 3.65rem);         /* 58px at 1440 */
+  --fw-hero: 500;
+  --ls-hero: -0.026em;
+  --lh-hero: 1.06;
+  --fs-h2: clamp(1.75rem, 1.15rem + 1.45vw, 2.4rem);         /* 38px at 1440 */
+  --fw-h2: 500;
+  --ls-h2: -0.02em;
+  --lh-h2: 1.12;
+  --fs-statement: clamp(2.05rem, 1.35rem + 1.75vw, 2.9rem);  /* 46px at 1440 */
+  --fw-h3: 560;
+  --ls-h3: -0.01em;
+  --fs-body-lg: 1.04rem;                                     /* 16.6px, DM Sans runs compact */
+  --lh-body-lg: 1.62;
+  --fw-strong: 600;
+  --fw-medium: 500;
+  --hero-cols: minmax(0, 1fr) minmax(0, 1.12fr);
+}
+
+html[data-type-variant="c"] {
+  /* C - Geist at full intent: one family, four-step ladder
+     (display 64 / heading 40 / detail 20 / body 16), mono strictly data. */
+  --display: var(--font-geist-sans), "PingFang SC", "Hiragino Sans GB", -apple-system, sans-serif;
+  --sans: var(--font-geist-sans), "PingFang SC", "Hiragino Sans GB", -apple-system, sans-serif;
+  --mono: var(--font-geist-mono), "SFMono-Regular", ui-monospace, Menlo, Consolas, monospace;
+
+  --fs-hero: clamp(2.7rem, 1.3rem + 3.05vw, 4.15rem);        /* 65px at 1440 */
+  --fw-hero: 620;
+  --ls-hero: -0.03em;
+  --lh-hero: 1.02;
+  --fs-h2: clamp(1.8rem, 1.1rem + 1.6vw, 2.5rem);            /* 40px at 1440 */
+  --fw-h2: 620;
+  --ls-h2: -0.024em;
+  --lh-h2: 1.06;
+  --fs-statement: clamp(2.2rem, 1.5rem + 2.05vw, 3.35rem);   /* 54px at 1440 */
+  --fw-h3: 600;
+  --ls-h3: -0.015em;
+  --fs-body-lg: 1rem;                                        /* 16px */
+  --lh-body-lg: 1.6;
+  --fw-strong: 620;
+  --fw-medium: 560;
+  --hero-cols: minmax(0, 1fr) minmax(0, 1.1fr);
+}
+
+/* CJK discipline (VISUAL_DECISION_SYSTEM section 4): display tracking and
+   leading relax for Chinese; PingFang carries the glyphs in every direction. */
+html:lang(zh-CN) {
+  --ls-hero: -0.008em;
+  --lh-hero: 1.14;
+  --ls-h2: -0.006em;
+  --lh-h2: 1.22;
+  --ls-h3: 0em;
 }
 
 * {
@@ -64,8 +157,10 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-:lang(zh-CN) body {
-  --sans: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", var(--font-geist-sans), sans-serif;
+h1,
+h2,
+h3 {
+  font-family: var(--display);
 }
 
 a {
@@ -161,7 +256,8 @@ code {
   display: inline-flex;
   align-items: center;
   gap: 0.6rem;
-  font-weight: 640;
+  font-family: var(--display);
+  font-weight: var(--fw-strong);
   letter-spacing: -0.015em;
 }
 
@@ -268,7 +364,7 @@ code {
   background: var(--generator);
   color: #071018;
   font-size: 0.85rem;
-  font-weight: 620;
+  font-weight: var(--fw-strong);
   transition: background 200ms var(--ease), transform 200ms var(--ease);
 }
 
@@ -285,7 +381,7 @@ code {
 
 .hero {
   display: grid;
-  grid-template-columns: minmax(0, 0.72fr) minmax(0, 1.28fr);
+  grid-template-columns: var(--hero-cols);
   align-items: center;
   gap: clamp(2rem, 4vw, 3.75rem);
   padding-block: 6.75rem 3.25rem;
@@ -293,15 +389,15 @@ code {
 
 .hero h1 {
   margin: 0;
-  font-size: clamp(1.9rem, 2.5vw, 2.55rem);
-  font-weight: 640;
-  line-height: 1.14;
-  letter-spacing: -0.022em;
-  text-wrap: balance;
+  font-size: var(--fs-hero);
+  font-weight: var(--fw-hero);
+  line-height: var(--lh-hero);
+  letter-spacing: var(--ls-hero);
 }
 
 .hero h1 > span {
   display: block;
+  text-wrap: balance;
 }
 
 .accent-line {
@@ -310,24 +406,36 @@ code {
 
 .hero-copy > * {
   opacity: 0;
-  animation: fade-up 640ms var(--ease) forwards;
+  animation: fade-up 620ms var(--ease-spring) forwards;
 }
 
-.hero-copy > h1 { animation-delay: 60ms; }
-.hero-copy > .hero-intro { animation-delay: 180ms; }
-.hero-copy > .hero-actions { animation-delay: 300ms; }
-.hero-copy > .hero-meta { animation-delay: 420ms; }
-.hero-copy > .hero-caps { animation-delay: 480ms; }
+/* the headline enters line by line; the block itself stays unanimated */
+.hero-copy > h1 {
+  opacity: 1;
+  animation: none;
+}
+
+.hero-copy h1 > span {
+  opacity: 0;
+  animation: fade-up 680ms var(--ease-spring) forwards;
+}
+
+.hero-copy h1 > span:nth-child(1) { animation-delay: 40ms; }
+.hero-copy h1 > span:nth-child(2) { animation-delay: 140ms; }
+.hero-copy > .hero-intro { animation-delay: 280ms; }
+.hero-copy > .hero-actions { animation-delay: 380ms; }
+.hero-copy > .hero-meta { animation-delay: 470ms; }
+.hero-copy > .hero-caps { animation-delay: 530ms; }
 
 .demo-shell {
   opacity: 0;
-  animation: fade-up 700ms var(--ease) 260ms forwards;
+  animation: fade-up 720ms var(--ease-spring) 240ms forwards;
 }
 
 @keyframes fade-up {
   from {
     opacity: 0;
-    transform: translateY(14px);
+    transform: translateY(8px) scale(0.985);
   }
   to {
     opacity: 1;
@@ -336,11 +444,11 @@ code {
 }
 
 .hero-intro {
-  margin: 1.1rem 0 0;
-  max-width: 40ch;
+  margin: 1.15rem 0 0;
+  max-width: 42ch;
   color: var(--text-secondary);
-  font-size: clamp(0.98rem, 1.2vw, 1.08rem);
-  line-height: 1.62;
+  font-size: var(--fs-body-lg);
+  line-height: var(--lh-body-lg);
 }
 
 .hero-actions {
@@ -376,7 +484,7 @@ code {
   min-height: 2.9rem;
   padding: 0.72rem 1.35rem;
   border-radius: 10px;
-  font-weight: 620;
+  font-weight: var(--fw-strong);
   font-size: 0.95rem;
   white-space: nowrap;
   transition: background 200ms var(--ease), border-color 200ms var(--ease),
@@ -384,7 +492,7 @@ code {
 }
 
 .button:active {
-  transform: translateY(1px) scale(0.985);
+  transform: translateY(1px) scale(0.98);
 }
 
 .button-primary {
@@ -503,7 +611,7 @@ code {
   color: var(--text-primary);
   font-size: 0.74rem;
   line-height: 1.5;
-  animation: dw-msg 11s var(--ease) infinite;
+  animation: dw-msg 11s var(--ease-spring) infinite;
 }
 
 .dw-states {
@@ -534,50 +642,50 @@ code {
   background: var(--text-tertiary);
 }
 
-.dw-state-1 { animation: dw-s1 11s linear infinite; }
-.dw-state-2 { animation: dw-s2 11s linear infinite; }
+.dw-state-1 { animation: dw-s1 11s var(--ease-spring) infinite; }
+.dw-state-2 { animation: dw-s2 11s var(--ease-spring) infinite; }
 .dw-state-2 i { background: var(--generator); }
-.dw-state-3 { animation: dw-s3 11s linear infinite; }
+.dw-state-3 { animation: dw-s3 11s var(--ease-spring) infinite; }
 .dw-state-3 i { background: var(--auditor); }
-.dw-state-4 { animation: dw-s4 11s linear infinite; }
+.dw-state-4 { animation: dw-s4 11s var(--ease-spring) infinite; }
 .dw-state-4 i { background: var(--information); }
-.dw-state-5 { animation: dw-s5 11s linear infinite; }
+.dw-state-5 { animation: dw-s5 11s var(--ease-spring) infinite; }
 .dw-state-5 i { background: var(--pass); }
 
 @keyframes dw-msg {
-  0% { opacity: 0; transform: translateY(6px); }
+  0% { opacity: 0; transform: translateY(6px) scale(0.985); }
   4% { opacity: 1; transform: none; }
-  97% { opacity: 1; }
+  97% { opacity: 1; transform: none; }
   100% { opacity: 0; }
 }
 
 @keyframes dw-s1 {
-  0%, 3% { opacity: 0; }
-  5%, 12% { opacity: 1; }
-  14%, 100% { opacity: 0; }
+  0%, 3% { opacity: 0; transform: translateY(5px) scale(0.98); }
+  5%, 12% { opacity: 1; transform: none; }
+  14%, 100% { opacity: 0; transform: translateY(-3px); }
 }
 
 @keyframes dw-s2 {
-  0%, 13% { opacity: 0; }
-  15%, 35% { opacity: 1; }
-  37%, 100% { opacity: 0; }
+  0%, 13% { opacity: 0; transform: translateY(5px) scale(0.98); }
+  15%, 35% { opacity: 1; transform: none; }
+  37%, 100% { opacity: 0; transform: translateY(-3px); }
 }
 
 @keyframes dw-s3 {
-  0%, 37% { opacity: 0; }
-  39%, 55% { opacity: 1; }
-  57%, 100% { opacity: 0; }
+  0%, 37% { opacity: 0; transform: translateY(5px) scale(0.98); }
+  39%, 55% { opacity: 1; transform: none; }
+  57%, 100% { opacity: 0; transform: translateY(-3px); }
 }
 
 @keyframes dw-s4 {
-  0%, 57% { opacity: 0; }
-  59%, 75% { opacity: 1; }
-  77%, 100% { opacity: 0; }
+  0%, 57% { opacity: 0; transform: translateY(5px) scale(0.98); }
+  59%, 75% { opacity: 1; transform: none; }
+  77%, 100% { opacity: 0; transform: translateY(-3px); }
 }
 
 @keyframes dw-s5 {
-  0%, 78% { opacity: 0; }
-  80%, 97% { opacity: 1; }
+  0%, 78% { opacity: 0; transform: translateY(5px) scale(0.98); }
+  80%, 97% { opacity: 1; transform: none; }
   100% { opacity: 0; }
 }
 
@@ -588,7 +696,7 @@ code {
   color: var(--text-secondary);
   font-family: var(--mono);
   font-size: 0.66rem;
-  animation: dw-file 11s linear infinite;
+  animation: dw-file 11s var(--ease-spring) infinite;
 }
 
 .dw-file i {
@@ -599,7 +707,7 @@ code {
 }
 
 @keyframes dw-file {
-  0%, 22% { opacity: 0; transform: translateY(4px); }
+  0%, 22% { opacity: 0; transform: translateY(6px) scale(0.985); }
   26%, 97% { opacity: 1; transform: none; }
   100% { opacity: 0; }
 }
@@ -609,7 +717,7 @@ code {
 }
 
 @keyframes dw-file2 {
-  0%, 30% { opacity: 0; transform: translateY(4px); }
+  0%, 30% { opacity: 0; transform: translateY(6px) scale(0.985); }
   34%, 97% { opacity: 1; transform: none; }
   100% { opacity: 0; }
 }
@@ -618,12 +726,12 @@ code {
   color: var(--warning);
   font-family: var(--mono);
   font-size: 0.66rem;
-  animation: dw-findings 11s linear infinite;
+  animation: dw-findings 11s var(--ease-spring) infinite;
 }
 
 @keyframes dw-findings {
-  0%, 42% { opacity: 0; }
-  46%, 71% { opacity: 1; }
+  0%, 42% { opacity: 0; transform: translateY(5px); }
+  46%, 71% { opacity: 1; transform: none; }
   75%, 100% { opacity: 0; }
 }
 
@@ -631,12 +739,12 @@ code {
   color: var(--pass);
   font-family: var(--mono);
   font-size: 0.66rem;
-  animation: dw-pass 11s linear infinite;
+  animation: dw-pass 11s var(--ease-spring) infinite;
 }
 
 @keyframes dw-pass {
-  0%, 77% { opacity: 0; }
-  81%, 97% { opacity: 1; }
+  0%, 77% { opacity: 0; transform: translateY(5px); }
+  81%, 97% { opacity: 1; transform: none; }
   100% { opacity: 0; }
 }
 
@@ -652,7 +760,7 @@ code {
   color: var(--text-primary);
   font-family: var(--mono);
   font-size: 0.7rem;
-  animation: dw-deliver 11s var(--ease) infinite;
+  animation: dw-deliver 11s var(--ease-spring) infinite;
 }
 
 .dw-deliver span {
@@ -661,7 +769,7 @@ code {
 }
 
 @keyframes dw-deliver {
-  0%, 84% { opacity: 0; transform: translateY(6px); }
+  0%, 84% { opacity: 0; transform: translateY(7px) scale(0.98); }
   88%, 97% { opacity: 1; transform: none; }
   100% { opacity: 0; }
 }
@@ -705,18 +813,18 @@ code {
   opacity: 0;
 }
 
-.dw-round-1 { animation: dw-round1 11s linear infinite; }
-.dw-round-2 { animation: dw-round2 11s linear infinite; }
+.dw-round-1 { animation: dw-round1 11s var(--ease-spring) infinite; }
+.dw-round-2 { animation: dw-round2 11s var(--ease-spring) infinite; }
 
 @keyframes dw-round1 {
-  0%, 8% { opacity: 0; }
-  10%, 55% { opacity: 1; }
+  0%, 8% { opacity: 0; transform: translateY(4px); }
+  10%, 55% { opacity: 1; transform: none; }
   57%, 100% { opacity: 0; }
 }
 
 @keyframes dw-round2 {
-  0%, 57% { opacity: 0; }
-  59%, 97% { opacity: 1; }
+  0%, 57% { opacity: 0; transform: translateY(4px); }
+  59%, 97% { opacity: 1; transform: none; }
   100% { opacity: 0; }
 }
 
@@ -850,11 +958,11 @@ code {
 
 .section-heading h2 {
   margin: 0;
-  max-width: 30ch;
-  font-size: clamp(1.55rem, 2.3vw, 2.15rem);
-  font-weight: 640;
-  line-height: 1.16;
-  letter-spacing: -0.02em;
+  max-width: 26ch;
+  font-size: var(--fs-h2);
+  font-weight: var(--fw-h2);
+  line-height: var(--lh-h2);
+  letter-spacing: var(--ls-h2);
   text-wrap: balance;
 }
 
@@ -862,20 +970,20 @@ code {
   margin: 0;
   max-width: 58ch;
   color: var(--text-secondary);
-  font-size: clamp(0.98rem, 1.2vw, 1.08rem);
-  line-height: 1.65;
+  font-size: var(--fs-body-lg);
+  line-height: var(--lh-body-lg);
 }
 
 [data-reveal] {
   opacity: 0;
-  transform: translateY(1.25rem);
-  transition: opacity 620ms var(--ease), transform 720ms var(--ease);
-  transition-delay: calc(var(--i, 0) * 90ms);
+  transform: translateY(12px) scale(0.99);
+  transition: opacity 560ms var(--ease-spring), transform 640ms var(--ease-spring);
+  transition-delay: calc(var(--i, 0) * 80ms);
 }
 
 [data-reveal].is-visible {
   opacity: 1;
-  transform: translateY(0);
+  transform: none;
 }
 
 /* ---------------------------------------------------------------- thesis */
@@ -1076,7 +1184,8 @@ code {
   border-radius: 10px;
   background: #10141b;
   text-align: left;
-  transition: border-color 240ms ease, background-color 240ms ease;
+  transition: border-color 220ms var(--ease-spring), background-color 220ms var(--ease-spring),
+    transform 220ms var(--ease-spring), box-shadow 220ms var(--ease-spring);
 }
 
 .fc-card::before {
@@ -1095,6 +1204,7 @@ code {
 
 .fc-card:hover {
   border-color: var(--border-strong);
+  transform: translateY(-1px);
 }
 
 .fc-head {
@@ -1106,7 +1216,7 @@ code {
 .fc-head strong {
   color: var(--text-primary);
   font-size: 0.8rem;
-  font-weight: 620;
+  font-weight: var(--fw-strong);
   line-height: 1.25;
 }
 
@@ -1147,7 +1257,8 @@ code {
 .fc-card.active {
   border-color: var(--generator);
   background: var(--surface-accent);
-  box-shadow: 0 0 0 1px rgba(94, 160, 255, 0.22), 0 10px 30px rgba(24, 58, 112, 0.3);
+  transform: translateY(-2px);
+  box-shadow: 0 0 0 1px rgba(94, 160, 255, 0.22), 0 14px 34px rgba(24, 58, 112, 0.34);
 }
 
 .fc-card.active::before {
@@ -1158,7 +1269,8 @@ code {
 .fc-a.active {
   border-color: var(--auditor);
   background: rgba(154, 124, 255, 0.09);
-  box-shadow: 0 0 0 1px rgba(154, 124, 255, 0.24), 0 10px 30px rgba(74, 52, 128, 0.32);
+  transform: translateY(-2px);
+  box-shadow: 0 0 0 1px rgba(154, 124, 255, 0.24), 0 14px 34px rgba(74, 52, 128, 0.36);
 }
 
 .fc-a.active::before {
@@ -1238,13 +1350,18 @@ code {
   border-radius: 10px;
   background: rgba(23, 26, 32, 0.72);
   text-align: left;
-  transition: border-color 240ms ease, background-color 240ms ease;
+  transition: border-color 220ms var(--ease-spring), background-color 220ms var(--ease-spring),
+    transform 220ms var(--ease-spring);
+}
+
+.fc-exit:hover {
+  transform: translateY(-1px);
 }
 
 .fc-exit strong {
   font-family: var(--mono);
   font-size: 0.62rem;
-  font-weight: 620;
+  font-weight: 600;
   letter-spacing: 0.05em;
 }
 
@@ -1277,6 +1394,22 @@ code {
   border-top: 1px solid var(--border);
 }
 
+/* the evidence line crossfades when the checkpoint changes */
+.flow-now strong {
+  animation: fade-swap 260ms var(--ease-spring);
+}
+
+@keyframes fade-swap {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 .flow-now span {
   color: var(--accent-strong);
   font-family: var(--mono);
@@ -1285,7 +1418,7 @@ code {
 
 .flow-now strong {
   font-size: 0.9rem;
-  font-weight: 620;
+  font-weight: var(--fw-strong);
 }
 
 .flow-now em {
@@ -1319,13 +1452,24 @@ code {
   font-family: var(--mono);
   font-size: 0.64rem;
   opacity: 0.55;
-  transition: opacity 320ms var(--ease), color 320ms var(--ease);
+  transform: translateX(-3px);
+  transition: opacity 300ms var(--ease-spring), color 300ms var(--ease-spring),
+    transform 300ms var(--ease-spring);
+  transition-delay: 0ms;
 }
 
 .flow-events p.active {
   opacity: 1;
+  transform: none;
   color: var(--text-secondary);
 }
+
+/* newly reached events light up one by one, 120ms apart */
+.flow-events p:nth-of-type(2).active { transition-delay: 120ms; }
+.flow-events p:nth-of-type(3).active { transition-delay: 240ms; }
+.flow-events p:nth-of-type(4).active { transition-delay: 120ms; }
+.flow-events p:nth-of-type(5).active { transition-delay: 240ms; }
+.flow-events p:nth-of-type(6).active { transition-delay: 360ms; }
 
 .flow-events p span {
   flex: 0 0 auto;
@@ -1364,8 +1508,8 @@ code {
   display: flex;
   align-items: center;
   opacity: 0.52;
-  transform: translateY(0.6rem);
-  transition: opacity 420ms ease, transform 520ms var(--ease);
+  transform: translateY(0.5rem);
+  transition: opacity 400ms var(--ease-spring), transform 480ms var(--ease-spring);
 }
 
 .flow-chapters article.active {
@@ -1421,9 +1565,10 @@ code {
 
 .flow-chapters h3 {
   margin: 0.2rem 0 0;
-  font-size: clamp(1.15rem, 1.6vw, 1.45rem);
-  font-weight: 620;
-  letter-spacing: -0.022em;
+  font-size: clamp(1.2rem, 1.7vw, 1.55rem);
+  font-weight: var(--fw-h3);
+  letter-spacing: var(--ls-h3);
+  line-height: 1.25;
 }
 
 .flow-chapters p {
@@ -1462,9 +1607,11 @@ code {
 .prompt-quote p {
   margin: 0;
   color: var(--text-primary);
-  font-size: clamp(1.05rem, 1.6vw, 1.3rem);
-  font-weight: 560;
-  line-height: 1.5;
+  font-family: var(--display);
+  font-size: clamp(1.1rem, 0.85rem + 0.75vw, 1.45rem);
+  font-weight: var(--fw-medium);
+  letter-spacing: var(--ls-h3);
+  line-height: 1.45;
 }
 
 .prompt-quote footer {
@@ -1494,7 +1641,7 @@ code {
 
 .prompt-steps strong {
   font-size: 0.94rem;
-  font-weight: 620;
+  font-weight: var(--fw-strong);
 }
 
 .prompt-steps span {
@@ -1535,7 +1682,7 @@ code {
   width: 100%;
   height: auto;
   transform-origin: 50% 50%;
-  transition: transform 900ms var(--ease), opacity 600ms var(--ease);
+  transition: transform 860ms var(--ease-spring), opacity 560ms var(--ease-spring);
 }
 
 .shot-frame .shot-audit {
@@ -1600,9 +1747,9 @@ code {
 .shot-steps h3 {
   margin: 0;
   color: var(--text-primary);
-  font-size: 1.05rem;
-  font-weight: 620;
-  letter-spacing: -0.01em;
+  font-size: 1.1rem;
+  font-weight: var(--fw-h3);
+  letter-spacing: var(--ls-h3);
 }
 
 .shot-steps p {
@@ -1615,11 +1762,11 @@ code {
 
 .indep-statement h2 {
   margin: 0;
-  max-width: 26ch;
-  font-size: clamp(1.8rem, 2.9vw, 2.5rem);
-  font-weight: 650;
-  line-height: 1.14;
-  letter-spacing: -0.022em;
+  max-width: 24ch;
+  font-size: var(--fs-statement);
+  font-weight: var(--fw-hero);
+  line-height: calc(var(--lh-hero) + 0.04);
+  letter-spacing: var(--ls-hero);
   text-wrap: balance;
 }
 
@@ -1635,7 +1782,8 @@ code {
   margin: 1.1rem 0 0;
   max-width: 50ch;
   color: var(--text-secondary);
-  font-size: 1.02rem;
+  font-size: var(--fs-body-lg);
+  line-height: var(--lh-body-lg);
 }
 
 .indep-toggle {
@@ -1708,7 +1856,7 @@ code {
 
 .indep-view strong {
   font-size: 0.9rem;
-  font-weight: 620;
+  font-weight: var(--fw-strong);
 }
 
 .indep-view span {
@@ -1758,7 +1906,7 @@ code {
 
 .cap-group strong {
   font-size: 0.9rem;
-  font-weight: 620;
+  font-weight: var(--fw-strong);
 }
 
 .cap-group span {
@@ -1819,8 +1967,9 @@ code {
 
 .sci-facts h3 {
   margin: 0;
-  font-size: 1rem;
-  font-weight: 620;
+  font-size: 1.05rem;
+  font-weight: var(--fw-h3);
+  letter-spacing: var(--ls-h3);
 }
 
 .sci-facts p {
@@ -1872,18 +2021,18 @@ code {
 .download-intro h2 {
   margin: 0;
   max-width: 20ch;
-  font-size: clamp(1.55rem, 2.3vw, 2.15rem);
-  font-weight: 640;
-  line-height: 1.16;
-  letter-spacing: -0.02em;
+  font-size: var(--fs-h2);
+  font-weight: var(--fw-h2);
+  line-height: var(--lh-h2);
+  letter-spacing: var(--ls-h2);
 }
 
 .download-intro > p {
   margin: 1.1rem 0 0;
   max-width: 46ch;
   color: var(--text-secondary);
-  font-size: 1.02rem;
-  line-height: 1.65;
+  font-size: var(--fs-body-lg);
+  line-height: var(--lh-body-lg);
 }
 
 .clone-label {
@@ -2230,7 +2379,7 @@ footer a:hover {
   }
 
   .hero h1 {
-    font-size: clamp(1.6rem, 7vw, 1.95rem);
+    font-size: clamp(1.9rem, 8.5vw, 2.35rem);
   }
 
   .hero-actions,
@@ -2311,6 +2460,7 @@ footer a:hover {
   }
 
   .hero-copy > *,
+  .hero-copy h1 > span,
   .demo-shell,
   [data-reveal] {
     opacity: 1;
@@ -2322,6 +2472,17 @@ footer a:hover {
   .shot-steps article {
     opacity: 1;
     transform: none;
+  }
+
+  /* state stays visible; only its motion is removed */
+  .flow-events p,
+  .fc-card {
+    transform: none;
+    transition-delay: 0ms;
+  }
+
+  .flow-now strong {
+    animation: none;
   }
 
   /* the demo window settles on its completed run */
