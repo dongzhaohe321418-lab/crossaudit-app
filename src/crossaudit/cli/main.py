@@ -342,6 +342,21 @@ def cmd_check(args: argparse.Namespace) -> int:
     return EXIT_BLOCKED if result["total_hard_failures"] else EXIT_OK
 
 
+def _provider_stop_reason(outcome) -> str:
+    """An escalation reason for rounds whose model audit could not run.
+
+    Carrying "provider failure" routes an escalated cycle to the provider
+    remedies (retry / review connection / change model) instead of asking a
+    human for content guidance about an outage. Rounds that failed on
+    content keep their default reasons.
+    """
+    if outcome.integrity != "PROVIDER_FAILURE":
+        return ""
+    detail = str(outcome.exchange.get("error", "")).strip()
+    return ("provider failure: the model audit could not run"
+            + (f" — {detail[:300]}" if detail else ""))
+
+
 # ------------------------------------------------------------------ audit
 def cmd_audit(args: argparse.Namespace) -> int:
     cfg = load()
@@ -447,7 +462,8 @@ def cmd_audit(args: argparse.Namespace) -> int:
             f"audit receipt {sha[:12]} r{cycle['round']} ({outcome.verdict})", cwd=cfg.root)
 
     status = store.record_verdict(cycle["cycle_id"], sha, outcome.verdict,
-                                  receipt_digest(receipt), cfg.max_rounds)
+                                  receipt_digest(receipt), cfg.max_rounds,
+                                  escalation_reason=_provider_stop_reason(outcome))
     result = {"verdict": outcome.verdict, "cycle_status": status,
               "cycle_id": cycle["cycle_id"], "round": cycle["round"],
               "integrity": outcome.integrity, "receipt": str(ledger / "receipt.json"),
@@ -505,6 +521,40 @@ def cmd_verify(args: argparse.Namespace) -> int:
 
 
 # ----------------------------------------------------------------- status
+def _run_summary(cfg: Config) -> dict | None:
+    """One line of run-journal truth for pure-CLI users.
+
+    A stalled, abandoned or parked run is otherwise visible only in the
+    console; `crossaudit status` must not present a blocked run slot as a
+    quiet, healthy project.
+    """
+    from ..runtime import ACTIVE_STATES, RunJournal, RunState, journal_path, pid_alive
+
+    runtime = journal_path(cfg)
+    if not runtime.is_file():
+        return None
+    row = RunJournal(runtime).latest()
+    if row is None:
+        return None
+    state = row["state"]
+    note = ""
+    if RunState(state) in ACTIVE_STATES:
+        owner = int(row.get("owner_pid", 0))
+        if owner != os.getpid() and not pid_alive(owner):
+            note = f"owner pid {owner} is gone; recovery pending"
+        elif any(s.get("kind") == "run_stalled" for s in row.get("steps", [])[-1:]):
+            note = "no recent heartbeat"
+    elif state == "PROVIDER_UNAVAILABLE":
+        waiting = row.get("waiting_reason") or {}
+        note = str(waiting.get("detail") or "waiting for a provider")[:80]
+    elif state in ("INTERRUPTED", "FAILED"):
+        note = str(row.get("error", ""))[:80]
+    return {"run_id": row["run_id"], "state": state,
+            "outcome": row.get("outcome", ""),
+            "task": str(row.get("task", "")).splitlines()[0][:60],
+            "note": note}
+
+
 def cmd_status(args: argparse.Namespace) -> int:
     cfg = load()
     snap = _state(cfg).snapshot()
@@ -516,7 +566,12 @@ def cmd_status(args: argparse.Namespace) -> int:
              "-" * 60]
     human += [f"{r['cycle_id']:16s} {r['status']:10s} {r['round']:5d}  "
               f"{r['active_sha']}  {r['consumed']}" for r in rows] or ["(no cycles yet)"]
-    _emit({"cycles": rows}, args.json, "\n".join(human))
+    run = _run_summary(cfg)
+    if run is not None:
+        human.append(f"run: {run['state']}"
+                     + (f" ({run['note']})" if run["note"] else "")
+                     + f" — {run['task']!r}")
+    _emit({"cycles": rows, "run": run}, args.json, "\n".join(human))
     return EXIT_OK
 
 
@@ -529,6 +584,12 @@ def cmd_resolve(args: argparse.Namespace) -> int:
     cfg = load()
     action = "reopen" if args.reopen else "close"
     c = _state(cfg).resolve_escalation(args.cycle_id, action, args.because)
+    if action == "close":
+        # The close ruling settles the parked run this escalation references:
+        # a stopped task must not keep signalling "needs your decision".
+        from ..console import daemon
+
+        daemon.settle_closed_escalation(cfg, c)
     print(f"ruling recorded: {args.cycle_id} {action} — {args.because}")
     print(f"cycle is now {c['status']} (round {c['round']}); "
           + ("run `crossaudit run` to re-audit." if action == "reopen"
@@ -951,7 +1012,8 @@ def cmd_run(args: argparse.Namespace) -> int:
     git("commit", "-q", "-m",
         f"audit receipt {sha[:12]} r{cycle['round']} ({outcome.verdict})", cwd=cfg.root)
     status = store.record_verdict(cycle["cycle_id"], sha, outcome.verdict,
-                                  receipt_digest(receipt), cfg.max_rounds)
+                                  receipt_digest(receipt), cfg.max_rounds,
+                                  escalation_reason=_provider_stop_reason(outcome))
     _done("report + receipt committed")
 
     print()

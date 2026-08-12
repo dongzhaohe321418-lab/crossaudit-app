@@ -24,6 +24,7 @@ from ..dcl import run_checks
 from ..errors import ConfigDenial, Denial, ProviderDenial
 from ..providers import resilience as provider_resilience
 from ..providers.registry import NON_EVIDENTIAL
+from ..runtime.runs import PROVIDER_WAIT_CATEGORIES
 from ..usage import record_completion
 from . import prompt as prompt_mod
 from .validate import known_rules, parse_reply, validate_reply
@@ -92,7 +93,8 @@ def dcl_source_digest() -> str:
 def render_report(*, cfg: Config, sha: str, round_: int, verdict: str, dcl: dict,
                   reply: dict | None, invalid: str | None, constitution_commit: str,
                   provider: str, model: str, vendor: str | None = None,
-                  reasoning_effort: str | None = None) -> str:
+                  reasoning_effort: str | None = None,
+                  provider_failure: str | None = None) -> str:
     lines = [
         f"# Audit Report — {cfg.science_repo}@{sha[:12]}",
         "",
@@ -122,7 +124,17 @@ def render_report(*, cfg: Config, sha: str, round_: int, verdict: str, dcl: dict
         lines += ["None.", ""]
 
     lines += ["## Model findings", ""]
-    if invalid:
+    if provider_failure:
+        # A provider failure is not a finding. This paragraph deliberately
+        # does not use the "### [SEVERITY] RULE — artifact" finding shape:
+        # everything in that shape is machine-parsed as audit content
+        # (dispute.parse_findings, generator.render_findings, the decision
+        # modal), and an outage rendered as a CA-META-002 BLOCKER was fed to
+        # the generator to "fix" and escalated with content guidance.
+        lines += [f"Model audit unavailable (provider failure: {provider_failure}).",
+                  "No model reviewed this increment; the verdict above is a "
+                  "deterministic-tier result only.", ""]
+    elif invalid:
         lines += ["### [BLOCKER] CA-META-002 — invalid Auditor reply",
                   (f"The model audit was rejected: {invalid}. Under I3 an invalid audit "
                    f"escalates; it can never pass an increment."), ""]
@@ -152,6 +164,7 @@ def run_audit(*, cfg: Config, sha: str, round_: int, files: Mapping[str, bytes],
         constitution, constitution_commit, dcl, files, task)
     reply: dict | None = None
     invalid: str | None = None
+    provider_failure: str | None = None
     integrity = "OK"
     exchange: dict = {"mode": "none"}
     actual = cfg.auditor
@@ -184,7 +197,28 @@ def run_audit(*, cfg: Config, sha: str, round_: int, files: Mapping[str, bytes],
             invalid = perr or validate_reply(parsed, known_rules(constitution))
             reply = parsed if invalid is None else None
         except ProviderDenial as exc:
-            invalid = f"auditor call failed: {exc.reason}"
+            if (str(exc.detail.get("category", "")) in PROVIDER_WAIT_CATEGORIES
+                    and not escalation_lock
+                    and dcl["total_hard_failures"] == 0):
+                # Every configured auditor route is exhausted or cooling
+                # down (or the usage guardrail refused to place the call),
+                # and the missing model reply is the only thing that could
+                # decide this round: that is an infrastructure or spending
+                # stop, not an audit opinion. Re-raise so the build loop's
+                # park path records an explicit wait and the direct
+                # `crossaudit audit` verb maps it to EXIT_PROVIDER. When
+                # the deterministic tier already hard-blocked the round (or
+                # an escalation lock already decided it), the verdict below
+                # is code's own and the outage decides nothing, so those
+                # rounds keep their deterministic result instead of
+                # stalling.
+                raise
+            # The audit did not happen. That is never a *finding*: it must
+            # not enter the Model findings section, reach the generator as
+            # something to "fix", or masquerade as an invalid reply — the
+            # receipt records it in its integrity field and the report
+            # states it in plain prose.
+            provider_failure = exc.reason
             integrity = "PROVIDER_FAILURE"
             exchange = {"mode": "none", "error": exc.reason}
         except Denial:
@@ -203,6 +237,9 @@ def run_audit(*, cfg: Config, sha: str, round_: int, files: Mapping[str, bytes],
     elif reply:
         verdict = reply["verdict"]
     else:
+        # No model opinion exists (offline, or the provider failed with the
+        # deterministic tier already decisive): a deterministic-tier result,
+        # explicitly marked as such, never a synthesized model verdict.
         verdict = "DCL_ONLY"
 
     if actual.provider in NON_EVIDENTIAL and verdict == "PASS":
@@ -214,7 +251,8 @@ def run_audit(*, cfg: Config, sha: str, round_: int, files: Mapping[str, bytes],
                            constitution_commit=constitution_commit,
                            provider=actual.provider, model=actual.model,
                            vendor=actual.vendor,
-                           reasoning_effort=actual.reasoning_effort)
+                           reasoning_effort=actual.reasoning_effort,
+                           provider_failure=provider_failure)
     return AuditOutcome(verdict=verdict, dcl=dcl, model_reply=reply,
                         invalid_reason=invalid, integrity=integrity, exchange=exchange,
                         prompt_sha256=prompt_sha, report=report)

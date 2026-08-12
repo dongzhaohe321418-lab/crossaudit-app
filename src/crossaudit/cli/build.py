@@ -40,6 +40,7 @@ from ..runtime import (
     RunCommandService,
     RunEvent,
     RunState,
+    waiting_kind,
 )
 from ..usage import record_completion
 from .main import ALLOW_CUSTOM_ENV, cmd_run
@@ -149,9 +150,12 @@ def run_loop(cfg, task: str, *, on_event=None, attachments: str = "",
     """
     current_round = 0
     operational_state = RunState.QUEUED
-    # The run shell exposes lease renewal on the emit callable so the loop's
-    # provider boundaries can prove liveness without a second command channel.
+    # The run shell exposes lease renewal and this run's durable identity on
+    # the emit callable, so the loop's provider boundaries can prove liveness
+    # and its escalations can reference the exact run they record — without a
+    # second command channel.
     heartbeat = getattr(on_event, "heartbeat", None)
+    run_id = str(getattr(on_event, "run_id", "") or "")
 
     def emit(kind: str, actor: str, text: str, detail: str = "", *,
              state: RunState | None = None, waiting_reason: dict | None = None,
@@ -167,6 +171,10 @@ def run_loop(cfg, task: str, *, on_event=None, attachments: str = "",
     def generator_provider_event(actor: str, text: str, detail: str = "") -> None:
         emit("provider_recovery", actor, text, detail,
              state=RunState.GENERATING)
+
+    # The resilience layer renews the lease before each retry attempt through
+    # the same attribute convention the run shell uses.
+    generator_provider_event.heartbeat = heartbeat
 
     if chat_id and not re.fullmatch(r"(?:history|[a-f0-9]{16})", chat_id):
         raise ConfigDenial("chat id is invalid")
@@ -269,11 +277,12 @@ def run_loop(cfg, task: str, *, on_event=None, attachments: str = "",
                      "resuming with compute result", state=RunState.GENERATING)
         except ProviderDenial as exc:
             if str(exc.detail.get("category", "")) in PROVIDER_WAIT_CATEGORIES:
-                # Every configured route is exhausted or cooling down: no
-                # further request can differ from the last one, and burning
-                # the remaining rounds on it would present an infrastructure
-                # outage as spent content revisions (§14 red line). Stop and
-                # park the run for a human remedy.
+                # Every configured route is exhausted or cooling down — or
+                # the local usage guardrail refused to place the call at
+                # all. No further request can differ from the last one, and
+                # burning the remaining rounds on it would present an
+                # infrastructure or spending stop as spent content revisions
+                # (§14 red line). Stop and park the run for a human remedy.
                 provider_wait = exc
                 termination_reason = (
                     f"generator provider failure in round {round_no}: "
@@ -287,14 +296,15 @@ def run_loop(cfg, task: str, *, on_event=None, attachments: str = "",
             findings = (f"[BLOCKER] Your last round was refused before it reached "
                         f"the auditor: {exc.reason}\nReturn only files inside "
                         f"{', '.join(cfg.scope_dirs)}/ and try again.")
-            # Authentication, permission, endpoint and invalid-model HTTP
-            # failures cannot improve by sending the same request for every
-            # remaining round. Stop once, retain the provider's actionable
-            # explanation, and expose a human decision in the UI. Retryable
-            # transport/rate-limit failures and malformed model output may use
-            # the remaining automatic revision budget.
-            if (exc.detail.get("status") is not None and
-                    not exc.detail.get("retryable", False)):
+            # A non-retryable denial (authentication, permission, endpoint,
+            # invalid model, an exceeded automation limit) cannot improve by
+            # sending the same request for every remaining round. Stop once,
+            # retain the actionable explanation, and expose a human decision
+            # in the UI. The judgment keys on the denial's own retryable
+            # claim, never on whether an HTTP status happened to be attached
+            # — a guardrail stop without one must not burn the whole budget
+            # in a zero-call loop.
+            if not exc.detail.get("retryable", False):
                 termination_reason = (
                     f"generator provider failure in round {round_no}: "
                     f"{exc.reason[:400]}")
@@ -369,10 +379,33 @@ def run_loop(cfg, task: str, *, on_event=None, attachments: str = "",
         run_args.continue_cycle = build_cycle_id
         run_args.on_step = lambda actor, text, detail="": emit(
             "provider_recovery", actor, text, detail, state=RunState.AUDITING)
+        # The auditor's resilience layer renews the lease before each retry
+        # attempt through the same handle convention as the generator's.
+        run_args.on_step.heartbeat = heartbeat
         if heartbeat is not None:
             heartbeat()          # auditor provider turn: same silence problem
-        with contextlib.redirect_stdout(buffer):
-            code = cmd_run(run_args)
+        try:
+            with contextlib.redirect_stdout(buffer):
+                code = cmd_run(run_args)
+        except ProviderDenial as exc:
+            if str(exc.detail.get("category", "")) not in PROVIDER_WAIT_CATEGORIES:
+                raise
+            # The auditor, not the generator, lost every configured route.
+            # run_audit re-raises this instead of synthesizing a verdict, so
+            # the run parks exactly like a generator outage via the tail
+            # below. cmd_run opened or advanced the cycle before the audit
+            # call, so anchor the escalation to it rather than minting a
+            # duplicate.
+            provider_wait = exc
+            termination_reason = (
+                f"auditor provider failure in round {round_no}: "
+                f"{exc.reason[:400]}")
+            cycles = store.snapshot().get("cycles", {})
+            matched = [(cid, c) for cid, c in cycles.items()
+                       if c.get("active_sha") == audit_sha]
+            if matched:
+                build_cycle_id = matched[0][0]
+            break
         inner = buffer.getvalue()
         cycles = store.snapshot().get("cycles", {})
         matched = [(cid, c) for cid, c in cycles.items()
@@ -399,39 +432,60 @@ def run_loop(cfg, task: str, *, on_event=None, attachments: str = "",
              state=RunState.REVISING)
 
     reason = termination_reason
-    # Write order is a recovery contract: the cycle store records the human
-    # decision first, the run journal moves to its waiting state second (via
-    # the emit below and the shell's finish). A death in between leaves an
-    # ESCALATED cycle beside an interrupted run, which
-    # console.daemon.reconcile_human_wait completes to WAITING_FOR_HUMAN.
-    if build_cycle_id:
-        store.escalate(build_cycle_id, reason, task=task)
-        cycle_ref = build_cycle_id
-    else:
-        # A provider can refuse every generator attempt before there is a work
-        # commit for cmd_run to open. Anchor that stop to the current durable
-        # task/routing commit so the UI exposes an actual human decision instead
-        # of an ephemeral "needs input" banner with nothing to resolve.
-        anchor = git("rev-parse", "HEAD", cwd=cfg.root)
-        cycle = store.record_build_escalation(
-            cfg.science_repo, anchor, reason, last_round, chat_id, task)
-        cycle_ref = cycle["cycle_id"]
+
+    def record_decision_object() -> str:
+        """The cycle-side decision object for this stop, referencing this run.
+
+        Wrapped fail-closed: the verdict-rewriting guards in the cycle store
+        (a PASSED/CONSUMED cycle at the anchor, a human's close) may refuse
+        the write, and that refusal must never detonate the loop or dress the
+        stop as a content refusal — the run side still records the honest
+        stop, and the run-side signal carries the human surface.
+        """
+        try:
+            if build_cycle_id:
+                store.escalate(build_cycle_id, reason, task=task,
+                               run_id=run_id)
+                return build_cycle_id
+            # A provider can refuse every generator attempt before there is
+            # a work commit for cmd_run to open. Anchor that stop to the
+            # current durable task/routing commit so the UI exposes an
+            # actual human decision instead of an ephemeral "needs input"
+            # banner with nothing to resolve.
+            anchor = git("rev-parse", "HEAD", cwd=cfg.root)
+            cycle = store.record_build_escalation(
+                cfg.science_repo, anchor, reason, last_round, chat_id, task,
+                run_id=run_id)
+            return cycle["cycle_id"]
+        except Denial:
+            return ""
+
     if provider_wait is not None:
-        # The run parks as an explicit provider wait, never as "0 findings"
-        # or a generic refusal: the waiting reason is machine-readable so the
-        # UI can offer the provider remedies rather than content guidance.
-        # It is the last event on purpose — a later event would clear the
-        # persisted waiting reason.
+        # Run side first: the park is the honest record of this stop, and
+        # the waiting reason is machine-readable so the UI can offer the
+        # provider (or budget) remedies rather than content guidance. The
+        # cycle decision object follows; if the process dies between the two
+        # writes, the status-gated reconciler completes the cycle side. The
+        # park is the last journal event on purpose — a later event would
+        # clear the persisted waiting reason.
+        category = str(provider_wait.detail.get("category", ""))
         emit("loop_stopped", "loop", reason)
         emit("provider_unavailable", "loop", "waiting for provider", reason,
              state=RunState.PROVIDER_UNAVAILABLE,
              waiting_reason={
-                 "kind": "provider",
-                 "category": str(provider_wait.detail.get("category", "")),
+                 "kind": waiting_kind(category),
+                 "category": category,
                  "detail": provider_wait.reason[:400]})
+        record_decision_object()
         return EXIT_ESCALATED
+    # For a non-park escalation the cycle is written first: the run side
+    # reaches WAITING_FOR_HUMAN only through the shell's finish after this
+    # function returns, and the run_id reference lets reconciliation
+    # complete exactly this run if the process dies in between.
+    cycle_ref = record_decision_object()
     emit("audit_escalated", "auditor", "ESCALATED",
-         f"cycle {cycle_ref} is waiting for a human")
+         (f"cycle {cycle_ref} is waiting for a human" if cycle_ref else
+          "this stop is waiting for a human"))
     emit("loop_stopped", "loop", reason)
     return EXIT_ESCALATED
 
@@ -501,8 +555,10 @@ def cmd_build(args) -> int:
                   else f"{line}\n  {'':10s} {event.detail[:96]}")
 
         # The CLI narrator wraps the shell's emit; carry the lease-renewal
-        # handle across the wrapper so foreground builds heartbeat too.
+        # handle and the run identity across the wrapper so foreground
+        # builds heartbeat and reference their run like console builds do.
         on_event.heartbeat = getattr(emit, "heartbeat", None)
+        on_event.run_id = getattr(emit, "run_id", "")
         return run_loop(cfg, prepared.task, on_event=on_event)
 
     code = service.start(prepare, worker, background=False)

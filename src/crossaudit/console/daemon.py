@@ -37,7 +37,7 @@ from pathlib import Path
 
 from .. import _selfid
 from ..config import Config
-from ..controller import BLOCKED, ESCALATED, OPEN, StateStore
+from ..controller import CONSUMED, ESCALATED, PASSED, StateStore
 from ..errors import Denial
 from ..gitio import git, is_repo
 from ..runtime import (
@@ -58,10 +58,19 @@ WATCHDOG_INTERVAL_S = 30.0
 #: Cycle-store history events that prove the needs-a-human write reached the
 #: cycle side after a given run started.
 _ESCALATION_EVENTS = frozenset({
-    "escalate", "build_escalated_before_revision", "human_resolution"})
+    "escalate", "build_escalated_before_revision"})
 #: Run states that mean "a person owns the next step".
 _HUMAN_WAIT_STATES = frozenset({
     RunState.WAITING_FOR_HUMAN.value, RunState.PROVIDER_UNAVAILABLE.value})
+#: Run outcomes whose write paths historically recorded no cycle-side decision
+#: object; only these can present a direction-B tear. An "escalated" or
+#: "blocked" outcome comes from paths whose contract writes the cycle first.
+_CYCLE_LESS_OUTCOMES = frozenset({"", "refused", "provider_unavailable"})
+#: How many journal rows the reconciler scans for torn halves. A tear does not
+#: heal itself by being raced past: a retry started before the sweep must not
+#: orphan the older interrupted row forever, so the sweep looks at recent
+#: history, bounded so it stays a few cheap reads.
+RECONCILE_SCAN_LIMIT = 20
 # Read-only migration fallback for a build interrupted by CrossAudit <= 4.14.
 LEGACY_BUILD_FLAG = "build-in-flight.json"
 KILL_SIGNAL = getattr(signal, "SIGKILL", signal.SIGTERM)
@@ -350,18 +359,30 @@ def reconcile_human_wait(cfg: Config, journal: RunJournal | None = None) -> dict
     "A person owns the next step" is recorded in two stores: the cycle store
     (state.json, status ESCALATED — the decision object) and the run journal
     (WAITING_FOR_HUMAN / PROVIDER_UNAVAILABLE — what the UI narrates). The
-    writers' contract is cycle first, run second (build.run_loop tail,
-    cmd_run's record_verdict); a process death in between tears them:
+    park paths write run first, cycle second; the non-park escalation paths
+    write cycle first, run second — and both reference the run by id. This
+    sweep is a backstop for deaths inside those two-store windows and for
+    journals written by older builds, never the primary mechanism.
 
-    * an ESCALATED cycle beside an INTERRUPTED run presents a human decision
-      as a crash — the run side is completed to WAITING_FOR_HUMAN;
-    * a human-wait run with no escalation recorded since it started offers
-      the person nothing to decide on — the cycle side is escalated with the
-      run's own stop reason.
+    Reconciliation heals only tears it has association evidence for:
 
-    Only the newest run is considered: older human-wait runs belong to cycles
-    that were already ruled on, and reviving them would invent decisions.
-    Both repairs are idempotent; a corrupt store aborts rather than guesses.
+    * an ESCALATED cycle that references a run_id completes exactly that run
+      if it sits INTERRUPTED — never any other row. A fresh escalation is
+      evidence about its own stop, not a license to re-narrate unrelated old
+      crashes as "waiting for a person" (a one-way rewrite the user could
+      never dismiss again). Legacy escalations without a run_id fall back to
+      the pre-existing conservative shapes: the newest row, or an exact
+      chat-and-task match, corroborated by escalation activity recorded
+      since that row started;
+    * a human-wait run with no decision object offers the person nothing to
+      decide on — the cycle side is escalated with the run's own stop
+      reason, keyed on the anchored cycle's current status, never on
+      event-timestamp windows (integer history timestamps cannot order
+      same-second writes, and a window once suppressed this repair forever).
+
+    Fail-closed throughout: a recorded PASS or a consumed admission is never
+    rewritten into an escalation, a cycle a human already closed is never
+    re-escalated, and a corrupt store aborts rather than guesses.
     """
     result: dict = {"run_completed": None, "cycle_recorded": None}
     runtime = journal_path(cfg)
@@ -369,70 +390,154 @@ def reconcile_human_wait(cfg: Config, journal: RunJournal | None = None) -> dict
         if not runtime.is_file():
             return result
         journal = RunJournal(runtime)
-    row = journal.latest()
-    if row is None:
+    rows = journal.recent(RECONCILE_SCAN_LIMIT)
+    if not rows:
         return result
     store = StateStore(cfg.root / cfg.state_dir / "state.json")
     try:
         state = store.snapshot()
     except Denial:
         return result            # a corrupt store is its own incident; never guess
-    since = float(row["started"]) - 1
-    recent = [event for event in state.get("history", [])
-              if float(event.get("t", 0) or 0) >= since]
-    escalation_recorded = any(
-        event.get("event") in ("escalate", "build_escalated_before_revision")
-        or (event.get("event") == "verdict" and event.get("status") == ESCALATED)
-        for event in recent)
-    escalation_activity = escalation_recorded or any(
-        event.get("event") == "human_resolution" for event in recent)
+    history = state.get("history", [])
     cycles = state.get("cycles", {})
     escalated_now = [dict(c, cycle_id=cid) for cid, c in cycles.items()
                      if c.get("status") == ESCALATED]
 
-    if (row["state"] == RunState.INTERRUPTED.value and escalation_recorded
-            and escalated_now):
-        reason = str(escalated_now[-1].get("escalation_reason", ""))[:400]
-        if journal.complete_human_wait(str(row["run_id"]), reason):
-            result["run_completed"] = str(row["run_id"])
-        return result
+    # Direction A: the cycle store recorded the escalation, the worker died
+    # before the run journal said so. Only runs the escalation can be
+    # associated with are completed — by run_id reference when the record
+    # carries one, else by the conservative legacy shapes — and each heal
+    # carries its OWN cycle's reason, never a neighbour's.
+    if escalated_now:
+        rows_by_id = {str(r["run_id"]): r for r in rows}
+        latest_id = str(rows[0]["run_id"])
 
-    if row["state"] in _HUMAN_WAIT_STATES and not escalation_activity:
-        if not is_repo(cfg.root):
+        def recorded_since(row: dict) -> bool:
+            since = float(row["started"]) - 1
+            return any(
+                event.get("event") in _ESCALATION_EVENTS
+                or (event.get("event") == "verdict"
+                    and event.get("status") == ESCALATED)
+                for event in history
+                if float(event.get("t", 0) or 0) >= since)
+
+        for cycle in escalated_now:
+            reason = str(cycle.get("escalation_reason", ""))[:400]
+            ref = str(cycle.get("escalation_run_id") or "")
+            if ref:
+                row = rows_by_id.get(ref)
+                if (row is not None
+                        and row["state"] == RunState.INTERRUPTED.value
+                        and journal.complete_human_wait(ref, reason)
+                        and result["run_completed"] is None):
+                    result["run_completed"] = ref
+                continue
+            # Legacy record without a run reference: the association must be
+            # corroborated — the newest row (the pre-repair behavior), or an
+            # exact chat-and-task match — plus escalation activity recorded
+            # since that row started. Anything less would let a fresh
+            # escalation rewrite unrelated old crashes.
+            for row in rows:
+                if row["state"] != RunState.INTERRUPTED.value:
+                    continue
+                associated = (str(row["run_id"]) == latest_id or (
+                    bool(cycle.get("chat_id"))
+                    and str(cycle.get("chat_id")) == str(row["chat_id"])
+                    and str(cycle.get("task", "")) == str(row["task"])))
+                if not associated or not recorded_since(row):
+                    continue
+                if (journal.complete_human_wait(str(row["run_id"]), reason)
+                        and result["run_completed"] is None):
+                    result["run_completed"] = str(row["run_id"])
+
+    # Direction B: the newest run waits for a person, but no decision object
+    # exists. Older human-wait runs belong to stops already ruled on;
+    # reviving them would invent decisions.
+    row = journal.latest()
+    if (row is None or row["state"] not in _HUMAN_WAIT_STATES
+            or str(row.get("outcome") or "") not in _CYCLE_LESS_OUTCOMES):
+        return result
+    if not is_repo(cfg.root):
+        return result
+    try:
+        anchor = git("rev-parse", "HEAD", cwd=cfg.root)
+    except Denial:
+        return result
+    candidate = next((dict(c, cycle_id=cid) for cid, c in cycles.items()
+                      if c.get("active_sha") == anchor), None)
+    if candidate is not None:
+        status = candidate.get("status")
+        if status == ESCALATED:
+            return result        # the decision object already exists
+        if status in (PASSED, CONSUMED):
+            # Fail-closed: a recorded verdict outranks the watchdog. A stale
+            # human-wait row must never flip a passed (or admitted) cycle
+            # back into an escalation — that would be a supervisor rewriting
+            # the ledger's judgment (record_build_escalation refuses this
+            # too; checking here keeps the sweep from even attempting it).
             return result
-        try:
-            anchor = git("rev-parse", "HEAD", cwd=cfg.root)
-        except Denial:
-            return result
-        waiting = row.get("waiting_reason") or {}
-        if row["state"] == RunState.PROVIDER_UNAVAILABLE.value:
-            # "provider failure" in the reason is what routes the escalation
-            # to the provider remedies (retry / review connection / change
-            # model) instead of content guidance.
-            reason = ("provider failure left this task waiting for a person: "
-                      + str(waiting.get("detail") or row.get("error")
-                            or "no provider route is available"))[:400]
+        if candidate.get("closed_by_human"):
+            return result        # a person already ruled: do not reopen it
+    waiting = row.get("waiting_reason") or {}
+    if row["state"] == RunState.PROVIDER_UNAVAILABLE.value:
+        # "provider failure" in the reason is what routes the escalation
+        # to the provider remedies (retry / review connection / change
+        # model) instead of content guidance.
+        reason = ("provider failure left this task waiting for a person: "
+                  + str(waiting.get("detail") or row.get("error")
+                        or "no provider route is available"))[:400]
+    else:
+        reason = (str(row.get("error") or "").strip()
+                  or "the run stopped for a person before its decision "
+                     "record was written")[:400]
+    rounds = [int(step.get("round_no", 0) or 0)
+              for step in row.get("steps", [])]
+    try:
+        if candidate is not None:
+            cycle = store.escalate(candidate["cycle_id"], reason,
+                                   task=str(row.get("task", "")),
+                                   run_id=str(row.get("run_id", "")))
         else:
-            reason = (str(row.get("error") or "").strip()
-                      or "the run stopped for a person before its decision "
-                         "record was written")[:400]
-        rounds = [int(step.get("round_no", 0) or 0)
-                  for step in row.get("steps", [])]
-        target = next((cid for cid, c in cycles.items()
-                       if c.get("active_sha") == anchor
-                       and c.get("status") in (OPEN, BLOCKED, ESCALATED)), None)
-        try:
-            if target is not None:
-                cycle = store.escalate(target, reason,
-                                       task=str(row.get("task", "")))
-            else:
-                cycle = store.record_build_escalation(
-                    cfg.science_repo, anchor, reason, max([1, *rounds]),
-                    str(row.get("chat_id", "")), str(row.get("task", "")))
-        except Denial:
-            return result
-        result["cycle_recorded"] = cycle["cycle_id"]
+            cycle = store.record_build_escalation(
+                cfg.science_repo, anchor, reason, max([1, *rounds]),
+                str(row.get("chat_id", "")), str(row.get("task", "")),
+                run_id=str(row.get("run_id", "")))
+    except Denial:
+        return result
+    result["cycle_recorded"] = cycle["cycle_id"]
     return result
+
+
+def settle_closed_escalation(cfg: Config, cycle: dict) -> bool:
+    """Settle the parked run a just-closed escalation references.
+
+    Closing a provider escalation is the human ruling "stop this task". The
+    referenced run is still parked with its waiting reason — and a parked
+    run's own signal is what carries the needs-a-decision surface — so
+    leaving it parked would keep demanding a decision that was just given.
+    Only the referenced run is touched (the reference is the association
+    evidence), and only while it is actually parked.
+    """
+    run_id = str(cycle.get("escalation_run_id") or "")
+    if not run_id:
+        return False
+    runtime = journal_path(cfg)
+    if not runtime.is_file():
+        return False
+    journal = RunJournal(runtime)
+    try:
+        state = journal.state(run_id)
+    except KeyError:
+        return False
+    from ..runtime import PARKED_STATES
+
+    if state not in PARKED_STATES:
+        return False
+    try:
+        journal.request_cancel(run_id)
+    except RuntimeError:
+        return False
+    return True
 
 
 def watchdog_sweep(cfg: Config) -> dict:

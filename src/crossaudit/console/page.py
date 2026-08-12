@@ -3643,7 +3643,16 @@ function modelTag(value){const raw=String(value||'');if(!raw)return '';
   return (tail.split(' · ')[0]||'').trim()||raw;}
 function userState(d){
   const p=chatProgress(d);
-  if(p&&p.state==='PROVIDER_UNAVAILABLE')return {key:'decide',label:STATE_LABELS.decide,live:false};
+  if(p&&p.state==='PROVIDER_UNAVAILABLE'){
+    // The run-side signal itself carries the ask: a parked run with a
+    // waiting reason needs a person even when no cycle escalation could be
+    // recorded (fail-closed verdict protection can refuse the decision
+    // object). Rulings settle the run (waiting run is cancelled on close),
+    // so a stale "decide" cannot outlive its decision.
+    if(currentEscalations(d).length||p.waiting_reason)return {key:'decide',label:STATE_LABELS.decide,live:false};
+    // Nothing pending and no waiting reason: fall through to the ledger
+    // status instead of demanding a decision with no decision object.
+  }
   if(p&&!p.finished){
     if(p.state==='CANCELLING')return {key:'work',label:'Stopping',live:true};
     const key=USER_STATES[p.state]||'work';
@@ -4066,11 +4075,17 @@ function renderTasks(d){
 function renderDecisionBanner(d){
   const banner=document.getElementById('decision-banner');
   const rows=(d&&d.escalations)||[];
-  const show=rows.length>0&&!resolutionModal.classList.contains('on')
+  // A parked run whose decision object could not be recorded (fail-closed
+  // verdict protection) still needs a person: its own waiting reason keeps
+  // it in the needs-attention count instead of vanishing.
+  const p=d&&d.progress;
+  const parkedAlone=(p&&p.state==='PROVIDER_UNAVAILABLE'&&p.waiting_reason&&!rows.length)?1:0;
+  const count=rows.length+parkedAlone;
+  const show=count>0&&!resolutionModal.classList.contains('on')
     &&!document.body.classList.contains('hub-mode');
   banner.hidden=!show;
   if(show)document.getElementById('decision-banner-text').textContent=
-    rows.length+' task'+(rows.length===1?'':'s')+' need'+(rows.length===1?'s':'')+' your decision';
+    count+' task'+(count===1?'':'s')+' need'+(count===1?'s':'')+' your decision';
 }
 function renderInspector(d){
   document.getElementById('runtime-generator').textContent = d.generator;

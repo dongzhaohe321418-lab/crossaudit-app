@@ -1140,6 +1140,11 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                         result = store.resolve_escalation(
                             cycle_id, action, reason)
                         started = None
+                        if action == "close":
+                            # The close ruling settles the parked run this
+                            # escalation references: a stopped task must not
+                            # keep signalling "needs your decision".
+                            daemon.settle_closed_escalation(current, result)
                     STREAM_CHANGES.notify()
                     response = {
                         "cycle_id": cycle_id,

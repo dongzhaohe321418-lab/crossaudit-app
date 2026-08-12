@@ -17,6 +17,7 @@ from .runs import (
     RunJournal,
     RunState,
     journal_path,
+    waiting_kind,
 )
 from .workspaces import acquire_workspace_slot, release_workspace_slot, workspace_capacity
 
@@ -26,6 +27,6 @@ __all__ = [
     "PreparedRun", "ProvisioningJournal",
     "RunCommandService", "RunEvent", "RunJournal", "RunLaunch", "RunState",
     "acquire_workspace_slot", "journal_path",
-    "pid_alive", "release_workspace_slot", "windows_pid_alive",
-    "workspace_capacity", "zombie",
+    "pid_alive", "release_workspace_slot", "waiting_kind",
+    "windows_pid_alive", "workspace_capacity", "zombie",
 ]

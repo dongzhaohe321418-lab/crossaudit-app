@@ -183,6 +183,15 @@ def complete(cfg: Config, role_name: str, primary: Role, *, system: str,
             continue
         fn = get_provider(role.provider)
         for attempt in range(1, cfg.resilience.max_attempts + 1):
+            # Renew the run's liveness lease before every attempt: retries
+            # and their backoff sleeps are healthy work, and without this a
+            # long recovery sequence reads as a silent worker. The handle
+            # rides on the caller's event callable (the run shell's
+            # emit.heartbeat convention) so this layer needs no knowledge
+            # of the journal.
+            heartbeat = getattr(on_event, "heartbeat", None)
+            if heartbeat is not None:
+                heartbeat()
             try:
                 if on_event and (attempt > 1 or index > 0):
                     on_event(role_name, "provider recovery",

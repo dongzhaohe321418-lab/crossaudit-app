@@ -212,28 +212,40 @@ class StateStore:
                       parent_active_sha=previous, round=c["round"])
             return dict(c, cycle_id=cycle_id)
 
-    def escalate(self, cycle_id: str, reason: str, *, task: str = "") -> dict:
-        """Persist a build-level stop so status and Console expose it."""
+    def escalate(self, cycle_id: str, reason: str, *, task: str = "",
+                 run_id: str = "") -> dict:
+        """Persist a build-level stop so status and Console expose it.
+
+        ``run_id`` links this decision object to the exact journal run whose
+        stop it records. Reconciliation heals only the referenced run: an
+        escalation is evidence about one stop, never a license to re-narrate
+        unrelated interrupted runs as "waiting for a person".
+        """
         with self._locked() as state:
             c = state["cycles"].get(cycle_id)
             if c is None:
                 raise IntegrityDenial("unknown cycle", cycle_id=cycle_id)
             if c["status"] not in (OPEN, BLOCKED, ESCALATED):
+                # Fail-closed against verdict rewriting: a recorded PASS or a
+                # consumed admission is ledger, and no supervisor (watchdog,
+                # reconciler, retry handler) may flip it into an escalation.
                 raise IntegrityDenial(
                     f"cycle is {c['status']}; it cannot be escalated",
                     cycle_id=cycle_id, status=c["status"])
             c["status"] = ESCALATED
             c["awaiting_verdict"] = False
             c["escalation_reason"] = reason
+            if run_id:
+                c["escalation_run_id"] = run_id[:64]
             if task.strip():
                 c["task"] = task.strip()[:12000]
             self._log(state, "escalate", cycle=cycle_id, reason=reason,
-                      round=c["round"])
+                      round=c["round"], run_id=run_id[:64])
             return dict(c, cycle_id=cycle_id)
 
     def record_build_escalation(self, repo: str, sha: str, reason: str,
                                 round_: int, chat_id: str = "",
-                                task: str = "") -> dict:
+                                task: str = "", run_id: str = "") -> dict:
         """Persist a build that stopped before any auditable revision existed.
 
         Provider refusals can consume the whole generator budget before there is
@@ -251,23 +263,47 @@ class StateStore:
             if existing and existing.get("active_sha") != sha:
                 raise IntegrityDenial("build escalation cycle has a conflicting sha",
                                       cycle_id=cid)
+            if existing and existing.get("status") in (PASSED, CONSUMED):
+                # Fail-closed against verdict rewriting: this cycle already
+                # carries a recorded PASS (or was consumed by admission). The
+                # watchdog's reconciler and any retry path anchor escalations
+                # by sha, and without this guard a stale human-wait run could
+                # silently flip a passed cycle back into ESCALATED — a
+                # supervisor rewriting the ledger's judgment.
+                raise IntegrityDenial(
+                    f"cycle is {existing['status']}; a recorded verdict cannot "
+                    f"be overwritten with an escalation",
+                    cycle_id=cid, status=existing["status"])
             c = existing or {
                 "repo": repo, "root_sha": sha, "active_sha": sha,
                 "parent_receipt": "", "consumed": [],
             }
             c.update(round=round_, status=ESCALATED, awaiting_verdict=False,
                      escalation_reason=reason)
+            if run_id:
+                # The run this decision object records; reconciliation heals
+                # only referenced runs (see escalate()).
+                c["escalation_run_id"] = run_id[:64]
             if chat_id:
                 c["chat_id"] = chat_id
             if task.strip():
                 c["task"] = task.strip()[:12000]
             cycles[cid] = c
             self._log(state, "build_escalated_before_revision", cycle=cid,
-                      sha=sha, reason=reason, round=round_, chat_id=chat_id)
+                      sha=sha, reason=reason, round=round_, chat_id=chat_id,
+                      run_id=run_id[:64])
             return dict(c, cycle_id=cid)
 
     def record_verdict(self, cycle_id: str, sha: str, verdict: str,
-                       receipt_hash: str, max_rounds: int) -> str:
+                       receipt_hash: str, max_rounds: int,
+                       escalation_reason: str = "") -> str:
+        """Record one round's verdict; ``escalation_reason`` names the stop.
+
+        When the round's failure was infrastructural (the model audit could
+        not run at all), the caller passes a reason carrying "provider
+        failure" so an escalated cycle routes to the provider remedies
+        instead of asking a human for content guidance about an outage.
+        """
         with self._locked() as state:
             c = state["cycles"].get(cycle_id)
             if c is None:
@@ -286,6 +322,8 @@ class StateStore:
                 c["status"] = ESCALATED
             else:
                 c["status"] = ESCALATED if c["round"] >= max_rounds else BLOCKED
+            if c["status"] == ESCALATED and escalation_reason.strip():
+                c["escalation_reason"] = escalation_reason.strip()[:400]
             c["parent_receipt"] = receipt_hash
             c["awaiting_verdict"] = False
             self._log(state, "verdict", cycle=cycle_id, sha=sha, verdict=verdict,
@@ -342,6 +380,9 @@ class StateStore:
                 c["status"] = OPEN
                 c["awaiting_verdict"] = True
                 c["human_reopened"] = True
+                # The ruled-on stop is settled; a future escalation will
+                # reference the run of the retry, not this one.
+                c.pop("escalation_run_id", None)
             else:
                 c["status"] = BLOCKED
                 c["closed_by_human"] = True
