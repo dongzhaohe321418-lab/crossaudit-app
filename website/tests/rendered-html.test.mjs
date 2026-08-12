@@ -103,10 +103,10 @@ test("keeps accessibility, release fallback, and responsive safeguards in source
   assert.match(css, /@media \(max-width: 34rem\)/);
   assert.match(layout, /openGraph:/);
   assert.match(layout, /https:\/\/crossaudit-v4\.vercel\.app/);
-  assert.match(layout, /GeistSans/);
-  assert.match(layout, /GeistMono/);
-  assert.match(layout, /geist\/font\/sans/);
-  assert.match(layout, /geist\/font\/mono/);
+  assert.match(layout, /Space_Grotesk/);
+  assert.match(layout, /DM_Sans/);
+  assert.match(layout, /IBM_Plex_Mono/);
+  assert.match(layout, /next\/font\/google/);
   assert.match(layout, /<html[\s\S]*className=/);
   assert.doesNotMatch(layout, /codex-preview|Starter Project/);
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);

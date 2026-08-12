@@ -42,96 +42,48 @@
 }
 
 /* ------------------------------------------------------------ typography
-   Three complete directions, switched by html[data-type-variant] (set from
-   ?type=a|b|c before first paint; A is the default). Every direction tunes
-   family, size, weight, tracking and leading together; calibration numbers
-   were measured from linear.app (64-72px / 510 / -0.022em / lh 1.0, body
-   15-16px) and apple.com/macbook-pro (80px / 600 / -0.015em / lh 1.05,
-   body 17px) on 2026-08-12. */
+   Final system. Space Grotesk carries display and brand, DM Sans carries
+   reading text, IBM Plex Mono carries data and evidence. Editorial scale:
+   oversized display against small mono annotations, and one shared indent
+   step (--indent) that traces the handoff from generator to auditor across
+   the page: hero line two, offset section bodies, the second statement
+   line. Calibrated against measured references (linear.app 64-72px/510/
+   -0.022em lh 1.0, apple.com 80px/600/-0.015em lh 1.05) on 2026-08-12. */
 
 :root {
-  /* A - Apple system stack: native macOS product voice. SF Pro Display
-     engages automatically at display sizes; precise small text below. */
-  --display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue",
-    "PingFang SC", "Hiragino Sans GB", sans-serif;
-  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue",
-    "PingFang SC", "Hiragino Sans GB", sans-serif;
-  --mono: var(--font-plex-mono), "SFMono-Regular", ui-monospace, Menlo, Consolas, monospace;
-
-  --fs-hero: clamp(2.6rem, 1.35rem + 2.95vw, 4rem);          /* 64px at 1440 */
-  --fw-hero: 640;
-  --ls-hero: -0.019em;
-  --lh-hero: 1.05;
-  --fs-h2: clamp(1.85rem, 1.2rem + 1.55vw, 2.6rem);          /* 42px at 1440 */
-  --fw-h2: 620;
-  --ls-h2: -0.017em;
-  --lh-h2: 1.09;
-  --fs-statement: clamp(2.15rem, 1.4rem + 1.9vw, 3.1rem);    /* 50px at 1440 */
-  --fw-h3: 600;
-  --ls-h3: -0.012em;
-  --fs-body-lg: 1.0625rem;                                   /* 17px intro/section body */
-  --lh-body-lg: 1.58;
-  --fw-strong: 600;
-  --fw-medium: 560;
-  --hero-cols: minmax(0, 1fr) minmax(0, 1.16fr);
-}
-
-html[data-type-variant="b"] {
-  /* B - original identity: Space Grotesk display, DM Sans body,
-     IBM Plex Mono data. Geometric confidence, softer body voice. */
   --display: var(--font-space-grotesk), "PingFang SC", "Hiragino Sans GB", sans-serif;
   --sans: var(--font-dm-sans), "PingFang SC", "Hiragino Sans GB", -apple-system, sans-serif;
+  --mono: var(--font-plex-mono), "SFMono-Regular", ui-monospace, Menlo, Consolas, monospace;
 
-  --fs-hero: clamp(2.5rem, 1.3rem + 2.6vw, 3.65rem);         /* 58px at 1440 */
+  --fs-hero: clamp(3rem, 1.4rem + 4.6vw, 5.5rem);            /* 88px at 1440 */
   --fw-hero: 500;
-  --ls-hero: -0.026em;
-  --lh-hero: 1.06;
-  --fs-h2: clamp(1.75rem, 1.15rem + 1.45vw, 2.4rem);         /* 38px at 1440 */
+  --ls-hero: -0.028em;
+  --lh-hero: 1.0;
+  --fs-h2: clamp(2rem, 1.2rem + 2.15vw, 3.3rem);             /* 50px at 1440 */
   --fw-h2: 500;
-  --ls-h2: -0.02em;
-  --lh-h2: 1.12;
-  --fs-statement: clamp(2.05rem, 1.35rem + 1.75vw, 2.9rem);  /* 46px at 1440 */
+  --ls-h2: -0.022em;
+  --lh-h2: 1.04;
+  --fs-statement: clamp(2.3rem, 1.35rem + 2.6vw, 3.85rem);   /* 59px at 1440 */
   --fw-h3: 560;
-  --ls-h3: -0.01em;
-  --fs-body-lg: 1.04rem;                                     /* 16.6px, DM Sans runs compact */
-  --lh-body-lg: 1.62;
+  --ls-h3: -0.012em;
+  --fs-body-lg: 1.05rem;                                     /* 16.8px reading text */
+  --lh-body-lg: 1.6;
   --fw-strong: 600;
   --fw-medium: 500;
-  --hero-cols: minmax(0, 1fr) minmax(0, 1.12fr);
-}
 
-html[data-type-variant="c"] {
-  /* C - Geist at full intent: one family, four-step ladder
-     (display 64 / heading 40 / detail 20 / body 16), mono strictly data. */
-  --display: var(--font-geist-sans), "PingFang SC", "Hiragino Sans GB", -apple-system, sans-serif;
-  --sans: var(--font-geist-sans), "PingFang SC", "Hiragino Sans GB", -apple-system, sans-serif;
-  --mono: var(--font-geist-mono), "SFMono-Regular", ui-monospace, Menlo, Consolas, monospace;
-
-  --fs-hero: clamp(2.7rem, 1.3rem + 3.05vw, 4.15rem);        /* 65px at 1440 */
-  --fw-hero: 620;
-  --ls-hero: -0.03em;
-  --lh-hero: 1.02;
-  --fs-h2: clamp(1.8rem, 1.1rem + 1.6vw, 2.5rem);            /* 40px at 1440 */
-  --fw-h2: 620;
-  --ls-h2: -0.024em;
-  --lh-h2: 1.06;
-  --fs-statement: clamp(2.2rem, 1.5rem + 2.05vw, 3.35rem);   /* 54px at 1440 */
-  --fw-h3: 600;
-  --ls-h3: -0.015em;
-  --fs-body-lg: 1rem;                                        /* 16px */
-  --lh-body-lg: 1.6;
-  --fw-strong: 620;
-  --fw-medium: 560;
-  --hero-cols: minmax(0, 1fr) minmax(0, 1.1fr);
+  /* the audit indent step, shared across the page */
+  --indent: clamp(1.5rem, 8vw, 6.5rem);
+  --section-pad: clamp(5rem, 9.5vh, 7.5rem);
+  --module-gap: clamp(2.4rem, 5vh, 3.8rem);
 }
 
 /* CJK discipline (VISUAL_DECISION_SYSTEM section 4): display tracking and
-   leading relax for Chinese; PingFang carries the glyphs in every direction. */
+   leading relax for Chinese; PingFang carries the glyphs. */
 html:lang(zh-CN) {
   --ls-hero: -0.008em;
-  --lh-hero: 1.14;
+  --lh-hero: 1.12;
   --ls-h2: -0.006em;
-  --lh-h2: 1.22;
+  --lh-h2: 1.18;
   --ls-h3: 0em;
 }
 
@@ -365,7 +317,7 @@ code {
   color: #071018;
   font-size: 0.85rem;
   font-weight: var(--fw-strong);
-  transition: background 200ms var(--ease), transform 200ms var(--ease);
+  transition: background 150ms var(--ease), transform 150ms var(--ease);
 }
 
 .header-download:hover {
@@ -377,18 +329,33 @@ code {
   transform: translateY(0) scale(0.98);
 }
 
-/* ------------------------------------------------------------------ hero */
+/* ------------------------------------------------------------------ hero
+   Editorial composition. The headline runs the full measure in two
+   staggered lines: line one is the generator's work, line two steps right
+   by the audit indent and turns auditor violet, and the mono release line
+   sits directly under the oversized display as an instrument caption.
+   On wide screens the product window slides up under the indented line,
+   so the claim literally stands on the product. */
 
 .hero {
-  display: grid;
-  grid-template-columns: var(--hero-cols);
-  align-items: center;
-  gap: clamp(2rem, 4vw, 3.75rem);
+  display: block;
   padding-block: 6.75rem 3.25rem;
 }
 
+.hero-copy {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
 .hero h1 {
+  order: 1;
   margin: 0;
+  overflow: hidden;
+  padding-bottom: 0.08em;
+  margin-bottom: -0.08em;
   font-size: var(--fs-hero);
   font-weight: var(--fw-hero);
   line-height: var(--lh-hero);
@@ -400,42 +367,51 @@ code {
   text-wrap: balance;
 }
 
+.hero h1 > span:nth-child(2) {
+  margin-left: var(--indent);
+}
+
 .accent-line {
   color: var(--auditor);
 }
 
+.hero-meta { order: 2; }
+.hero-intro { order: 3; }
+.hero-actions { order: 4; }
+.hero-caps { order: 5; }
+
 .hero-copy > * {
   opacity: 0;
-  animation: fade-up 620ms var(--ease-spring) forwards;
+  animation: fade-up 640ms var(--ease-spring) forwards;
 }
 
-/* the headline enters line by line; the block itself stays unanimated */
+/* the headline lines rise from behind the h1 edge: a mask reveal,
+   transform and opacity only */
 .hero-copy > h1 {
   opacity: 1;
   animation: none;
 }
 
 .hero-copy h1 > span {
-  opacity: 0;
-  animation: fade-up 680ms var(--ease-spring) forwards;
+  animation: mask-rise 760ms var(--ease-spring) both;
 }
 
-.hero-copy h1 > span:nth-child(1) { animation-delay: 40ms; }
-.hero-copy h1 > span:nth-child(2) { animation-delay: 140ms; }
-.hero-copy > .hero-intro { animation-delay: 280ms; }
-.hero-copy > .hero-actions { animation-delay: 380ms; }
-.hero-copy > .hero-meta { animation-delay: 470ms; }
-.hero-copy > .hero-caps { animation-delay: 530ms; }
+.hero-copy h1 > span:nth-child(1) { animation-delay: 60ms; }
+.hero-copy h1 > span:nth-child(2) { animation-delay: 170ms; }
+.hero-copy > .hero-meta { animation-delay: 420ms; }
+.hero-copy > .hero-intro { animation-delay: 500ms; }
+.hero-copy > .hero-actions { animation-delay: 580ms; }
+.hero-copy > .hero-caps { animation-delay: 660ms; }
 
 .demo-shell {
   opacity: 0;
-  animation: fade-up 720ms var(--ease-spring) 240ms forwards;
+  animation: fade-up 780ms var(--ease-spring) 420ms forwards;
 }
 
 @keyframes fade-up {
   from {
     opacity: 0;
-    transform: translateY(8px) scale(0.985);
+    transform: translateY(10px) scale(0.99);
   }
   to {
     opacity: 1;
@@ -443,9 +419,18 @@ code {
   }
 }
 
+@keyframes mask-rise {
+  from {
+    transform: translateY(112%);
+  }
+  to {
+    transform: none;
+  }
+}
+
 .hero-intro {
-  margin: 1.15rem 0 0;
-  max-width: 42ch;
+  margin: 2rem 0 0;
+  max-width: 34ch;
   color: var(--text-secondary);
   font-size: var(--fs-body-lg);
   line-height: var(--lh-body-lg);
@@ -455,26 +440,50 @@ code {
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
-  margin-top: 1.6rem;
+  margin-top: 1.7rem;
 }
 
+/* the instrument caption: small mono data crashing into the display */
 .hero-meta {
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem 1.1rem;
-  margin: 1.6rem 0 0;
+  margin: 1.1rem 0 0 calc(var(--indent) + 0.1em);
   color: var(--text-tertiary);
   font-family: var(--mono);
-  font-size: 0.74rem;
+  font-size: 0.78rem;
 }
 
 .hero-caps {
-  margin: 0.5rem 0 0;
-  max-width: 26rem;
+  margin: 2.2rem 0 0;
+  max-width: 30rem;
   color: var(--text-tertiary);
   font-family: var(--mono);
   font-size: 0.68rem;
   opacity: 0.85;
+}
+
+@media (min-width: 72rem) {
+  .hero {
+    padding-bottom: 5rem;
+  }
+
+  .hero-intro,
+  .hero-actions,
+  .hero-caps {
+    max-width: 38%;
+  }
+
+  .hero-intro {
+    max-width: min(34ch, 38%);
+  }
+
+  .hero > .demo-shell {
+    width: min(58%, 54rem);
+    margin: -17rem 0 0 auto;
+    position: relative;
+    z-index: 1;
+  }
 }
 
 .button {
@@ -487,8 +496,8 @@ code {
   font-weight: var(--fw-strong);
   font-size: 0.95rem;
   white-space: nowrap;
-  transition: background 200ms var(--ease), border-color 200ms var(--ease),
-    color 200ms var(--ease), transform 200ms var(--ease);
+  transition: background 150ms var(--ease), border-color 150ms var(--ease),
+    color 150ms var(--ease), transform 150ms var(--ease);
 }
 
 .button:active {
@@ -944,21 +953,27 @@ code {
 /* -------------------------------------------------------- section rhythm */
 
 #main-content > section {
-  padding-block: clamp(4.5rem, 9vh, 7.5rem);
+  padding-block: var(--section-pad);
+}
+
+#main-content > section.hero {
+  padding-top: clamp(6.75rem, 13vh, 8.5rem);
 }
 
 #main-content > section + section {
   border-top: 1px solid var(--border);
 }
 
+/* editorial section head: oversized display line, body copy stepped right
+   by the audit indent so every section repeats the hero's handoff gesture */
 .section-heading {
   display: grid;
-  gap: 1.1rem;
+  gap: 1.4rem;
 }
 
 .section-heading h2 {
   margin: 0;
-  max-width: 26ch;
+  max-width: 24ch;
   font-size: var(--fs-h2);
   font-weight: var(--fw-h2);
   line-height: var(--lh-h2);
@@ -967,8 +982,8 @@ code {
 }
 
 .section-heading p {
-  margin: 0;
-  max-width: 58ch;
+  margin: 0 0 0 var(--indent);
+  max-width: 52ch;
   color: var(--text-secondary);
   font-size: var(--fs-body-lg);
   line-height: var(--lh-body-lg);
@@ -976,9 +991,9 @@ code {
 
 [data-reveal] {
   opacity: 0;
-  transform: translateY(12px) scale(0.99);
-  transition: opacity 560ms var(--ease-spring), transform 640ms var(--ease-spring);
-  transition-delay: calc(var(--i, 0) * 80ms);
+  transform: translateY(16px) scale(0.99);
+  transition: opacity 640ms var(--ease-spring), transform 720ms var(--ease-spring);
+  transition-delay: calc(var(--i, 0) * 90ms);
 }
 
 [data-reveal].is-visible {
@@ -992,7 +1007,7 @@ code {
   display: grid;
   grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
   gap: 1.2rem;
-  margin-top: clamp(2.2rem, 5vh, 3.5rem);
+  margin-top: var(--module-gap);
 }
 
 .track {
@@ -1106,7 +1121,7 @@ code {
   grid-template-columns: minmax(18rem, 0.34fr) minmax(0, 0.66fr);
   align-items: start;
   gap: clamp(2rem, 4vw, 4rem);
-  margin-top: clamp(2.6rem, 5vw, 4rem);
+  margin-top: var(--module-gap);
 }
 
 .flow-map-sticky {
@@ -1184,8 +1199,8 @@ code {
   border-radius: 10px;
   background: #10141b;
   text-align: left;
-  transition: border-color 220ms var(--ease-spring), background-color 220ms var(--ease-spring),
-    transform 220ms var(--ease-spring), box-shadow 220ms var(--ease-spring);
+  transition: border-color 180ms var(--ease-spring), background-color 180ms var(--ease-spring),
+    transform 180ms var(--ease-spring), box-shadow 180ms var(--ease-spring);
 }
 
 .fc-card::before {
@@ -1302,9 +1317,9 @@ code {
 .fcb-flow {
   stroke: rgba(244, 245, 247, 0.38);
   stroke-width: 1.2;
-  stroke-dasharray: 3 9;
+  stroke-dasharray: 4 8;
   stroke-linecap: round;
-  animation: flow-scan 1.5s linear infinite;
+  animation: flow-scan 1.15s linear infinite;
 }
 
 @keyframes flow-scan {
@@ -1350,8 +1365,8 @@ code {
   border-radius: 10px;
   background: rgba(23, 26, 32, 0.72);
   text-align: left;
-  transition: border-color 220ms var(--ease-spring), background-color 220ms var(--ease-spring),
-    transform 220ms var(--ease-spring);
+  transition: border-color 160ms var(--ease-spring), background-color 160ms var(--ease-spring),
+    transform 160ms var(--ease-spring);
 }
 
 .fc-exit:hover {
@@ -1410,10 +1425,24 @@ code {
   }
 }
 
+/* the checkpoint counter ticks over like an instrument readout */
 .flow-now span {
   color: var(--accent-strong);
   font-family: var(--mono);
   font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+  animation: tick-in 200ms var(--ease-spring);
+}
+
+@keyframes tick-in {
+  from {
+    opacity: 0;
+    transform: translateY(7px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .flow-now strong {
@@ -1482,7 +1511,13 @@ code {
   height: 0.32rem;
   border-radius: 50%;
   background: var(--text-tertiary);
-  transition: background-color 320ms ease;
+  transform: scale(0.62);
+  transition: background-color 240ms ease, transform 240ms var(--ease-spring);
+  transition-delay: inherit;
+}
+
+.flow-events p.active i {
+  transform: none;
 }
 
 .flow-events p.active.event-generator i { background: var(--generator); }
@@ -1518,13 +1553,12 @@ code {
 }
 
 .flow-chapters button {
+  position: relative;
   width: 100%;
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 0.45rem 1rem;
+  display: block;
   border: 0;
   border-left: 1px solid var(--border);
-  padding: 1.2rem 0 1.2rem 1.2rem;
+  padding: 1.4rem 0 1.4rem 1.2rem;
   background: transparent;
   color: var(--text-tertiary);
   text-align: left;
@@ -1537,10 +1571,10 @@ code {
 }
 
 .flow-chapters article.active button::after {
+  display: block;
   width: 2.5rem;
   height: 1px;
-  grid-column: 2;
-  margin-top: 0.45rem;
+  margin-top: 0.55rem;
   background: var(--generator);
   content: "";
   transform-origin: left center;
@@ -1552,38 +1586,80 @@ code {
   to { opacity: 1; transform: scaleX(1); }
 }
 
-.flow-chapters button > span,
-.flow-chapters button > small {
-  font-family: var(--mono);
-  font-size: 0.62rem;
+/* the checkpoint numeral is the chapter's background layer: oversized
+   display digits that identify the step from across the room */
+.flow-chapters button > span {
+  position: absolute;
+  top: -1.3rem;
+  left: 0.55rem;
+  z-index: 0;
+  font-family: var(--display);
+  font-size: clamp(4.6rem, 6.5vw, 6.4rem);
+  font-weight: 500;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  color: rgba(244, 245, 247, 0.05);
+  pointer-events: none;
+  user-select: none;
+  transition: color 320ms var(--ease-spring);
 }
 
-.flow-chapters button > span {
-  grid-row: 1 / 5;
-  color: var(--accent-strong);
+.flow-chapters article.active button > span {
+  color: rgba(94, 160, 255, 0.13);
+}
+
+/* background layer drifts gently with scroll where supported */
+@supports (animation-timeline: view()) {
+  .flow-chapters button > span {
+    animation: numeral-drift linear both;
+    animation-timeline: view();
+    animation-range: entry 0% exit 100%;
+  }
+
+  @keyframes numeral-drift {
+    from { translate: 0 16px; }
+    to { translate: 0 -16px; }
+  }
+}
+
+.flow-chapters button > small {
+  position: relative;
+  z-index: 1;
+  display: block;
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
 }
 
 .flow-chapters h3 {
-  margin: 0.2rem 0 0;
-  font-size: clamp(1.2rem, 1.7vw, 1.55rem);
+  position: relative;
+  z-index: 1;
+  margin: 0.4rem 0 0;
+  font-size: clamp(1.25rem, 1.8vw, 1.65rem);
   font-weight: var(--fw-h3);
   letter-spacing: var(--ls-h3);
-  line-height: 1.25;
+  line-height: 1.2;
 }
 
 .flow-chapters p {
-  margin: 0.45rem 0 0;
-  max-width: 42ch;
+  position: relative;
+  z-index: 1;
+  margin: 0.5rem 0 0;
+  max-width: 40ch;
   color: var(--text-secondary);
   font-size: 0.88rem;
   line-height: 1.62;
 }
 
 .flow-chapters button > strong {
-  margin-top: 0.35rem;
+  position: relative;
+  z-index: 1;
+  display: block;
+  margin-top: 0.45rem;
   color: var(--text-tertiary);
-  font-size: 0.68rem;
-  font-weight: 520;
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  font-weight: 500;
 }
 
 /* ------------------------------------------------------------ one prompt */
@@ -1593,7 +1669,7 @@ code {
   grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
   gap: clamp(2rem, 5vw, 4.5rem);
   align-items: start;
-  margin-top: clamp(2.2rem, 5vh, 3.5rem);
+  margin-top: var(--module-gap);
 }
 
 .prompt-quote {
@@ -1608,10 +1684,10 @@ code {
   margin: 0;
   color: var(--text-primary);
   font-family: var(--display);
-  font-size: clamp(1.1rem, 0.85rem + 0.75vw, 1.45rem);
+  font-size: clamp(1.25rem, 0.9rem + 1.05vw, 1.85rem);
   font-weight: var(--fw-medium);
-  letter-spacing: var(--ls-h3);
-  line-height: 1.45;
+  letter-spacing: -0.018em;
+  line-height: 1.32;
 }
 
 .prompt-quote footer {
@@ -1657,7 +1733,7 @@ code {
   grid-template-columns: minmax(0, 1.5fr) minmax(16rem, 0.5fr);
   gap: clamp(2rem, 4vw, 4rem);
   align-items: start;
-  margin-top: clamp(2.2rem, 5vh, 3.5rem);
+  margin-top: var(--module-gap);
 }
 
 .shot-sticky {
@@ -1760,14 +1836,32 @@ code {
 
 /* ----------------------------------------------------- independent audit */
 
+/* the statement repeats the hero gesture: the generator's line, then the
+   auditor's answer stepped right by the same indent, mask-revealed */
 .indep-statement h2 {
   margin: 0;
-  max-width: 24ch;
+  overflow: hidden;
+  padding-bottom: 0.09em;
+  margin-bottom: -0.09em;
   font-size: var(--fs-statement);
   font-weight: var(--fw-hero);
-  line-height: calc(var(--lh-hero) + 0.04);
+  line-height: calc(var(--lh-hero) + 0.06);
   letter-spacing: var(--ls-hero);
-  text-wrap: balance;
+}
+
+.indep-statement h2 > span {
+  display: block;
+  transform: translateY(114%);
+  transition: transform 720ms var(--ease-spring);
+}
+
+.indep-statement h2 > .statement-a {
+  margin-left: var(--indent);
+  transition-delay: 110ms;
+}
+
+.indep-statement.is-visible h2 > span {
+  transform: none;
 }
 
 .statement-g {
@@ -1779,11 +1873,15 @@ code {
 }
 
 .indep-statement p {
-  margin: 1.1rem 0 0;
-  max-width: 50ch;
+  margin: 1.4rem 0 0 var(--indent);
+  max-width: 46ch;
   color: var(--text-secondary);
   font-size: var(--fs-body-lg);
   line-height: var(--lh-body-lg);
+}
+
+.indep-statement .indep-toggle {
+  margin-left: var(--indent);
 }
 
 .indep-toggle {
@@ -1871,7 +1969,7 @@ code {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: clamp(1.4rem, 3vw, 2.5rem);
-  margin-top: clamp(2.2rem, 5vh, 3.5rem);
+  margin-top: var(--module-gap);
 }
 
 .cap-group h3 {
@@ -1897,7 +1995,7 @@ code {
   margin-inline: -0.5rem;
   border-radius: 8px;
   border-top: 1px solid var(--border);
-  transition: background 180ms var(--ease);
+  transition: background 120ms var(--ease);
 }
 
 .cap-group li:hover {
@@ -1922,7 +2020,7 @@ code {
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
-  margin-top: clamp(2rem, 4vh, 3rem);
+  margin-top: var(--module-gap);
 }
 
 .sci-pipeline span {
@@ -1957,7 +2055,7 @@ code {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 2rem;
-  margin-top: clamp(2rem, 4vh, 3rem);
+  margin-top: var(--module-gap);
 }
 
 .sci-facts article {
@@ -1985,7 +2083,7 @@ code {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   column-gap: clamp(2rem, 5vw, 4.5rem);
-  margin: clamp(2rem, 4vh, 3rem) 0 0;
+  margin: var(--module-gap) 0 0;
 }
 
 .security-ledger > div {
@@ -2202,13 +2300,12 @@ footer a:hover {
 
 @media (max-width: 72rem) {
   .hero {
-    grid-template-columns: 1fr;
-    min-height: auto;
     padding-top: 7rem;
   }
 
-  .demo-shell {
+  .hero > .demo-shell {
     max-width: 46rem;
+    margin-top: 2.4rem;
   }
 
   .thesis-tracks {
@@ -2337,6 +2434,12 @@ footer a:hover {
     padding: 1rem;
   }
 
+  .flow-chapters button > span {
+    top: -0.35rem;
+    left: 0.3rem;
+    font-size: 3.2rem;
+  }
+
   .flow-chapters article.active button {
     background: rgba(94, 160, 255, 0.06);
   }
@@ -2379,7 +2482,7 @@ footer a:hover {
   }
 
   .hero h1 {
-    font-size: clamp(1.9rem, 8.5vw, 2.35rem);
+    font-size: clamp(2.2rem, 10.5vw, 2.8rem);
   }
 
   .hero-actions,
@@ -2481,8 +2584,23 @@ footer a:hover {
     transition-delay: 0ms;
   }
 
-  .flow-now strong {
+  .flow-now strong,
+  .flow-now span {
     animation: none;
+  }
+
+  .indep-statement h2 > span {
+    transform: none;
+    transition: none;
+  }
+
+  .flow-chapters button > span {
+    animation: none;
+    translate: none;
+  }
+
+  .flow-events p i {
+    transform: none;
   }
 
   /* the demo window settles on its completed run */

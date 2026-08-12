@@ -1,13 +1,9 @@
 import type { Metadata } from "next";
-import { GeistSans } from "geist/font/sans";
-import { GeistMono } from "geist/font/mono";
 import { DM_Sans, IBM_Plex_Mono, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 
-/* Typography direction B (original identity): Space Grotesk display,
-   DM Sans body, IBM Plex Mono data. Directions A (Apple system stack)
-   and C (Geist) resolve through the same CSS variable layer; see
-   globals.css `html[data-type-variant]`. */
+/* Final typography identity: Space Grotesk carries display and brand,
+   DM Sans carries reading text, IBM Plex Mono carries data and evidence. */
 const spaceGrotesk = Space_Grotesk({
   variable: "--font-space-grotesk",
   subsets: ["latin"],
@@ -26,13 +22,6 @@ const plexMono = IBM_Plex_Mono({
   weight: ["400", "500", "600"],
   display: "swap",
 });
-
-/* Applies ?type=a|b|c before first paint so the three typography
-   directions can be compared from real renders. Defaults to A. */
-const typeVariantScript =
-  '(function(){try{var t=new URLSearchParams(location.search).get("type");' +
-  'if(t==="a"||t==="b"||t==="c"){document.documentElement.setAttribute("data-type-variant",t);}' +
-  "}catch(e){}})();";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://crossaudit-v4.vercel.app"),
@@ -61,14 +50,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      className={`${GeistSans.variable} ${GeistMono.variable} ${spaceGrotesk.variable} ${dmSans.variable} ${plexMono.variable}`}
-    >
-      <body>
-        <script dangerouslySetInnerHTML={{ __html: typeVariantScript }} />
-        {children}
-      </body>
+    <html lang="en" className={`${spaceGrotesk.variable} ${dmSans.variable} ${plexMono.variable}`}>
+      <body>{children}</body>
     </html>
   );
 }
