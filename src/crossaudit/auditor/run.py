@@ -14,9 +14,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import sys
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Mapping
 
 from ..config import Config, Role, heterogeneity
 from ..dcl import run_checks
@@ -42,6 +43,18 @@ class AuditOutcome:
 
 def dcl_source_digest() -> str:
     """Hash of the check layer's own source, so a receipt pins what ran."""
+    if getattr(sys, "frozen", False):
+        identity_file = Path(getattr(sys, "_MEIPASS", "")) / "crossaudit-build.json"
+        try:
+            value = json.loads(identity_file.read_text(encoding="utf-8"))
+            digest = str(value["dcl_source_sha256"])
+            if len(digest) == 64 and all(ch in "0123456789abcdef" for ch in digest):
+                return digest
+        except (OSError, ValueError, KeyError, TypeError):
+            pass
+        raise ConfigDenial(
+            "the frozen application is missing its deterministic-layer identity; "
+            "reinstall CrossAudit from a verified build")
     import crossaudit.dcl as pkg
 
     root = Path(pkg.__file__).parent
@@ -51,7 +64,7 @@ def dcl_source_digest() -> str:
         h.update(p.read_bytes())
     # The mandatory document check delegates container parsing and semantic
     # recovery to this module; bind that implementation into the DCL digest.
-    import crossaudit.document_export as document_export
+    from crossaudit import document_export
     h.update(b"document_export.py")
     h.update(Path(document_export.__file__).read_bytes())
     return h.hexdigest()
@@ -69,8 +82,8 @@ def render_report(*, cfg: Config, sha: str, round_: int, verdict: str, dcl: dict
         f"| verdict | **{verdict}** |",
         f"| round | {round_} |",
         f"| constitution | `{constitution_commit[:12]}` |",
-        f"| auditor | `{provider}:{model}` (vendor {vendor or cfg.auditor.vendor}; effort "
-        f"{reasoning_effort or 'provider-default'}) |",
+        (f"| auditor | `{provider}:{model}` (vendor {vendor or cfg.auditor.vendor}; effort "
+         f"{reasoning_effort or 'provider-default'}) |"),
         f"| deterministic layer | {dcl['total_hard_failures']} hard failure(s) |",
         "",
         "## Deterministic findings",
@@ -91,9 +104,9 @@ def render_report(*, cfg: Config, sha: str, round_: int, verdict: str, dcl: dict
 
     lines += ["## Model findings", ""]
     if invalid:
-        lines += [f"### [BLOCKER] CA-META-002 — invalid Auditor reply",
-                  f"The model audit was rejected: {invalid}. Under I3 an invalid audit "
-                  f"escalates; it can never pass an increment.", ""]
+        lines += ["### [BLOCKER] CA-META-002 — invalid Auditor reply",
+                  (f"The model audit was rejected: {invalid}. Under I3 an invalid audit "
+                   f"escalates; it can never pass an increment."), ""]
     elif reply:
         if reply.get("findings"):
             for f in reply["findings"]:

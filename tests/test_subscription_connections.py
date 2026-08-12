@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+
 import pytest
 
 from crossaudit import connections
@@ -61,15 +62,122 @@ def test_login_rejects_an_unexpected_browser_origin(monkeypatch):
         server.start_login()
 
 
-def test_collector_fails_closed_when_subscription_agent_attempts_a_tool():
+def test_collector_records_tool_attempt_without_ending_the_turn():
     collector = codex_subscription._Collector("thread-1")
     collector.accept({"method": "item/completed", "params": {
         "threadId": "thread-1", "item": {"type": "commandExecution"}}})
+
+    assert collector.forbidden == ["commandExecution"]
+    assert not collector.done.is_set()
+
     collector.accept({"method": "turn/completed", "params": {
         "threadId": "thread-1", "turn": {"id": "turn-1", "status": "completed"}}})
 
-    assert collector.forbidden == ["commandExecution"]
     assert collector.done.is_set()
+
+
+def test_server_tool_request_is_denied_without_failing_collector(monkeypatch):
+    server = codex_subscription.CodexAppServer("/fake/codex")
+    collector = codex_subscription._Collector("thread-1")
+    server._collectors["thread-1"] = collector
+    sent = []
+    monkeypatch.setattr(server, "_send", sent.append)
+
+    server._deny_server_request({
+        "id": 8, "method": "item/commandExecution/requestApproval",
+        "params": {"threadId": "thread-1"},
+    })
+
+    assert collector.forbidden == ["item/commandExecution/requestApproval"]
+    assert not collector.done.is_set()
+    assert sent[0]["id"] == 8
+    assert sent[0]["error"]["code"] == -32601
+
+
+def test_subscription_recovers_to_text_after_blocked_tool(tmp_path, monkeypatch):
+    server = codex_subscription.CodexAppServer("/fake/codex")
+
+    def call(method, _params, **_kwargs):
+        if method == "thread/start":
+            return {"thread": {"id": "thread-1"}}
+        if method == "turn/start":
+            collector = server._collectors["thread-1"]
+            collector.accept({"method": "item/completed", "params": {
+                "threadId": "thread-1", "item": {"type": "commandExecution"}}})
+            collector.accept({"method": "item/agentMessage/delta", "params": {
+                "threadId": "thread-1", "delta": "safe text response"}})
+            collector.accept({"method": "turn/completed", "params": {
+                "threadId": "thread-1", "turn": {
+                    "id": "turn-1", "status": "completed"}}})
+            return {"turn": {"id": "turn-1"}}
+        raise AssertionError(method)
+
+    monkeypatch.setattr(server, "call", call)
+    reply = server._complete_in_workspace(
+        cwd=str(tmp_path), model="gpt-5.6-sol", system="Return JSON.",
+        prompt="Make one document.", reasoning_effort="medium", timeout=1)
+
+    assert reply.text == "safe text response"
+    assert reply.raw["blocked_tool_requests"] == ["commandExecution"]
+
+
+def test_subscription_fails_closed_when_blocked_tool_has_no_text(
+        tmp_path, monkeypatch):
+    server = codex_subscription.CodexAppServer("/fake/codex")
+
+    def call(method, _params, **_kwargs):
+        if method == "thread/start":
+            return {"thread": {"id": "thread-1"}}
+        if method == "turn/start":
+            collector = server._collectors["thread-1"]
+            collector.accept({"method": "item/completed", "params": {
+                "threadId": "thread-1", "item": {"type": "fileChange"}}})
+            collector.accept({"method": "turn/completed", "params": {
+                "threadId": "thread-1", "turn": {
+                    "id": "turn-1", "status": "completed"}}})
+            return {"turn": {"id": "turn-1"}}
+        raise AssertionError(method)
+
+    monkeypatch.setattr(server, "call", call)
+    with pytest.raises(ProviderDenial, match="safely blocked"):
+        server._complete_in_workspace(
+            cwd=str(tmp_path), model="gpt-5.6-sol", system="Return JSON.",
+            prompt="Make one document.", reasoning_effort=None, timeout=1)
+
+
+def test_subscription_thread_replaces_agent_behavior_with_a_text_only_contract(
+        tmp_path, monkeypatch):
+    server = codex_subscription.CodexAppServer("/fake/codex")
+    requests = []
+
+    def call(method, params, **_kwargs):
+        requests.append((method, params))
+        if method == "thread/start":
+            return {"thread": {"id": "thread-1"}}
+        if method == "turn/start":
+            collector = server._collectors["thread-1"]
+            collector.accept({"method": "item/agentMessage/delta", "params": {
+                "threadId": "thread-1", "delta": "text response"}})
+            collector.accept({"method": "turn/completed", "params": {
+                "threadId": "thread-1", "turn": {
+                    "id": "turn-1", "status": "completed"}}})
+            return {"turn": {"id": "turn-1"}}
+        raise AssertionError(method)
+
+    monkeypatch.setattr(server, "call", call)
+    reply = server._complete_in_workspace(
+        cwd=str(tmp_path), model="gpt-5.6-sol", system="Return JSON.",
+        prompt="Make one document.", reasoning_effort="medium", timeout=1)
+
+    thread = requests[0][1]
+    assert reply.text == "text response"
+    assert "text-only model endpoint" in thread["baseInstructions"]
+    assert thread["developerInstructions"] == "Return JSON."
+    assert "dynamicTools" not in thread
+    assert "environments" not in thread
+    assert "runtimeWorkspaceRoots" not in thread
+    assert thread["approvalPolicy"] == "never"
+    assert thread["sandbox"] == "read-only"
 
 
 def test_subscription_completion_rejects_redirected_endpoints():

@@ -22,9 +22,9 @@ import json
 import os
 import tempfile
 import time
+from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterator
 
 from ..errors import ConfigDenial, IntegrityDenial
 
@@ -212,7 +212,7 @@ class StateStore:
                       parent_active_sha=previous, round=c["round"])
             return dict(c, cycle_id=cycle_id)
 
-    def escalate(self, cycle_id: str, reason: str) -> dict:
+    def escalate(self, cycle_id: str, reason: str, *, task: str = "") -> dict:
         """Persist a build-level stop so status and Console expose it."""
         with self._locked() as state:
             c = state["cycles"].get(cycle_id)
@@ -225,12 +225,15 @@ class StateStore:
             c["status"] = ESCALATED
             c["awaiting_verdict"] = False
             c["escalation_reason"] = reason
+            if task.strip():
+                c["task"] = task.strip()[:12000]
             self._log(state, "escalate", cycle=cycle_id, reason=reason,
                       round=c["round"])
             return dict(c, cycle_id=cycle_id)
 
     def record_build_escalation(self, repo: str, sha: str, reason: str,
-                                round_: int, chat_id: str = "") -> dict:
+                                round_: int, chat_id: str = "",
+                                task: str = "") -> dict:
         """Persist a build that stopped before any auditable revision existed.
 
         Provider refusals can consume the whole generator budget before there is
@@ -256,6 +259,8 @@ class StateStore:
                      escalation_reason=reason)
             if chat_id:
                 c["chat_id"] = chat_id
+            if task.strip():
+                c["task"] = task.strip()[:12000]
             cycles[cid] = c
             self._log(state, "build_escalated_before_revision", cycle=cid,
                       sha=sha, reason=reason, round=round_, chat_id=chat_id)

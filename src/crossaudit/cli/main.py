@@ -591,7 +591,7 @@ def cmd_console(args: argparse.Namespace) -> int:
         print(daemon.stop(cfg))
         return EXIT_OK
 
-    running = daemon.live(cfg)
+    running = daemon.live(cfg) if args.status or args.stop else daemon.reusable_for_launch(cfg)
     if args.status:
         if running:
             print(f"  console running (pid {running['pid']}) — {daemon.url_for(running)}")
@@ -716,7 +716,7 @@ def _open_console(root: Path) -> dict:
 
     try:
         cfg = load(root / CONFIG_NAME)
-        info = daemon.live(cfg) or daemon.spawn(cfg, 0)
+        info = daemon.reusable_for_launch(cfg) or daemon.spawn(cfg, 0)
     except (Denial, TimeoutError, OSError) as exc:
         print(f"\n  The console did not start ({exc}). Start it yourself with:")
         print("    crossaudit console")

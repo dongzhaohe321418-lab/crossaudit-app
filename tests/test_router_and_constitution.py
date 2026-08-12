@@ -185,6 +185,30 @@ def test_low_confidence_is_not_certain_so_the_box_will_ask():
     assert not r.certain and r.clarify
 
 
+@pytest.mark.parametrize("source,expected", [
+    ("generator", "generator"), ("project", "generator"), ("query", "query"),
+])
+def test_safe_autonomy_continues_reversible_low_confidence_routes(source, expected):
+    raw = router_mod.route(
+        "ordinary request", complete=stub(routing_payload(source, 0.4, "which?")))
+    routed = router_mod.apply_safe_default(raw)
+
+    assert routed.certain and routed.lane == expected
+    assert routed.confidence == 0.4  # uncertainty remains observable in the ledger
+    assert routed.routing_mode == "automatic_safe_default"
+    assert routed.clarify == ""
+
+
+@pytest.mark.parametrize("lane", ["amendment", "dispute", "resolve"])
+def test_safe_autonomy_never_guesses_control_plane_changes(lane):
+    raw = router_mod.route(
+        "ambiguous control request",
+        complete=stub(routing_payload(lane, 0.4, "Please clarify")))
+
+    assert router_mod.apply_safe_default(raw) is raw
+    assert not raw.certain and raw.clarify == "Please clarify"
+
+
 def test_confidence_is_clamped_and_garbage_reads_as_unsure():
     assert router_mod.route("x", complete=stub(routing_payload("query", 9.5))).confidence == 1.0
     payload = routing_payload("query", 0.9) | {"confidence": "very"}

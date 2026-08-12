@@ -21,8 +21,7 @@ from pathlib import Path
 from . import __version__
 from .app_keys import load_into_environment
 from .config import CONFIG_NAME, load
-from .console import serve
-from .console import daemon
+from .console import daemon, serve
 from .dcl import describe as describe_checks
 from .scaffold import CONFIG_TEMPLATE, GENERAL_CHECKS, read
 from .workspace import configured_workspace
@@ -83,10 +82,10 @@ def _controller_project(workspace: Path) -> Path:
             if sys.platform == "darwin" and git_path == "/usr/bin/git":
                 tools_ready = subprocess.run(
                     ["/usr/bin/xcode-select", "-p"], capture_output=True,
-                    timeout=5).returncode == 0
+                    timeout=5, check=False).returncode == 0
             if tools_ready:
                 probe = subprocess.run([git_path, "--version"], capture_output=True,
-                                       timeout=5)
+                                       timeout=5, check=False)
                 git_usable = probe.returncode == 0
         except (OSError, subprocess.TimeoutExpired):
             pass
@@ -114,6 +113,7 @@ def self_test() -> dict:
     the controller can bootstrap, and the loopback UI enforces its session
     token. Everything lives in a temporary directory and no provider is called.
     """
+    from .auditor.run import dcl_source_digest
     from .document_export import extract_document, render_docx, render_pdf
     from .providers.base import tls_context
 
@@ -154,7 +154,11 @@ def self_test() -> dict:
             daemon.clear_run(cfg)
         if not authenticated or not refused_without_token:
             raise RuntimeError("loopback UI authentication self-test failed")
+        deterministic_digest = dcl_source_digest()
+        if len(deterministic_digest) != 64:
+            raise RuntimeError("deterministic-layer identity is invalid")
         return {"ok": True, "version": __version__, "documents": formats,
+                "dcl_source_sha256": deterministic_digest,
                 "tls": {"trusted_certificate_authorities": trusted_roots},
                 "loopback_token_enforced": True}
 
@@ -164,7 +168,7 @@ def main() -> int:
         try:
             print(json.dumps(self_test(), sort_keys=True), flush=True)
             return 0
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 -- app boundary must return structured failure
             print(json.dumps({"ok": False, "error": type(exc).__name__,
                               "detail": str(exc)[:300]}, sort_keys=True),
                   file=sys.stderr, flush=True)

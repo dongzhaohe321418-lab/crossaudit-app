@@ -4,9 +4,11 @@ This provider never reads ChatGPT tokens.  The official ``codex`` executable
 owns browser login, refresh, and credential storage; CrossAudit speaks its
 documented JSON-RPC protocol over stdio and keeps only non-secret account state.
 
-Each completion runs in an ephemeral, read-only thread.  A CrossAudit model
-role returns text only: command/file-change events are treated as a provider
-boundary violation and the round fails closed.
+Each completion runs in an ephemeral, read-only, network-disabled thread.  A
+CrossAudit model role returns text only.  Tool requests are denied at the
+protocol boundary, but the turn may continue so the model can recover and
+provide a valid text answer.  A turn still fails closed when no valid text is
+returned.
 """
 from __future__ import annotations
 
@@ -34,6 +36,12 @@ FORBIDDEN_ITEM_TYPES = {
     "commandExecution", "fileChange", "mcpToolCall", "dynamicToolCall",
     "webSearch", "imageGeneration", "collabAgentToolCall",
 }
+TEXT_ONLY_BASE_INSTRUCTIONS = """You are a text-only model endpoint embedded in
+CrossAudit, not an interactive coding agent. Use no shell, file, web, MCP,
+computer, image, delegation, or other tools. Do not inspect the working
+directory. All relevant input is already present in the messages. Return the
+requested answer only as your final assistant text; the surrounding application
+validates and applies any structured result itself."""
 
 
 def executable() -> str:
@@ -142,22 +150,10 @@ class CodexAppServer:
                 # Server-initiated tool/approval requests are outside this
                 # adapter's text-only contract. Refuse the request immediately
                 # instead of leaving the runtime (and UI) waiting for a timeout.
+                # Do not end the turn here: Codex can recover from the denial
+                # and return ordinary text, which remains safe to consume.
                 if message.get("method"):
-                    params = message.get("params") or {}
-                    thread_id = str(params.get("threadId", ""))
-                    with self._state_lock:
-                        collector = self._collectors.get(thread_id)
-                    if collector:
-                        collector.forbidden.append(str(message["method"]))
-                        collector.error = "the subscription runtime requested a tool"
-                        collector.status = "failed"
-                        collector.done.set()
-                    try:
-                        self._send({"id": request_id, "error": {
-                            "code": -32601,
-                            "message": "CrossAudit allows text completions only"}})
-                    except ConfigDenial:
-                        pass
+                    self._deny_server_request(message)
                     continue
                 with self._state_lock:
                     waiter = self._pending.get(request_id)
@@ -184,6 +180,26 @@ class CodexAppServer:
             collector.error = reason
             collector.status = "failed"
             collector.done.set()
+
+    def _deny_server_request(self, message: dict) -> None:
+        """Reject one server-side action without prematurely ending its turn."""
+        params = message.get("params") or {}
+        thread_id = str(params.get("threadId", ""))
+        method = str(message.get("method", "tool request"))
+        with self._state_lock:
+            collector = self._collectors.get(thread_id)
+        if collector:
+            collector.forbidden.append(method)
+        try:
+            self._send({"id": message.get("id"), "error": {
+                "code": -32601,
+                "message": (
+                    "This CrossAudit role accepts text only. Continue without "
+                    "tools and return the requested answer as final text.")}})
+        except ConfigDenial:
+            # Process shutdown is handled centrally by _read; there is no
+            # useful second response to send for an already closed transport.
+            pass
 
     def _send(self, message: dict) -> None:
         proc = self._proc
@@ -314,9 +330,12 @@ class CodexAppServer:
                                prompt: str, reasoning_effort: str | None,
                                timeout: float) -> Reply:
         thread = self.call("thread/start", {
-            "model": model, "cwd": cwd, "developerInstructions": system,
+            "model": model, "cwd": cwd,
+            "baseInstructions": TEXT_ONLY_BASE_INSTRUCTIONS,
+            "developerInstructions": system,
             "approvalPolicy": "never", "sandbox": "read-only",
             "ephemeral": True,
+            "personality": "none",
             "config": {"features.shell_tool": False, "web_search": "disabled"},
         }, timeout=30).get("thread") or {}
         thread_id = str(thread.get("id", ""))
@@ -354,11 +373,6 @@ class CodexAppServer:
         finally:
             with self._state_lock:
                 self._collectors.pop(thread_id, None)
-        if collector.forbidden:
-            raise ProviderDenial(
-                "the subscription agent attempted tools outside CrossAudit's "
-                "text-only provider boundary; the round was refused",
-                category="boundary")
         if collector.status != "completed":
             raise ProviderDenial(
                 "ChatGPT subscription completion failed" +
@@ -366,15 +380,20 @@ class CodexAppServer:
                 category="provider")
         text = "".join(collector.text).strip()
         if not text:
-            raise ProviderDenial("ChatGPT subscription returned an empty completion",
-                                 category="response")
+            detail = (
+                "; its tool request was safely blocked, but it did not recover "
+                "with a text answer" if collector.forbidden else "")
+            raise ProviderDenial(
+                "ChatGPT subscription returned an empty completion" + detail,
+                category="response")
         request_bytes = json.dumps(request, sort_keys=True, separators=(",", ":")).encode()
         return Reply(
             text=text, request_id=collector.turn_id or thread_id,
             request_sha256=hashlib.sha256(request_bytes).hexdigest(),
             response_sha256=hashlib.sha256(text.encode()).hexdigest(),
             raw={"transport": "codex-app-server", "thread": thread_id,
-                 "usage": collector.usage})
+                 "usage": collector.usage,
+                 "blocked_tool_requests": sorted(set(collector.forbidden))})
 
     @staticmethod
     def _stop_process(proc: subprocess.Popen) -> None:

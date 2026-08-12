@@ -214,6 +214,23 @@ def test_round_limit_escalation_explains_attempts_issues_and_human_action(cfg):
     assert "Tell the generator" in row["requested"]
 
 
+def test_provider_failure_has_a_direct_retry_task_instead_of_fake_findings(cfg):
+    from crossaudit.controller import StateStore
+
+    store = StateStore(cfg.root / cfg.state_dir / "state.json")
+    stopped = store.record_build_escalation(
+        cfg.science_repo, "c" * 40,
+        "generator provider failure in round 1: connection unavailable", 1,
+        "history", "Create one accurate review")
+
+    row = next(item for item in overview.escalations(cfg)
+               if item["cycle_id"] == stopped["cycle_id"])
+    assert row["kind"] == "provider"
+    assert row["task"] == "Create one accurate review"
+    assert row["issues"] == []
+    assert "No correction guidance is needed" in row["requested"]
+
+
 def test_a_quiet_project_has_nothing_waiting(cfg):
     assert overview.escalations(cfg) == []
 
@@ -236,7 +253,7 @@ def console(cfg):
 
 
 def test_the_stream_pushes_a_first_frame_immediately(console):
-    cfg, url = console
+    _cfg, url = console
     stream = url.replace("/?", "/api/stream?")
     with urllib.request.urlopen(stream, timeout=5) as r:
         assert r.headers["content-type"].startswith("text/event-stream")
@@ -264,7 +281,7 @@ def test_the_stream_sends_again_when_the_ledger_changes(console):
 def test_the_stream_needs_the_token_like_every_other_route(console):
     import urllib.error
 
-    cfg, url = console
+    _cfg, url = console
     with pytest.raises(urllib.error.HTTPError) as caught:
         urllib.request.urlopen(url.split("?")[0] + "api/stream", timeout=5)
     try:

@@ -23,23 +23,32 @@ from pathlib import Path
 
 import yaml
 
-from ..config import CONFIG_NAME, Config, heterogeneity, load
-from ..app_keys import backup_env_for_vendor, env_for_vendor
-from .. import connections, skills as skills_mod
-from ..providers import codex_subscription
-from ..controller import StateStore
-from ..errors import ConfigDenial, Denial
-from ..providers.catalog import list_models
-from ..providers.specs import (EFFORT_HINTS, SPECS, endpoint as provider_endpoint,
-                               endpoints as provider_endpoints,
-                               reasoning_efforts)
-from ..gitio import git, is_repo
+from .. import connections
+from .. import skills as skills_mod
 from .. import workspace as workspace_mod
-from ..scaffold import (CONFIG_TEMPLATE, GENERAL_CHECKS, GENERAL_TREE,
-                        SCIENCE_CHECKS, SCIENCE_TREE, read, write_tree)
-from ..dcl import describe as describe_checks
+from ..app_keys import backup_env_for_vendor, env_for_vendor
 from ..cli import pair as pair_mod
 from ..cli import wizard
+from ..config import CONFIG_NAME, Config, heterogeneity, load
+from ..controller import StateStore
+from ..dcl import describe as describe_checks
+from ..errors import ConfigDenial, Denial
+from ..gitio import git, is_repo
+from ..providers import codex_subscription
+from ..providers.catalog import list_models
+from ..providers.specs import EFFORT_HINTS, SPECS, reasoning_efforts
+from ..providers.specs import endpoint as provider_endpoint
+from ..providers.specs import endpoints as provider_endpoints
+from ..runtime import ProvisioningJournal, journal_path, workspace_capacity
+from ..scaffold import (
+    CONFIG_TEMPLATE,
+    GENERAL_CHECKS,
+    GENERAL_TREE,
+    SCIENCE_CHECKS,
+    SCIENCE_TREE,
+    read,
+    write_tree,
+)
 from . import chats, daemon
 
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,79}")
@@ -154,13 +163,15 @@ def _guidance(exc: Exception) -> dict:
         "repo_exists": "One or both repository names are already used",
         "origin_conflict": "The local Git remote needs attention",
         "workspace": "Choose a writable workspace",
+        "workspace_dirty": "Review local changes before setup",
         "workspace_permission": "Choose a writable workspace",
         "setup": "Project setup needs your attention",
     }
     return {"code": code[:60], "title": titles.get(code, titles["setup"]),
             "action": action[:60] or "retry", "url": url[:500] or None,
             "retryable": action in {"retry", "connect_github",
-                                     "edit_repositories", "choose_workspace"}}
+                                     "edit_repositories", "choose_workspace",
+                                     "review_workspace"}}
 
 
 def _fail_setup(root: Path, detail: str, issue: dict | None = None) -> None:
@@ -175,7 +186,30 @@ def _fail_setup(root: Path, detail: str, issue: dict | None = None) -> None:
 class ProjectJobs:
     def __init__(self) -> None:
         self._lock = threading.Lock()
-        self._jobs: dict[str, dict] = {}
+        self._paths: set[Path] = set()
+
+    def _journal(self, current: Config) -> ProvisioningJournal:
+        path = journal_path(current).resolve()
+        with self._lock:
+            self._paths.add(path)
+        journal = ProvisioningJournal(path)
+        journal.recover_abandoned(current_pid=os.getpid(), alive=daemon._pid_alive)
+        return journal
+
+    def _journals(self, current: Config | None = None) -> list[ProvisioningJournal]:
+        if current is not None:
+            self._journal(current)
+        with self._lock:
+            paths = tuple(self._paths)
+        return [ProvisioningJournal(path) for path in paths]
+
+    def _find(self, job_id: str, current: Config | None = None
+              ) -> tuple[ProvisioningJournal, dict] | tuple[None, None]:
+        for journal in self._journals(current):
+            row = journal.get(job_id)
+            if row:
+                return journal, row
+        return None, None
 
     def start(self, current: Config, payload: dict, notify) -> dict:
         project = str(payload.get("name", ""))[:80]
@@ -186,99 +220,146 @@ class ProjectJobs:
             candidate = None
         failure_root = (candidate if candidate is not None and
                         NAME.fullmatch(project or "") else None)
+        safe_draft = {key: payload[key] for key in (
+            "name", "description", "project_type", "max_rounds",
+            "auditor_vendor", "auditor_connection", "auditor_endpoint",
+            "auditor_model", "generator_vendor", "generator_connection",
+            "generator_endpoint", "generator_model", "github", "science_repo",
+            "audit_repo", "adopt_existing", "public", "workspace",
+            "use_selected_folder") if key in payload}
+        spec = {"kind": "create", "base": str(base), "payload": safe_draft}
         return self._start(
-            current, project, notify,
-            lambda step: create_project(base, payload, step),
+            current, project, notify, spec,
             failure_root=failure_root,
             context={"science": str(payload.get("science_repo", ""))[:170],
                      "audit": str(payload.get("audit_repo", ""))[:170],
-                     "workspace": str(base), "github": payload.get("github") is True})
+                     "workspace": str(base), "github": payload.get("github") is True,
+                     "draft": safe_draft})
 
     def resume(self, current: Config, root: str, payload: dict, notify) -> dict:
         path = Path(root).resolve()
         roots = workspace_roots(current)
         base = (path if path in roots else path.parent
                 if _trusted_project(current, path) else workspace_base(current))
+        safe_payload = {key: payload[key] for key in (
+            "science_repo", "audit_repo") if key in payload}
+        spec = {"kind": "resume", "base": str(base), "target": str(path),
+                "payload": safe_payload}
         return self._start(
-            current, path.name[:80], notify,
-            lambda step: resume_project(base, path, step, payload),
+            current, path.name[:80], notify, spec,
             failure_root=(path if path == base or path.parent == base
                           else None), context={"science": str(payload.get("science_repo", ""))[:170],
                                               "audit": str(payload.get("audit_repo", ""))[:170],
                                               "github": True})
 
-    def _start(self, current: Config, project: str, notify, operation, *,
+    def _start(self, current: Config, project: str, notify, specification: dict, *,
                failure_root: Path | None, context: dict | None = None) -> dict:
         job_id = uuid.uuid4().hex[:12]
-        row = {"id": job_id, "status": "running", "stage": "validate",
-               "detail": "Validating project settings", "started": time.time(),
-               "steps": [], "project": project,
-               "root": str(failure_root) if failure_root is not None else None}
-        row.update(context or {})
-        with self._lock:
-            if any(j["status"] == "running" and
-                   j["project"].casefold() == project.casefold()
-                   for j in self._jobs.values()):
-                raise ConfigDenial(f"setup is already running for {project}")
-            finished = sorted(
-                (j for j in self._jobs.values() if j["status"] != "running"),
-                key=lambda j: j.get("finished", j["started"]))
-            for old in finished[:-39]:
-                self._jobs.pop(old["id"], None)
-            self._jobs[job_id] = row
+        journal = self._journal(current)
+        try:
+            journal.create(
+                job_id=job_id, kind=str(specification.get("kind", "create")),
+                project=project, current_config=str(current.path),
+                workspace=str(workspace_base(current)),
+                specification=specification,
+                root=str(failure_root) if failure_root is not None else None,
+                context=dict(context or {}), owner_pid=os.getpid())
+        except RuntimeError as exc:
+            raise ConfigDenial(str(exc)) from exc
 
         def step(stage: str, detail: str) -> None:
-            with self._lock:
-                row["stage"], row["detail"] = stage, detail
-                row["steps"].append({"stage": stage, "detail": detail,
-                                     "at": time.time()})
+            journal.step(job_id, stage, detail)
             notify()
 
         def work() -> None:
             try:
-                result = operation(step)
-                with self._lock:
-                    row.update(status="complete", stage="ready", detail="Project ready",
-                               result=result, finished=time.time())
+                result = self._execute(specification, step)
+                journal.complete(job_id, result)
             except (Denial, OSError, ValueError) as exc:
                 why = exc.reason if isinstance(exc, Denial) else str(exc)
                 issue = _guidance(exc)
                 if failure_root is not None:
                     _fail_setup(failure_root, why, issue)
-                with self._lock:
-                    row.update(status="failed", detail=why[:500], issue=issue,
-                               recoverable=bool(failure_root and
-                                                (failure_root / CONFIG_NAME).is_file()),
-                               finished=time.time())
+                journal.fail(
+                    job_id, why[:500], issue,
+                    recoverable=bool(failure_root and
+                                     (failure_root / CONFIG_NAME).is_file()))
             except Exception as exc:  # noqa: BLE001 - background boundary
                 issue = _guidance(exc)
                 if failure_root is not None:
                     _fail_setup(failure_root, str(exc), issue)
-                with self._lock:
-                    row.update(status="failed",
-                               detail=f"{type(exc).__name__}: {exc}"[:500],
-                               issue=issue,
-                               recoverable=bool(failure_root and
-                                                (failure_root / CONFIG_NAME).is_file()),
-                               finished=time.time())
+                journal.fail(
+                    job_id, f"{type(exc).__name__}: {exc}"[:500], issue,
+                    recoverable=bool(failure_root and
+                                     (failure_root / CONFIG_NAME).is_file()))
             notify()
 
         threading.Thread(target=work, daemon=True).start()
         return {"job": job_id}
 
-    def snapshot(self) -> list[dict]:
-        with self._lock:
-            return [dict(v, steps=[dict(s) for s in v["steps"]])
-                    for v in self._jobs.values()]
+    @staticmethod
+    def _execute(specification: dict, step) -> dict:
+        kind = str(specification.get("kind", ""))
+        base = Path(str(specification.get("base", ""))).resolve()
+        payload = specification.get("payload")
+        if not isinstance(payload, dict):
+            raise ConfigDenial("the saved project setup request is invalid")
+        if kind == "create":
+            return create_project(base, payload, step)
+        if kind == "resume":
+            target = Path(str(specification.get("target", ""))).resolve()
+            return resume_project(base, target, step, payload)
+        raise ConfigDenial("the saved project setup operation is unsupported")
+
+    def snapshot(self, current: Config | None = None) -> list[dict]:
+        rows = []
+        for journal in self._journals(current):
+            for row in journal.snapshot():
+                rows.append({key: value for key, value in row.items() if key not in {
+                    "context", "current_config", "owner_pid", "specification"}})
+        return sorted(rows, key=lambda row: (row.get("started", 0), row["id"]))[-40:]
+
+    def retry(self, job_id: str, notify, current: Config | None = None) -> dict:
+        """Start a fresh attempt with the exact validated UI draft."""
+        journal, row = self._find(job_id, current)
+        if row is None or journal is None:
+            raise ConfigDenial("that project setup task is no longer available")
+        if row["status"] == "running":
+            raise ConfigDenial("that project setup task is still running")
+        if row["status"] != "failed":
+            raise ConfigDenial("only a stopped project setup task can be retried")
+        config_path = Path(str(row.get("current_config", "")))
+        if not config_path.is_file():
+            raise ConfigDenial("the workspace controller for this setup no longer exists")
+        selected = load(config_path)
+        context = {key: row[key] for key in (
+            "science", "audit", "workspace", "github", "draft") if key in row}
+        failure_root = Path(row["root"]) if row.get("root") else None
+        started = self._start(
+            selected, row["project"], notify, row["specification"],
+            failure_root=failure_root, context=context)
+        journal.dismiss(job_id)
+        notify()
+        return started
+
+    def dismiss(self, job_id: str, current: Config | None = None) -> dict:
+        """Remove a finished setup notification without touching user files."""
+        journal, row = self._find(job_id, current)
+        if row is None or journal is None:
+            return {"dismissed": True}
+        try:
+            journal.dismiss(job_id)
+        except RuntimeError as exc:
+            raise ConfigDenial(str(exc)) from exc
+        return {"dismissed": True}
 
     def running_for(self, root: Path) -> bool:
         """Whether project creation/recovery still owns this exact folder."""
         resolved = str(root.resolve())
-        with self._lock:
-            return any(row.get("status") == "running" and
-                       (row.get("root") == resolved or
-                        (not row.get("root") and row.get("project") == root.name))
-                       for row in self._jobs.values())
+        return any(row.get("status") == "running" and
+                   (row.get("root") == resolved or
+                    (not row.get("root") and row.get("project") == root.name))
+                   for row in self.snapshot())
 
 
 JOBS = ProjectJobs()
@@ -1115,8 +1196,8 @@ def snapshot(current: Config) -> dict:
                 rows.append(row)
     rows.sort(key=lambda p: (not p["pinned"], not p["current"],
                              -p["updated"], p["name"].lower()))
-    return {"workspace": str(base), "items": rows, "jobs": JOBS.snapshot(),
-            "capacity": daemon.workspace_capacity(current),
+    return {"workspace": str(base), "items": rows, "jobs": JOBS.snapshot(current),
+            "capacity": workspace_capacity(current),
             "github_auth": GITHUB_AUTH.snapshot(),
             "github": github_status(), "models": models(),
             "endpoints": endpoint_choices(),
@@ -1261,12 +1342,10 @@ def create_project(base: Path, payload: dict, progress) -> dict:
         raise ConfigDenial(f"{name} is already a CrossAudit project")
 
     github = payload.get("github") is True
-    owner = ""
     science = name
     audit = ""
     if github:
         checked = check_repositories(payload, enforce=True)
-        owner = checked["owner"]
         science, audit = checked["science"], checked["audit"]
 
         existing_science = next(
@@ -1287,8 +1366,9 @@ def create_project(base: Path, payload: dict, progress) -> dict:
                 if dirty:
                     raise ConfigDenial(
                         "the selected working repository has uncommitted changes; "
-                        "commit or stash them before CrossAudit setup",
-                        issue="workspace", action="choose_workspace")
+                        "commit or stash them, then choose Try again. CrossAudit will "
+                        "not alter or discard your work",
+                        issue="workspace_dirty", action="review_workspace")
                 if not current_origin:
                     pair_mod._git(target, "remote", "add", "origin", expected_origin)
                 progress("github", f"Synchronizing existing working repository {science}")
@@ -1455,7 +1535,7 @@ def open_project(current: Config, root: str) -> dict:
     if not _trusted_project(current, path) or not (path / CONFIG_NAME).is_file():
         raise ConfigDenial("that project is outside your selected workspaces")
     cfg = load(path / CONFIG_NAME)
-    info = daemon.live(cfg) or daemon.spawn(cfg, 0)
+    info = daemon.reusable_for_launch(cfg) or daemon.spawn(cfg, 0)
     return {"url": daemon.url_for(info), "project": cfg.science_repo}
 
 

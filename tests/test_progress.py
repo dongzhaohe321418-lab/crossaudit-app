@@ -1,10 +1,4 @@
-"""Live build progress: visible while it runs, and never a second history.
-
-The temptation with a progress feed is to let it become the record — it is
-richer, it arrives sooner, and it reads better than a git log. These tests hold
-the opposite line: progress is a view of work in flight, it lives only in
-memory, and the ledger remains the thing anyone is held to.
-"""
+"""Live progress is a read-only projection of the durable Run journal."""
 from __future__ import annotations
 
 import threading
@@ -13,6 +7,29 @@ import time
 import pytest
 
 from crossaudit.console.progress import Tracker
+from crossaudit.errors import EXIT_OK, ConfigDenial
+from crossaudit.runtime import (
+    PreparedRun,
+    RunCommandService,
+    RunEvent,
+    RunJournal,
+    RunState,
+    acquire_workspace_slot,
+    journal_path,
+    release_workspace_slot,
+    workspace_capacity,
+)
+
+
+def event(actor: str, text: str, state: RunState = RunState.GENERATING,
+          *, kind: str = "activity") -> RunEvent:
+    return RunEvent(actor=actor, text=text, state=state, kind=kind)
+
+
+def enable_build_scope(cfg) -> None:
+    cfg.path.write_text(
+        cfg.path.read_text(encoding="utf-8") + "scope:\n  dirs: [experiments]\n",
+        encoding="utf-8")
 
 
 def test_a_fresh_tracker_has_nothing_to_show():
@@ -20,122 +37,195 @@ def test_a_fresh_tracker_has_nothing_to_show():
     assert t.snapshot() is None and not t.running
 
 
-def test_steps_accumulate_in_order_while_a_run_is_in_flight():
+def test_steps_accumulate_in_order_while_a_run_is_in_flight(tmp_path):
+    journal = RunJournal(tmp_path / "runtime.sqlite3")
+    run_id = journal.start("write the section")
+    journal.append(run_id, event("generator", "writing"))
+    journal.append(run_id, event(
+        "auditor", "reviewing the commit", RunState.AUDITING,
+        kind="audit_started"))
     t = Tracker()
-    t.start("write the section")
-    t.step("generator", "writing")
-    t.step("auditor", "reviewing the commit")
+    t.bind(journal.path)
     snap = t.snapshot()
     assert t.running and not snap["finished"]
     assert [s["actor"] for s in snap["steps"]] == ["generator", "auditor"]
     assert snap["task"] == "write the section"
 
 
-def test_finishing_records_the_outcome_and_stops_the_run():
+def test_finishing_records_the_outcome_and_stops_the_run(tmp_path):
+    journal = RunJournal(tmp_path / "runtime.sqlite3")
+    run_id = journal.start("x")
+    journal.append(run_id, event("generator", "writing"))
+    journal.finish(run_id, "passed")
     t = Tracker()
-    t.start("x")
-    t.step("generator", "writing")
-    t.finish("passed")
+    t.bind(journal.path)
     snap = t.snapshot()
     assert not t.running and snap["finished"] and snap["outcome"] == "passed"
     assert snap["steps"][-1]["actor"] == "done"
 
 
-def test_a_failure_keeps_its_reason():
+def test_a_failure_keeps_its_reason(tmp_path):
+    journal = RunJournal(tmp_path / "runtime.sqlite3")
+    run_id = journal.start("x")
+    journal.finish(run_id, "refused", "the generator has no key")
     t = Tracker()
-    t.start("x")
-    t.finish("refused", "the generator has no key")
+    t.bind(journal.path)
     assert t.snapshot()["error"] == "the generator has no key"
 
 
-def test_only_one_build_runs_at_a_time():
+def test_only_one_build_runs_at_a_time(tmp_path):
     """Two concurrent builds would race on the working tree and on the round
     budget; the honest answer is that one is already running."""
-    t = Tracker()
-    t.start("first")
+    journal = RunJournal(tmp_path / "runtime.sqlite3")
+    first = journal.start("first")
     with pytest.raises(RuntimeError, match="already running"):
-        t.start("second")
-    t.finish("passed")
-    t.start("second")                     # once it is done, the next may begin
-    assert t.snapshot()["task"] == "second"
+        journal.start("second")
+    journal.finish(first, "passed")
+    journal.start("second")                 # once it is done, the next may begin
+    assert journal.latest()["task"] == "second"
 
 
-def test_steps_after_the_end_do_not_reopen_a_run():
+def test_steps_after_the_end_do_not_reopen_a_run(tmp_path):
+    journal = RunJournal(tmp_path / "runtime.sqlite3")
+    run_id = journal.start("x")
+    journal.finish(run_id, "passed")
+    with pytest.raises(RuntimeError, match="invalid run transition"):
+        journal.append(run_id, event("generator", "a late straggler"))
+    assert journal.latest()["state"] == "PASSED"
+
+
+def test_clearing_a_projection_never_deletes_durable_progress(tmp_path):
+    path = tmp_path / "runtime.sqlite3"
+    journal = RunJournal(path)
+    run_id = journal.start("x")
+    journal.append(run_id, event("generator", "writing"))
+    journal.finish(run_id, "passed")
     t = Tracker()
-    t.start("x")
-    t.finish("passed")
-    t.step("generator", "a late straggler")
-    assert not t.running and t.snapshot()["finished"]
-
-
-def test_progress_is_memory_only_and_leaves_no_file(tmp_path, monkeypatch):
-    """Ephemeral by construction: a progress log that outlived the run would be
-    a second, unversioned history, and the first thing anyone would do is trust
-    it."""
-    monkeypatch.chdir(tmp_path)
-    t = Tracker()
-    t.start("x")
-    t.step("generator", "writing")
-    t.finish("passed")
-    assert list(tmp_path.iterdir()) == []
+    t.bind(path)
     t.clear()
     assert t.snapshot() is None
+    assert RunJournal(path).latest()["state"] == "PASSED"
 
 
-def test_concurrent_steps_do_not_lose_entries():
-    t = Tracker()
-    t.start("x")
+def test_concurrent_steps_do_not_lose_entries(tmp_path):
+    journal = RunJournal(tmp_path / "runtime.sqlite3")
+    run_id = journal.start("x")
 
     def hammer(n: int) -> None:
         for i in range(50):
-            t.step("generator", f"{n}-{i}")
+            journal.append(run_id, event("generator", f"{n}-{i}"))
 
     threads = [threading.Thread(target=hammer, args=(n,)) for n in range(4)]
     for th in threads:
         th.start()
     for th in threads:
         th.join()
-    assert len(t.snapshot()["steps"]) == 200
+    assert len(journal.latest()["steps"]) == 200
 
 
-def test_every_progress_change_wakes_live_views():
+def test_every_progress_change_wakes_live_views(cfg):
     t = Tracker()
+    t.bind(journal_path(cfg))
     changes = []
     t.subscribe(lambda: changes.append(t.snapshot()))
 
-    t.start("x")
-    t.step("generator", "writing")
-    t.finish("passed")
-    t.clear()
+    service = RunCommandService(cfg, on_change=t.notify)
 
-    assert len(changes) == 4
+    def worker(_prepared, emit):
+        emit(event("generator", "writing"))
+        return EXIT_OK
+
+    service.start(lambda: PreparedRun(task="x"), worker, background=False)
+
+    assert len(changes) == 3
     assert changes[0]["task"] == "x"
     assert changes[1]["steps"][0]["text"] == "writing"
     assert changes[2]["finished"] is True
-    assert changes[3] is None
 
 
-def test_elapsed_grows_while_running_and_freezes_when_done():
+def test_elapsed_grows_while_running_and_freezes_when_done(tmp_path):
+    journal = RunJournal(tmp_path / "runtime.sqlite3")
+    run_id = journal.start("x")
     t = Tracker()
-    t.start("x")
+    t.bind(journal.path)
     time.sleep(0.01)
     assert t.snapshot()["elapsed"] >= 0
-    t.finish("passed")
+    journal.finish(run_id, "passed")
     frozen = t.snapshot()["elapsed"]
     time.sleep(0.05)
     assert t.snapshot()["elapsed"] == frozen
 
 
-def test_the_cli_and_the_console_drive_the_same_loop():
-    """A second copy of the loop could drift on the only thing that matters:
-    when it stops."""
+def test_the_cli_and_the_console_share_one_run_command_service():
+    """Lifecycle policy must not drift even though the presentation differs."""
     import inspect
 
     from crossaudit.cli import build as build_mod
     from crossaudit.console import server
 
-    assert "run_loop" in inspect.getsource(build_mod.cmd_build)
-    assert "run_loop" in inspect.getsource(server.start_build)
+    cli_source = inspect.getsource(build_mod.cmd_build)
+    ui_source = inspect.getsource(server.start_build)
+    assert "RunCommandService" in cli_source and "RunCommandService" in ui_source
+    assert "RunJournal" not in cli_source and "TRACKER.start" not in ui_source
+
+
+def test_cli_and_ui_share_one_project_mutation_lease(cfg, monkeypatch):
+    from crossaudit.cli import build as build_mod
+
+    monkeypatch.chdir(cfg.root)
+    enable_build_scope(cfg)
+    slot = acquire_workspace_slot(cfg)
+    try:
+        with pytest.raises(ConfigDenial, match="already owns"):
+            build_mod.cmd_build(type("Args", (), {"words": ["must", "not", "run"]})())
+    finally:
+        release_workspace_slot(slot)
+    assert workspace_capacity(cfg)["active"] == 0
+
+
+def test_cli_build_is_projected_into_the_same_durable_run_journal(
+        cfg, monkeypatch):
+    from crossaudit.cli import build as build_mod
+
+    monkeypatch.chdir(cfg.root)
+    enable_build_scope(cfg)
+
+    def fake_loop(_cfg, _task, *, on_event, **_kwargs):
+        on_event(RunEvent(
+            kind="round_started", actor="loop", text="localized text may vary",
+            state=RunState.GENERATING, round_no=1, round_limit=3))
+        on_event(RunEvent(
+            kind="audit_passed", actor="auditor", text="PASS",
+            state=RunState.AUDITING, round_no=1, round_limit=3))
+        return EXIT_OK
+
+    monkeypatch.setattr(build_mod, "run_loop", fake_loop)
+    assert build_mod.cmd_build(
+        type("Args", (), {"words": ["record", "this", "run"]})()) == EXIT_OK
+
+    row = RunJournal(journal_path(cfg)).latest()
+    assert row["task"] == "record this run" and row["state"] == "PASSED"
+    assert row["steps"][0]["kind"] == "round_started"
+    assert row["steps"][0]["round_no"] == 1
+    assert workspace_capacity(cfg)["active"] == 0
+
+
+def test_cli_failure_releases_workspace_lease_and_records_failure(cfg, monkeypatch):
+    from crossaudit.cli import build as build_mod
+
+    monkeypatch.chdir(cfg.root)
+    enable_build_scope(cfg)
+
+    def crash(*_args, **_kwargs):
+        raise RuntimeError("simulated engine crash")
+
+    monkeypatch.setattr(build_mod, "run_loop", crash)
+    with pytest.raises(RuntimeError, match="simulated engine crash"):
+        build_mod.cmd_build(type("Args", (), {"words": ["crash", "safely"]})())
+
+    row = RunJournal(journal_path(cfg)).latest()
+    assert row["state"] == "FAILED" and "simulated engine crash" in row["error"]
+    assert workspace_capacity(cfg)["active"] == 0
 
 
 def test_human_continuation_is_forced_to_the_generator_and_keeps_its_cycle(
@@ -158,6 +248,32 @@ def test_human_continuation_is_forced_to_the_generator_and_keeps_its_cycle(
     assert result["lane"] == "generator"
     assert seen["continuation_cycle"] == "a" * 16
     assert seen["chat_id"] == "history"
+
+
+def test_console_safe_autonomy_starts_a_reversible_low_confidence_task(
+        cfg, monkeypatch):
+    from crossaudit import router
+    from crossaudit.cli import talk as talk_mod
+    from crossaudit.console import server
+
+    seen = {}
+    routed = router.Routing(
+        utterance="make it clearer", lane="generator", confidence=0.31,
+        reasoning="probably a work request", restated="make it clearer",
+        clarify="Do you mean the work or its rules?")
+    monkeypatch.setattr(router, "route_addressed", lambda *_a, **_k: routed)
+    monkeypatch.setattr(talk_mod, "_record_routing",
+                        lambda _cfg, decision, executed: seen.update(
+                            decision=decision, executed=executed))
+    monkeypatch.setattr(server, "start_build", lambda _cfg, task, **_kwargs: {
+        "task": task, "attachments": []})
+
+    result = server.say(cfg, "make it clearer", chat_id="history")
+
+    assert result["asked"] is False and result["lane"] == "generator"
+    assert seen["decision"].routing_mode == "automatic_safe_default"
+    assert seen["decision"].confidence == 0.31
+    assert seen["executed"].startswith("building:")
 
 
 def test_no_string_literal_in_the_page_script_spans_a_line():
@@ -201,8 +317,11 @@ def test_the_page_never_reaches_outside_itself():
     """The CSP forbids it, but the page should not even try: everything inline."""
     from crossaudit.console.page import PAGE
 
+    # The SVG XML namespace is an identifier, not a network location.  Keep the
+    # standard namespace on inline data-URI icons while rejecting actual URLs.
+    network_markup = PAGE.replace("xmlns='http://www.w3.org/2000/svg'", "")
     for forbidden in ("http://", "https://", "<script src", "<link "):
-        assert forbidden not in PAGE, f"page references {forbidden!r}"
+        assert forbidden not in network_markup, f"page references {forbidden!r}"
 
 
 def test_the_page_source_is_raw_so_javascript_escapes_survive():
@@ -244,12 +363,10 @@ def test_console_has_one_primary_command_composer():
     assert "Current gate" in PAGE and "Stopped at" in PAGE and "Next gate" in PAGE
     assert "Live activity" in PAGE and "Audit evidence" in PAGE
     assert "loop-focus" in PAGE and "audit-event" in PAGE
-    assert PAGE.count('id="task-choices"') == 1
-    assert "Before I start" in PAGE
-    assert "Use prompt as written" in PAGE and "Run with selections" in PAGE
-    assert 'name="task_focus"' in PAGE and 'name="task_format"' in PAGE
-    assert 'name="task_tone"' in PAGE
-    assert "taskChoicePayload" in PAGE and "delivery_choices" in PAGE
+    assert 'id="task-choices"' not in PAGE
+    assert "delivery_choices" not in PAGE
+    assert "Auto-planning" in PAGE
+    assert "Generator infers focus, format, tone, and structure" in PAGE
     assert 'id="project-type"' in PAGE
     assert "General work — documents, reviews, code" in PAGE
     assert "Scientific / data workflow" in PAGE
@@ -257,9 +374,9 @@ def test_console_has_one_primary_command_composer():
     assert 'id="drop-overlay"' in PAGE and 'id="file-input" type="file" multiple' in PAGE
     assert "upload_batch" in PAGE and "batch_count" in PAGE
     assert "/api/upload" in PAGE and "uploadFile" in PAGE
-    assert PAGE.count('id="transfer-consent"') == 1
-    assert PAGE.count('id="confirm-transfer"') == 1
-    assert "attachment_consent" in PAGE
+    assert 'id="transfer-consent"' not in PAGE
+    assert 'id="confirm-transfer"' not in PAGE
+    assert "attachment_consent:pendingFiles.length>0" in PAGE
     assert "/api/file" in PAGE and "download" in PAGE
     assert "Files produced" in PAGE
     assert "output-file" in PAGE and "formatBytes" in PAGE

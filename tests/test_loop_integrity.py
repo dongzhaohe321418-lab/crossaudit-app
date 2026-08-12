@@ -13,15 +13,15 @@ from pathlib import Path
 
 import pytest
 
-from .conftest import (BAD_RESULTS, GOOD_RESULTS, PASS_REPLY, git, record_reply,
-                      write_increment)
 from crossaudit import _selfid
 from crossaudit.auditor import run_audit, validate_reply
 from crossaudit.controller import StateStore
-from crossaudit.errors import ConfigDenial, Denial, IntegrityDenial, ProviderDenial
+from crossaudit.errors import IntegrityDenial
 from crossaudit.gitio import materialise, parent, resolve
 from crossaudit.receipt import build, digest, validate, verify
 from crossaudit.receipt.verify import admit
+
+from .conftest import BAD_RESULTS, GOOD_RESULTS, PASS_REPLY, git, record_reply, write_increment
 
 
 @pytest.fixture()
@@ -45,7 +45,8 @@ def _audit(cfg, sha, transcripts, reply=None, **kw):
     files, notes = materialise(cfg.root, sha, "experiments")
     const = (cfg.root / cfg.constitution).read_text()
     cc = subprocess.run(["git", "log", "-1", "--format=%H", "--", cfg.constitution],
-                        cwd=str(cfg.root), capture_output=True, text=True).stdout.strip()
+                        cwd=str(cfg.root), capture_output=True, text=True,
+                        check=False).stdout.strip()
     outcome = run_audit(cfg=cfg, sha=sha, round_=cycle["round"], files=files, notes=notes,
                         constitution=const, constitution_commit=cc,
                         escalation_lock=bool(cycle.get("blocked_by_escalation")), **kw)
@@ -60,7 +61,8 @@ def _receipt_for(cfg, sha, cycle, outcome, mode="local"):
     ledger.mkdir(parents=True, exist_ok=True)
     (ledger / "report.md").write_text(outcome.report)
     cc = subprocess.run(["git", "log", "-1", "--format=%H", "--", cfg.constitution],
-                        cwd=str(cfg.root), capture_output=True, text=True).stdout.strip()
+                        cwd=str(cfg.root), capture_output=True, text=True,
+                        check=False).stdout.strip()
     _sha, tree = resolve(cfg.root, sha)
     from crossaudit.auditor import dcl_source_digest
     return build(cfg=cfg, subject={"sha": sha, "tree": tree, "scope": "experiments"},
@@ -81,7 +83,7 @@ def test_clean_increment_passes_and_admits_once(science, cfg, transcripts, evide
                           "clean increment")
     outcome, cycle, store = _audit(cfg, sha, transcripts, PASS_REPLY)
     assert outcome.verdict == "PASS"
-    receipt, ledger = _receipt_for(cfg, sha, cycle, outcome)
+    receipt, _ledger = _receipt_for(cfg, sha, cycle, outcome)
     store.record_verdict(cycle["cycle_id"], sha, "PASS", digest(receipt), cfg.max_rounds)
 
     evidence = verify(receipt, science_root=science, audit_root=science,
@@ -355,13 +357,13 @@ def test_build_loop_returns_remote_compute_data_to_generator_before_audit(
     cfg = replace(cfg, scope_dirs=["experiments"], max_rounds=1)
 
     code = build_mod.run_loop(
-        cfg, "calculate and report", on_step=lambda actor, text, detail: events.append(
-            (actor, text, detail)))
+        cfg, "calculate and report", on_event=events.append)
 
     assert code == EXIT_ESCALATED
     assert len(calls) == 2
-    assert any(actor == "compute" and text == "requesting remote calculation"
-               for actor, text, _detail in events)
+    assert any(event.actor == "compute" and
+               event.text == "requesting remote calculation"
+               for event in events)
 
 
 def test_build_loop_returns_mcp_tool_data_to_generator_before_audit(
@@ -409,13 +411,12 @@ def test_build_loop_returns_mcp_tool_data_to_generator_before_audit(
     cfg = replace(cfg, scope_dirs=["experiments"], max_rounds=1)
 
     code = build_mod.run_loop(
-        cfg, "use the approved lookup tool", on_step=lambda actor, text, detail:
-        events.append((actor, text, detail)))
+        cfg, "use the approved lookup tool", on_event=events.append)
 
     assert code == EXIT_ESCALATED
     assert len(calls) == 2
-    assert any(actor == "tool" and text == "calling MCP tool"
-               for actor, text, _detail in events)
+    assert any(event.actor == "tool" and event.text == "calling MCP tool"
+               for event in events)
 
 
 def test_generator_provider_refusals_still_create_a_resolvable_ui_cycle(
@@ -606,16 +607,17 @@ def test_admission_is_single_use_under_concurrency(science, cfg, transcripts, mo
     store.record_verdict(cycle["cycle_id"], sha, "PASS", rd, cfg.max_rounds)
 
     state_path = cfg.root / cfg.state_dir / "state.json"
+    source = str(Path(__file__).resolve().parents[1] / "src")
     code = (
-        "import sys; sys.path.insert(0, %r)\n"
+        f"import sys; sys.path.insert(0, {source!r})\n"
         "from crossaudit.controller import StateStore\n"
         "from crossaudit.errors import Denial\n"
         "try:\n"
-        "    StateStore(%r).admit(%r, %r, %r); print('ADMITTED')\n"
-        "except Denial as e:\n"
+        f"    StateStore({str(state_path)!r}).admit({cycle['cycle_id']!r}, "
+        f"{sha!r}, {rd!r}); print('ADMITTED')\n"
+        "except Denial:\n"
         "    print('DENIED')\n"
-    ) % (str(Path(__file__).resolve().parents[1] / "src"), str(state_path),
-         cycle["cycle_id"], sha, rd)
+    )
     procs = [subprocess.Popen([sys.executable, "-c", code], stdout=subprocess.PIPE,
                               text=True) for _ in range(6)]
     outs = [p.communicate()[0].strip() for p in procs]

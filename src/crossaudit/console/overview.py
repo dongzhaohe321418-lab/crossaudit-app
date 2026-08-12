@@ -15,7 +15,6 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
-from pathlib import Path
 
 from ..config import Config
 from ..controller import StateStore
@@ -56,7 +55,7 @@ def read_cycles(cfg: Config) -> list[Cycle]:
     for report in ledger.glob("*/report.md"):
         text = report.read_text(encoding="utf-8")
         name = report.parent.name
-        sha, _, rest = name.partition("-r")
+        sha, _, _rest = name.partition("-r")
         verdict = (VERDICT_RE.search(text) or [None, "?"])[1] if VERDICT_RE.search(text) else "?"
         round_m = ROUND_RE.search(text)
         aud = AUDITOR_RE.search(text)
@@ -202,6 +201,7 @@ def escalations(cfg: Config) -> list[dict]:
         if s["status"] != "ESCALATED":
             continue
         stop_reason = s.get("escalation_reason") or "the automatic audit loop stopped"
+        provider_failure = "provider failure" in stop_reason.lower()
         shas = {str(s.get("root_sha", "")), str(s.get("active_sha", ""))}
         shas.update(str(row.get("sha", "")) for row in history
                     if row.get("cycle") == cid and row.get("sha"))
@@ -220,10 +220,10 @@ def escalations(cfg: Config) -> list[dict]:
             requested = (
                 "Tell the generator how to correct the remaining blockers, or stop "
                 "the task without admitting its output.")
-        elif "provider failure" in stop_reason.lower():
+        elif provider_failure:
             requested = (
-                "Fix the provider, model, or credential setting before allowing "
-                "another round, or stop the task.")
+                "Retry the provider now, review the model connection first, or stop "
+                "the task. No correction guidance is needed because no audit ran.")
         else:
             requested = (
                 "Review why the loop stopped, then either give concrete guidance "
@@ -234,6 +234,8 @@ def escalations(cfg: Config) -> list[dict]:
                     "limit_reached": s["round"] >= cfg.max_rounds,
                     "chat_id": s.get("chat_id", ""), "why": why,
                     "stop_reason": stop_reason, "issues": issues,
+                    "kind": "provider" if provider_failure else "audit",
+                    "task": str(s.get("task", ""))[:12000],
                     "attempts": [{"round": c.round, "verdict": c.verdict,
                                   "findings": len(c.findings)} for c in related],
                     "requested": requested})

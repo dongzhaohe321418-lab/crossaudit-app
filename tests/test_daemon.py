@@ -20,6 +20,15 @@ import pytest
 from crossaudit.config import load
 from crossaudit.console import daemon, serve
 from crossaudit.console.progress import Tracker
+from crossaudit.runtime import (
+    RunEvent,
+    RunJournal,
+    RunState,
+    acquire_workspace_slot,
+    journal_path,
+    release_workspace_slot,
+    workspace_capacity,
+)
 
 CONFIG = (
     "version: 1\nscience_repo: t/p\nconstitution: AUDIT_RULES.md\n"
@@ -77,12 +86,47 @@ def test_liveness_uses_constant_time_health_not_the_expensive_state(running,
 
 def test_spawn_rechecks_liveness_inside_its_start_lock(cfg, monkeypatch):
     existing = {"pid": 7, "port": 8, "token": "already-running"}
-    monkeypatch.setattr(daemon, "live", lambda _cfg: existing)
+    monkeypatch.setattr(daemon, "reusable_for_launch", lambda _cfg: existing)
     monkeypatch.setattr(
         daemon.subprocess, "Popen",
         lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("duplicate spawn")))
     assert daemon.spawn(cfg, 0) == existing
     assert not (cfg.root / cfg.state_dir / "console-start.lock").exists()
+
+
+def test_run_record_pins_the_worker_runtime_identity(running):
+    cfg, _url = running
+    info = daemon.read_run(cfg)
+
+    assert info["runtime"]["version"]
+    assert len(info["runtime"]["code_digest_sha256"]) == 64
+    assert daemon.runtime_matches(info, root=cfg.root)
+
+
+def test_idle_worker_from_older_code_is_restarted_on_next_launch(cfg, monkeypatch):
+    old = {"pid": 7, "port": 8, "token": "old"}
+    seen = []
+    monkeypatch.setattr(daemon, "live", lambda _cfg: old)
+    monkeypatch.setattr(daemon, "runtime_matches", lambda *_a, **_k: False)
+    monkeypatch.setattr(daemon, "fetch_state",
+                        lambda _info: {"progress": {"finished": True}})
+    monkeypatch.setattr(daemon, "stop", lambda _cfg: seen.append("stopped") or "stopped")
+
+    assert daemon.reusable_for_launch(cfg) is None
+    assert seen == ["stopped"]
+
+
+def test_active_worker_from_older_code_finishes_before_restart(cfg, monkeypatch):
+    old = {"pid": 7, "port": 8, "token": "old"}
+    monkeypatch.setattr(daemon, "live", lambda _cfg: old)
+    monkeypatch.setattr(daemon, "runtime_matches", lambda *_a, **_k: False)
+    monkeypatch.setattr(daemon, "fetch_state",
+                        lambda _info: {"progress": {"finished": False}})
+    monkeypatch.setattr(
+        daemon, "stop",
+        lambda _cfg: (_ for _ in ()).throw(AssertionError("active run was stopped")))
+
+    assert daemon.reusable_for_launch(cfg) is old
 
 
 def test_the_run_file_is_not_world_readable(running):
@@ -128,58 +172,54 @@ def test_stopping_when_nothing_runs_says_so(cfg):
 
 # -------------------------------------------------------- interrupted builds
 def test_a_build_in_flight_from_a_dead_process_reads_as_interrupted(cfg):
-    daemon.mark_build(cfg, "write the section")
-    # Rewrite the flag as if another, now-dead process had left it.
-    flag = json.loads(daemon.flag_path(cfg).read_text())
-    flag["pid"] = 999999
-    daemon.flag_path(cfg).write_text(json.dumps(flag))
+    journal = RunJournal(journal_path(cfg))
+    run_id = journal.start("write the section", owner_pid=999999)
+    journal.append(run_id, RunEvent(
+        actor="generator", text="writing", detail="drafting report",
+        state=RunState.GENERATING))
     found = daemon.interrupted(cfg)
     assert found and found["task"] == "write the section"
+    assert found["phase"] == "generator" and found["detail"] == "drafting report"
 
 
 def test_our_own_running_build_is_not_reported_as_interrupted(cfg):
-    daemon.mark_build(cfg, "still going")
+    RunJournal(journal_path(cfg)).start("still going", owner_pid=os.getpid())
     assert daemon.interrupted(cfg) is None
 
 
 def test_caught_worker_failure_remains_recoverable_in_the_same_process(cfg):
-    daemon.mark_build(cfg, "recover this", chat_id="history")
-    daemon.mark_failed(cfg, "failed", "RuntimeError: worker stopped")
+    journal = RunJournal(journal_path(cfg))
+    run_id = journal.start("recover this", chat_id="history")
+    journal.append(run_id, RunEvent(
+        actor="generator", text="writing", state=RunState.GENERATING))
+    journal.finish(run_id, "failed", "RuntimeError: worker stopped")
     found = daemon.interrupted(cfg)
     assert found["task"] == "recover this"
     assert found["phase"] == "failed" and found["failed"] is True
 
 
-def test_a_finished_build_leaves_nothing_behind(cfg):
-    daemon.mark_build(cfg, "done soon")
-    daemon.unmark_build(cfg)
+def test_a_finished_build_is_not_mistaken_for_an_interruption(cfg):
+    journal = RunJournal(journal_path(cfg))
+    run_id = journal.start("done soon")
+    journal.finish(run_id, "passed")
     assert daemon.interrupted(cfg) is None
-    assert not daemon.flag_path(cfg).exists()
+    assert journal_path(cfg).is_file()
 
 
 def test_the_state_endpoint_surfaces_an_interruption(running):
     cfg, url = running
-    daemon.mark_build(cfg, "cut off mid-round")
-    flag = json.loads(daemon.flag_path(cfg).read_text())
-    flag["pid"] = 999999
-    daemon.flag_path(cfg).write_text(json.dumps(flag))
-
-    import urllib.request
+    journal = RunJournal(journal_path(cfg))
+    journal.start("cut off mid-round", owner_pid=999999)
 
     with urllib.request.urlopen(url.replace("/?", "/api/state?"), timeout=5) as r:
         data = json.loads(r.read())
     assert data["interrupted"]["task"] == "cut off mid-round"
-    daemon.unmark_build(cfg)
+    RunJournal(journal_path(cfg)).dismiss_interruption()
 
 
 def test_interrupted_notice_can_be_dismissed_through_the_ui_api(running):
     cfg, url = running
-    daemon.mark_build(cfg, "preserve this work")
-    flag = json.loads(daemon.flag_path(cfg).read_text())
-    flag["pid"] = 999999
-    daemon.flag_path(cfg).write_text(json.dumps(flag))
-
-    import urllib.request
+    RunJournal(journal_path(cfg)).start("preserve this work", owner_pid=999999)
 
     endpoint = url.replace("/?", "/api/interrupted?")
     request = urllib.request.Request(
@@ -198,7 +238,8 @@ def test_a_running_build_keeps_the_console_alive(cfg, monkeypatch):
     import crossaudit.console.server as server_mod
 
     tracker = Tracker()
-    tracker.start("long job")
+    tracker.bind(journal_path(cfg))
+    RunJournal(journal_path(cfg)).start("long job")
     monkeypatch.setattr(server_mod, "TRACKER", tracker)
 
     url, httpd = serve(cfg, port=0, idle_timeout=0.05)
@@ -263,7 +304,7 @@ def test_the_signal_handler_never_blocks_the_loop_it_is_stopping():
 
     src = (Path(__file__).resolve().parents[1] / "src" / "crossaudit" / "cli"
            / "main.py").read_text()
-    body = re.search(r"def bye\(\*_a\) -> None:\n(.*?)signal\.signal", src, re.S).group(1)
+    body = re.search(r"def bye\(\*_a\) -> None:\n(.*?)signal\.signal", src, re.DOTALL).group(1)
     assert "httpd.shutdown" in body
     assert "Thread" in body, "shutdown() must not run on the serving thread"
     assert "clear_run" not in body, (
@@ -339,20 +380,22 @@ def test_workspace_capacity_is_cross_project_and_recoverable(cfg, tmp_path, monk
     (other_root / "AUDIT_RULES.md").write_text("### CA-X-001\n**BLOCKER.** exact\n")
     (other_root / "crossaudit.yml").write_text(CONFIG)
     other = load(other_root / "crossaudit.yml")
-    slot = daemon.acquire_workspace_slot(cfg)
-    assert daemon.workspace_capacity(cfg)["active"] == 1
+    slot = acquire_workspace_slot(cfg)
+    assert workspace_capacity(cfg)["active"] == 1
     with pytest.raises(ConfigDenial, match="capacity is 1"):
-        daemon.acquire_workspace_slot(other)
-    daemon.release_workspace_slot(slot)
-    other_slot = daemon.acquire_workspace_slot(other)
+        acquire_workspace_slot(other)
+    release_workspace_slot(slot)
+    other_slot = acquire_workspace_slot(other)
     assert other_slot.is_file()
-    daemon.release_workspace_slot(other_slot)
+    release_workspace_slot(other_slot)
 
 
 def test_stale_workspace_slots_are_reclaimed(cfg):
-    base = daemon._runtime_dir(cfg)
+    from crossaudit.runtime.workspaces import _runtime_dir
+
+    base = _runtime_dir(cfg)
     base.mkdir(parents=True, exist_ok=True)
     (base / "slot-dead.json").write_text(json.dumps({"pid": 999999,
                                                       "root": "/gone"}))
-    assert daemon.workspace_capacity(cfg)["active"] == 0
+    assert workspace_capacity(cfg)["active"] == 0
     assert not (base / "slot-dead.json").exists()

@@ -40,6 +40,7 @@ PAGE = r"""<!doctype html>
   --shadow:0 10px 30px rgba(0,0,0,.24);
 }
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 html,body{margin:0;height:100%;overflow:hidden}
 body{background:var(--surface);color:var(--text);font:13px/1.45 Inter,
   -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif}
@@ -76,6 +77,16 @@ button{cursor:pointer}
 .nav-item:hover{background:var(--surface-2);color:var(--text)}
 .nav-item.active{background:var(--hover);color:var(--text);font-weight:560}
 .nav-icon{width:16px;text-align:center;color:var(--faint)}
+.nav-disclosure{margin-top:4px}.nav-disclosure>summary{min-height:32px;padding:0 9px;border-radius:7px;
+  display:grid;grid-template-columns:16px minmax(0,1fr) auto;align-items:center;gap:9px;color:var(--muted);
+  cursor:pointer;list-style:none;font-size:11.5px}.nav-disclosure>summary::-webkit-details-marker{display:none}
+.nav-disclosure>summary:hover{background:var(--surface-2);color:var(--text)}.nav-disclosure>summary:after{
+  content:"";width:13px;height:13px;background:var(--faint);transition:transform .2s var(--spring);
+  -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m8 10 4 4 4-4'/%3E%3C/svg%3E") center/contain no-repeat;
+  mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m8 10 4 4 4-4'/%3E%3C/svg%3E") center/contain no-repeat}
+.nav-disclosure[open]>summary:after{transform:rotate(180deg)}.nav-more-icon{width:16px;text-align:center;
+  color:var(--faint);font-size:15px;line-height:1}.nav-secondary{margin:3px 0 0 8px;padding-left:8px;
+  border-left:1px solid var(--line)}.nav-secondary .nav-item{height:30px;font-size:11px}
 .side-label{font-size:10px;text-transform:uppercase;letter-spacing:.09em;color:var(--faint);
   padding:13px 10px 7px;font-weight:650}.task-list{overflow:auto;min-height:0}
 .task{padding:8px 7px 8px 10px;border-radius:8px;margin-bottom:2px;display:flex;align-items:center;
@@ -292,6 +303,9 @@ button{cursor:pointer}
 .audit-evidence-head h3{margin:0;font-size:13px}.audit-evidence-head span{color:var(--faint);font-size:10px}
 .interrupted{margin-bottom:20px;padding:10px 12px;background:var(--amber-bg);color:var(--amber);
   border-radius:9px;font-size:12px;display:none}.interrupted.on{display:block}
+.interrupted-detail{display:block;margin:7px 0;padding:7px 8px;border-radius:7px;
+  background:color-mix(in srgb,var(--surface) 68%,transparent);color:var(--text);font-size:10.5px;
+  line-height:1.45;overflow-wrap:anywhere}
 .interrupted-actions{display:flex;gap:7px;margin-top:9px}.interrupted-actions button{height:29px;border-radius:7px;
   border:1px solid currentColor;background:var(--surface);color:var(--amber);padding:0 10px;cursor:pointer}
 
@@ -303,19 +317,6 @@ button{cursor:pointer}
   padding:8px}.composer.drag{border-color:var(--blue);box-shadow:0 0 0 3px var(--blue-bg),var(--shadow)}
 .contract-preview{display:none;margin:1px 3px 7px;padding:7px 9px;border-radius:8px;background:var(--blue-bg);
   color:var(--muted);font-size:10px;line-height:1.4}.contract-preview.on{display:block}.contract-preview b{color:var(--blue)}
-.task-choices{display:none;margin:2px 3px 8px;padding:11px;border:1px solid var(--line);border-radius:10px;
-  background:var(--panel)}.task-choices.on{display:block}.choice-head{display:flex;gap:10px;align-items:flex-start;
-  margin-bottom:9px}.choice-head b{display:block;font-size:11.5px}.choice-head span{display:block;color:var(--muted);
-  font-size:10px;margin-top:2px}.choice-close{margin-left:auto;border:0;background:transparent;color:var(--faint);
-  font-size:16px}.choice-group{display:grid;grid-template-columns:72px minmax(0,1fr);gap:7px;align-items:start;
-  margin-top:7px}.choice-label{font-size:9.5px;color:var(--faint);padding-top:6px;text-transform:uppercase;
-  letter-spacing:.06em;font-weight:650}.choice-options{display:flex;gap:5px;flex-wrap:wrap}.choice-option input{position:absolute;
-  opacity:0;pointer-events:none}.choice-option span{display:block;border:1px solid var(--line);border-radius:7px;
-  background:var(--surface);padding:5px 8px;font-size:9.5px;color:var(--muted);cursor:pointer}
-.choice-option input:checked+span{border-color:var(--blue);background:var(--blue-bg);color:var(--blue);
-  font-weight:650}.choice-option input:disabled+span{opacity:.42;cursor:not-allowed;text-decoration:line-through}
-.choice-note{font-size:9.5px;color:var(--faint);margin:7px 0 0 79px}.choice-actions{display:flex;
-  justify-content:flex-end;gap:6px;margin-top:10px}.choice-actions button{height:29px;font-size:10px}
 .attachments{display:none;gap:6px;padding:3px 3px 8px;max-height:172px;overflow:auto}
 .attachments.on{display:grid;grid-template-columns:repeat(auto-fit,minmax(205px,1fr))}
 .attachment{position:relative;display:grid;grid-template-columns:28px minmax(0,1fr) 20px;align-items:center;
@@ -331,11 +332,6 @@ button{cursor:pointer}
 .attachment.failed{border-color:var(--red)}.attachment.failed .attachment-state{color:var(--red)}
 .attachment-note{grid-column:1/-1;color:var(--muted);font-size:10.5px;padding:1px 2px;display:flex;gap:7px;
   align-items:center}.attachment-note b{color:var(--text);font-weight:620}.attachment-more{color:var(--blue)}
-.transfer-consent{display:none;margin:6px 3px 1px;padding:9px 10px;border-radius:9px;
-  background:var(--amber-bg);color:var(--muted);font-size:11px;align-items:center;gap:10px}
-.transfer-consent.on{display:flex}.transfer-consent b{display:block;color:var(--amber);font-weight:650}
-.transfer-consent button{margin-left:auto;flex:none;border:0;border-radius:7px;padding:7px 9px;
-  background:var(--inverse);color:var(--inverse-text);font-weight:600}
 .audience-bar{display:flex;align-items:center;gap:5px;padding:1px 3px 5px}.audience-label{font-size:9.5px;
   color:var(--faint);margin-right:2px}.audience-chip{height:23px;border:1px solid var(--line);border-radius:6px;
   background:transparent;color:var(--muted);padding:0 7px;font-size:9.5px}.audience-chip:hover{background:var(--hover)}
@@ -346,8 +342,12 @@ textarea::placeholder{color:var(--faint)}.compose-button{border:0;background:tra
   width:34px;height:34px;border-radius:9px;display:grid;place-items:center;color:var(--muted);flex:none}
 .compose-button:hover{background:var(--hover)}.send{background:var(--inverse);color:var(--inverse-text)}
 .send:hover{background:var(--send-hover)}.send:disabled{opacity:.35;cursor:default}
-.stop{background:var(--red);color:var(--inverse-text)}
+.stop{background:var(--red);color:#fff}.stop:hover{background:color-mix(in srgb,var(--red) 82%,#000)}
+.stop:disabled{opacity:.62;cursor:wait}
 .composer-meta{display:flex;align-items:center;gap:8px;padding:4px 5px 1px;color:var(--faint);font-size:10px}
+.autonomy-summary{display:inline-flex;align-items:center;gap:4px;border-left:1px solid var(--line);
+  padding-left:8px;color:var(--muted)}.autonomy-summary::before{content:'·';color:var(--green);font-size:14px;
+  line-height:0}.autonomy-summary:hover{color:var(--text)}
 .route{display:none;margin:7px 3px 0;padding:7px 9px;border-radius:7px;background:var(--surface-2);
   color:var(--muted);font-size:11px;white-space:pre-wrap;word-break:break-word}.route.on{display:block}
 .drop-overlay{position:fixed;inset:0;z-index:100;display:none;place-items:center;padding:26px;
@@ -443,7 +443,6 @@ textarea::placeholder{color:var(--faint)}.compose-button{border:0;background:tra
   .loop-detail{display:block;grid-column:2/4;grid-row:2;margin:3px 0 0;min-height:0;-webkit-line-clamp:3}
   .loop-focus{margin:0 12px 12px;grid-template-columns:1fr;gap:3px}.activity{padding:11px 12px 13px}
   .audit-event{grid-template-columns:24px minmax(0,1fr)}.event-time{grid-column:2;margin-top:-2px}
-  .choice-group{grid-template-columns:1fr}.choice-label{padding-top:0}.choice-note{margin-left:0}
   .decision-options{grid-template-columns:1fr}
   .usage-roles{grid-template-columns:1fr}.usage-cards{grid-template-columns:1fr 1fr}.usage-card-value{font-size:18px}
   .usage-bars{gap:4px;padding-left:6px;padding-right:6px}.usage-day-value{display:none}
@@ -556,6 +555,25 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
   border-radius:7px;background:var(--surface);color:var(--muted);cursor:pointer}.fallback-empty{color:var(--faint);
   font-size:10px;padding:8px 0}.guardrail-state{font-size:10px;color:var(--muted);margin-top:8px}
 .custom-model.off{display:none}
+.runtime-wizard{width:min(980px,100%);height:min(740px,calc(100vh - 40px));display:flex;
+  flex-direction:column;overflow:hidden}.runtime-wizard>.wizard-head,.runtime-wizard>.wizard-foot{flex:none}
+.runtime-shell{min-height:0;flex:1;padding:0;display:grid;grid-template-columns:200px minmax(0,1fr);overflow:hidden}
+.runtime-nav{display:flex;flex-direction:column;gap:5px;padding:13px;border-right:1px solid var(--line);
+  background:color-mix(in srgb,var(--panel) 88%,transparent)}.runtime-nav-button{width:100%;min-height:48px;
+  padding:8px 10px;border:0;border-radius:11px;background:transparent;color:var(--muted);text-align:left;
+  transition:background .16s ease,transform .22s var(--spring)}.runtime-nav-button:hover{background:var(--hover);
+  color:var(--text)}.runtime-nav-button:active{transform:scale(.98)}.runtime-nav-button.active{
+  background:var(--glass-strong);color:var(--text);box-shadow:0 4px 15px rgba(42,52,70,.08),
+  inset 0 0 0 1px var(--line)}.runtime-nav-button b{display:block;font-size:11.5px}.runtime-nav-button small{
+  display:block;margin-top:2px;color:var(--faint);font-size:9px}.runtime-content{min-width:0;overflow:auto;
+  padding:24px 25px}.runtime-pane[hidden]{display:none}.runtime-pane-heading{margin:0 0 17px}.runtime-pane-heading h3{
+  margin:0;font-size:14px;letter-spacing:-.015em}.runtime-pane-heading p{margin:4px 0 0;color:var(--muted);
+  font-size:10.5px;line-height:1.5}.runtime-advanced{margin-top:14px;border:1px solid var(--line);border-radius:11px;
+  background:var(--panel);overflow:hidden}.runtime-advanced>summary{min-height:46px;padding:0 13px;display:flex;
+  align-items:center;gap:8px;cursor:pointer;list-style:none;color:var(--text);font-size:11px;font-weight:640}
+.runtime-advanced>summary::-webkit-details-marker{display:none}.runtime-advanced>summary:after{content:'⌄';margin-left:auto;
+  color:var(--faint);transition:transform .2s var(--spring)}.runtime-advanced[open]>summary:after{transform:rotate(180deg)}
+.runtime-advanced-body{border-top:1px solid var(--line);padding:13px}.runtime-content>.wizard-error{margin-top:12px}
 .github-box{border:1px solid var(--line);border-radius:10px;padding:14px;background:var(--panel)}
 .toggle-line{display:flex;align-items:flex-start;gap:10px}.toggle-line input{margin-top:3px}.toggle-line b{display:block}
 .toggle-line small{display:block;color:var(--muted);margin-top:2px}.github-fields{margin-top:14px}
@@ -712,7 +730,8 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
   --glass:rgba(250,252,255,.72);--glass-strong:rgba(255,255,255,.86);
   --glass-edge:rgba(255,255,255,.76);--glass-shadow:0 18px 54px rgba(42,52,70,.13),
     inset 0 1px 0 rgba(255,255,255,.74);--shadow:0 10px 34px rgba(42,52,70,.1);
-  --spring:cubic-bezier(.22,.78,.18,1);--topbar-height:56px;
+  --spring:cubic-bezier(.22,.78,.18,1);--topbar-height:64px;
+  --z-content:1;--z-chrome:40;--z-composer:50;--z-overlay:100;
 }
 :root[data-theme="dark"]{
   --bg:#0d1117;--panel:rgba(24,29,37,.74);--surface:#1b2028;
@@ -730,20 +749,21 @@ body.hub-mode .app{display:none}body.hub-mode .project-hub{display:block}
 }
 html{background:var(--bg)}
 body{background:
-  radial-gradient(72% 62% at 88% -8%,rgba(82,151,255,.13),transparent 68%),
-  radial-gradient(55% 54% at -8% 96%,rgba(139,112,226,.08),transparent 72%),var(--bg);
+  radial-gradient(72% 62% at 88% -8%,rgba(82,151,255,.18),transparent 66%),
+  radial-gradient(55% 54% at -8% 96%,rgba(139,112,226,.11),transparent 70%),var(--bg);
   font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display",
-    "Helvetica Neue","PingFang SC",sans-serif;-webkit-font-smoothing:antialiased}
-button,input,select,textarea{-webkit-tap-highlight-color:transparent}
+    "Helvetica Neue","PingFang SC",sans-serif;font-optical-sizing:auto;-webkit-font-smoothing:antialiased}
+button,input,select,textarea{-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,
 a:focus-visible{outline:3px solid color-mix(in srgb,var(--blue) 34%,transparent);
   outline-offset:2px}
 .app{grid-template-rows:var(--topbar-height) minmax(0,1fr);background:transparent}
 .topbar,.hub-bar{
-  background:var(--header-bg);border-color:var(--line);box-shadow:inset 0 1px 0 var(--glass-edge);
+  background:var(--header-bg);border:1px solid var(--glass-edge);border-radius:16px;
+  box-shadow:0 12px 34px rgba(42,52,70,.1),inset 0 1px 0 var(--glass-edge);
   -webkit-backdrop-filter:blur(26px) saturate(155%);backdrop-filter:blur(26px) saturate(155%)}
-.topbar{height:var(--topbar-height);padding:0 16px;gap:8px}
-.hub-bar{height:var(--topbar-height);padding:0 24px}
+.topbar{height:48px;margin:8px 10px 0;padding:0 12px;gap:8px;z-index:var(--z-chrome)}
+.hub-bar{height:48px;margin:8px 10px 0;padding:0 14px;top:8px;z-index:var(--z-chrome)}
 .brand-button{height:36px;padding:0 8px 0 3px;border-radius:11px;transition:background .18s var(--spring),
   transform .24s var(--spring)}.brand-button:hover{opacity:1;background:var(--hover)}
 .brand-button:active{transform:scale(.975)}
@@ -753,17 +773,56 @@ a:focus-visible{outline:3px solid color-mix(in srgb,var(--blue) 34%,transparent)
   inset 0 1px 0 rgba(255,255,255,.9)}
 :root[data-theme="dark"] .brand-mark{background:linear-gradient(145deg,rgba(86,105,133,.75),rgba(31,39,50,.88));
   box-shadow:0 6px 18px rgba(0,0,0,.24),inset 0 1px 0 rgba(255,255,255,.18)}
+.brand-mark,.welcome-mark{font-size:0}.brand-mark:before,.welcome-mark:before{content:"";width:12px;height:12px;
+  border:1.8px solid var(--blue);border-radius:4px;transform:rotate(45deg);box-shadow:inset 0 0 0 2px
+  color-mix(in srgb,var(--blue) 10%,transparent)}
 .version{border:0;background:var(--blue-bg);color:var(--blue);border-radius:99px;padding:3px 7px}
 .top-project{height:34px;margin-left:4px;padding:0 11px;border:0;border-radius:10px;background:transparent;
   display:flex;align-items:center;gap:5px;color:var(--muted)}.top-project:hover{background:var(--hover)}
 .icon-button{width:34px;height:34px;border-radius:10px;transition:background .16s ease,
   color .16s ease,transform .22s var(--spring)}.icon-button:active{transform:scale(.92)}
+#hub-locale,#locale-toggle{width:auto;min-width:44px;padding:0 8px;white-space:nowrap;font-size:10px}
+.icon-button:hover,.nav-item:hover,.new-task:hover,.secondary:hover,.runtime-button:hover{color:var(--text)}
+.icon-button:disabled,.nav-item:disabled,.secondary:disabled{cursor:not-allowed;opacity:.45}
+.brand-button,.icon-button,.nav-item,.new-task,.primary,.secondary,.runtime-button{user-select:none}
+
+/* A single outline icon language avoids font-dependent symbols in application chrome. */
+#hub-settings,#settings-open,#hub-theme,#theme-toggle,#sidebar-toggle,#back-projects,
+#current-project-pin,#inspect-toggle,.pin-button,.project-pin,.nav-icon,.new-task>span:first-child,
+.hpc-host-intro-icon,.project-delete,.task-delete,.project-arrow,[data-preview].artifact-action,
+.artifact-action[download]{font-size:0}
+#hub-settings:before,#settings-open:before,#hub-theme:before,#theme-toggle:before,#sidebar-toggle:before,
+#back-projects:before,#current-project-pin:before,#inspect-toggle:before,.pin-button:before,
+.project-pin:before,.nav-icon:before,.new-task>span:first-child:before,.hpc-host-intro-icon:before,
+.project-delete:before,.task-delete:before,.project-arrow:before,[data-preview].artifact-action:before,
+.artifact-action[download]:before,.top-project:after{content:"";display:block;width:17px;height:17px;background:currentColor;
+  -webkit-mask:var(--ui-icon) center/contain no-repeat;mask:var(--ui-icon) center/contain no-repeat}
+#hub-settings,#settings-open{--ui-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3Cpath d='M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21h-4v-.09A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3v-4h.09A1.7 1.7 0 0 0 4.6 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3h4v.09A1.7 1.7 0 0 0 15.4 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.14.36.35.7.6 1 .28.28.66.42 1.1.4H21v4h-.09A1.7 1.7 0 0 0 19.4 15Z'/%3E%3C/svg%3E")}
+#hub-theme,#theme-toggle{--ui-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20.7 15.1A9 9 0 1 1 8.9 3.3a7 7 0 0 0 11.8 11.8Z'/%3E%3C/svg%3E")}
+:root[data-theme="dark"] #hub-theme,:root[data-theme="dark"] #theme-toggle{--ui-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='4'/%3E%3Cpath d='M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4'/%3E%3C/svg%3E")}
+#sidebar-toggle{--ui-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round'%3E%3Cpath d='M4 6h16M4 12h11M4 18h16'/%3E%3C/svg%3E")}
+#back-projects{--ui-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m15 18-6-6 6-6'/%3E%3C/svg%3E")}
+#current-project-pin,.pin-button,.project-pin{--ui-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m14 4 6 6-3 1-4 4-1 5-3-3-3-3 5-1 4-4 1-3Z'/%3E%3Cpath d='m5 19 4-4'/%3E%3C/svg%3E")}
+#inspect-toggle{--ui-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round'%3E%3Cpath d='M4 6h10M18 6h2M4 12h2M10 12h10M4 18h7M15 18h5'/%3E%3Ccircle cx='16' cy='6' r='2'/%3E%3Ccircle cx='8' cy='12' r='2'/%3E%3Ccircle cx='13' cy='18' r='2'/%3E%3C/svg%3E")}
+.new-task>span:first-child{--ui-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round'%3E%3Cpath d='M12 5v14M5 12h14'/%3E%3C/svg%3E")}
+.top-project{--ui-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m8 10 4 4 4-4'/%3E%3C/svg%3E")}.top-project:after{width:13px;height:13px}
+.nav-item[data-view="tasks"] .nav-icon{--ui-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linejoin='round'%3E%3Cpath d='M5 5h14v11H9l-4 3V5Z'/%3E%3C/svg%3E")}
+.nav-item[data-view="artifacts"] .nav-icon{--ui-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linejoin='round'%3E%3Cpath d='M6 3h8l4 4v14H6V3Z'/%3E%3Cpath d='M14 3v5h4M9 12h6M9 16h6'/%3E%3C/svg%3E")}
+.nav-item[data-view="audits"] .nav-icon{--ui-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3 19 6v5c0 4.5-2.8 7.9-7 10-4.2-2.1-7-5.5-7-10V6l7-3Z'/%3E%3Cpath d='m9 12 2 2 4-4'/%3E%3C/svg%3E")}
+.nav-item[data-view="usage"] .nav-icon{--ui-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round'%3E%3Cpath d='M5 19V9M12 19V5M19 19v-7'/%3E%3C/svg%3E")}
+.nav-item[data-view="compute"] .nav-icon,.hpc-host-intro-icon{--ui-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='16' rx='3'/%3E%3Cpath d='m7 9 3 3-3 3M13 15h4'/%3E%3C/svg%3E")}
+.nav-item[data-view="tools"] .nav-icon{--ui-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round'%3E%3Ccircle cx='7' cy='7' r='3'/%3E%3Ccircle cx='17' cy='7' r='3'/%3E%3Ccircle cx='7' cy='17' r='3'/%3E%3Cpath d='M14 17h6M17 14v6'/%3E%3C/svg%3E")}
+.project-delete,.task-delete{--ui-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6'/%3E%3C/svg%3E")}
+.project-arrow{--ui-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 6 6 6-6 6'/%3E%3C/svg%3E")}
+[data-preview].artifact-action{--ui-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 12s3.3-6 9-6 9 6 9 6-3.3 6-9 6-9-6-9-6Z'/%3E%3Ccircle cx='12' cy='12' r='2.5'/%3E%3C/svg%3E")}
+.artifact-action[download]{--ui-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3v12M7 10l5 5 5-5M5 20h14'/%3E%3C/svg%3E")}
 .live-pill{height:30px;border-color:var(--line);border-radius:99px;background:rgba(255,255,255,.32);
   box-shadow:inset 0 1px 0 var(--glass-edge)}
 :root[data-theme="dark"] .live-pill{background:rgba(255,255,255,.04)}
 .sidebar,.inspector{background:var(--panel);border-color:var(--line);
   -webkit-backdrop-filter:blur(28px) saturate(145%);backdrop-filter:blur(28px) saturate(145%)}
-.sidebar{padding:13px 11px 14px;box-shadow:inset -1px 0 0 rgba(255,255,255,.22)}
+.sidebar{margin:0 0 8px 8px;padding:13px 11px 14px;border:1px solid var(--glass-edge);
+  border-radius:18px;box-shadow:0 14px 40px rgba(42,52,70,.08),inset 0 1px 0 var(--glass-edge)}
 .new-task{height:39px;border-color:var(--line);border-radius:11px;background:var(--glass-strong);
   box-shadow:0 4px 14px rgba(42,52,70,.07),inset 0 1px 0 var(--glass-edge);
   transition:transform .22s var(--spring),background .16s ease}.new-task:hover{background:var(--surface)}
@@ -775,13 +834,23 @@ a:focus-visible{outline:3px solid color-mix(in srgb,var(--blue) 34%,transparent)
 .side-label{padding-top:15px}.task{border-radius:10px;padding:9px 8px 9px 10px}
 .task.active{background:var(--glass-strong);box-shadow:0 3px 14px rgba(42,52,70,.08),
   inset 0 0 0 1px var(--line)}
-.workspace{background:transparent}.thread-head{height:64px;border-color:var(--line);padding:0 24px;
-  background:color-mix(in srgb,var(--surface) 72%,transparent)}
+.workspace{position:relative;z-index:var(--z-content);margin:0 8px 8px;border:1px solid var(--line);
+  border-radius:18px;background:color-mix(in srgb,var(--surface) 94%,transparent);overflow:hidden;
+  box-shadow:0 18px 46px rgba(42,52,70,.07)}
+.thread-head{height:64px;border-color:var(--line);padding:0 24px;
+  background:color-mix(in srgb,var(--surface) 88%,transparent)}
 .thread-title h1{font-size:15px;font-weight:650}.runtime-button{height:32px;border-radius:10px;
   background:var(--glass-strong);box-shadow:inset 0 1px 0 var(--glass-edge)}
 .thread{scrollbar-color:color-mix(in srgb,var(--muted) 34%,transparent) transparent}
 .thread::-webkit-scrollbar{width:12px}.thread::-webkit-scrollbar-thumb{
   background:color-mix(in srgb,var(--muted) 38%,transparent);border:4px solid transparent}
+:is(.project-hub,.thread,.task-list,.inspector,.wizard,.attachments,.preview-body){scrollbar-width:thin;
+  scrollbar-color:color-mix(in srgb,var(--muted) 34%,transparent) transparent;scroll-padding-bottom:24px}
+:is(.project-hub,.thread,.task-list,.inspector,.wizard,.attachments,.preview-body)::-webkit-scrollbar{width:10px;height:10px}
+:is(.project-hub,.thread,.task-list,.inspector,.wizard,.attachments,.preview-body)::-webkit-scrollbar-track{background:transparent}
+:is(.project-hub,.thread,.task-list,.inspector,.wizard,.attachments,.preview-body)::-webkit-scrollbar-thumb{
+  min-height:36px;border:3px solid transparent;border-radius:99px;background:
+  color-mix(in srgb,var(--muted) 42%,transparent);background-clip:padding-box}
 .thread-inner{width:min(820px,calc(100% - 56px));padding-top:34px}
 .welcome-mark{border-radius:13px;background:var(--glass-strong);color:var(--blue);
   border:1px solid var(--glass-edge);box-shadow:var(--shadow)}
@@ -792,8 +861,8 @@ a:focus-visible{outline:3px solid color-mix(in srgb,var(--blue) 34%,transparent)
   box-shadow:0 12px 36px rgba(42,52,70,.09)}
 .run-overview{background:var(--surface);padding:17px 18px 15px}.loop{padding:20px 18px 15px}
 .loop-focus{margin:0 18px 17px;border-radius:12px;background:var(--surface-2)}
-.composer-wrap{left:var(--sidebar);padding:34px 20px 14px;background:linear-gradient(180deg,transparent,
-  color-mix(in srgb,var(--bg) 66%,transparent) 30%,var(--bg) 82%)}
+.composer-wrap{left:var(--sidebar);padding:34px 20px 16px;background:linear-gradient(180deg,transparent,
+  color-mix(in srgb,var(--bg) 66%,transparent) 30%,var(--bg) 82%);z-index:var(--z-composer)}
 .composer{width:min(820px,100%);padding:9px;border-color:var(--glass-edge);border-radius:20px;
   background:var(--glass);box-shadow:var(--glass-shadow);-webkit-backdrop-filter:blur(30px) saturate(165%);
   backdrop-filter:blur(30px) saturate(165%);transition:border-color .18s ease,box-shadow .2s ease,
@@ -802,9 +871,10 @@ a:focus-visible{outline:3px solid color-mix(in srgb,var(--blue) 34%,transparent)
   box-shadow:0 22px 64px rgba(42,72,116,.17),inset 0 1px 0 var(--glass-edge)}
 .compose-button{border-radius:11px}.compose-button.send{background:var(--blue);color:#fff;
   box-shadow:0 5px 15px rgba(22,113,232,.28)}.compose-button.send:hover{background:var(--send-hover)}
-.audience-chip,.choice-option{border-radius:9px}.audience-chip.active{background:var(--surface);
+.audience-chip{border-radius:9px}.audience-chip.active{background:var(--surface);
   box-shadow:0 2px 8px rgba(42,52,70,.07),inset 0 0 0 1px var(--line)}
-.inspector{box-shadow:inset 1px 0 0 rgba(255,255,255,.18)}
+.inspector{top:var(--topbar-height);right:8px;bottom:8px;border:1px solid var(--glass-edge);
+  border-radius:18px;box-shadow:var(--glass-shadow)}
 .inspect-head{height:64px}.inspect-section{border-color:var(--line)}
 .model,.kv{border-radius:9px}.model:hover,.kv:hover{background:var(--hover)}
 .project-hub{background:
@@ -824,11 +894,13 @@ a:focus-visible{outline:3px solid color-mix(in srgb,var(--blue) 34%,transparent)
 .primary:hover{background:var(--blue);filter:brightness(1.04)}.primary:active{transform:scale(.97)}
 .secondary{height:36px;border-color:var(--line);border-radius:10px;background:var(--glass-strong);
   box-shadow:inset 0 1px 0 var(--glass-edge)}
-.project-modal{background:rgba(17,22,29,.28);-webkit-backdrop-filter:blur(18px) saturate(125%);
-  backdrop-filter:blur(18px) saturate(125%)}
+.project-modal{z-index:var(--z-overlay);background:rgba(17,22,29,.28);
+  -webkit-backdrop-filter:blur(18px) saturate(125%);backdrop-filter:blur(18px) saturate(125%)}
 .wizard{border-color:var(--glass-edge);border-radius:20px;background:var(--glass-strong);
   box-shadow:0 30px 100px rgba(12,18,28,.3),inset 0 1px 0 var(--glass-edge);
   -webkit-backdrop-filter:blur(34px) saturate(150%);backdrop-filter:blur(34px) saturate(150%)}
+.project-modal.on .wizard{transform-origin:50% 14%;animation:materialize .28s var(--spring) both}
+@keyframes materialize{from{opacity:0;transform:translateY(10px) scale(.975)}to{opacity:1;transform:none}}
 .wizard-head{padding:23px 25px 18px}.wizard-head h2{font-size:19px;letter-spacing:-.03em}
 .wizard-body{padding:24px 25px}.wizard-foot{padding:16px 25px;background:rgba(255,255,255,.2)}
 :root[data-theme="dark"] .wizard-foot{background:rgba(255,255,255,.025)}
@@ -843,27 +915,135 @@ a:focus-visible{outline:3px solid color-mix(in srgb,var(--blue) 34%,transparent)
   color:var(--blue)}.hpc-section-head p{line-height:1.5;max-width:620px}
 .drop-target{border-radius:22px;background:var(--glass-strong);box-shadow:var(--glass-shadow)}
 
+/* Project creation is a short guided flow, not a wall of configuration. */
+.project-wizard{width:min(800px,100%);height:min(760px,calc(100vh - 40px));display:flex;
+  flex-direction:column;overflow:hidden}.project-wizard .wizard-head{flex:none}
+.wizard-progress{position:relative;flex:none;display:grid;grid-template-columns:repeat(3,1fr);gap:0;
+  margin:0;padding:15px 25px 14px;list-style:none;border-bottom:1px solid var(--line);
+  background:color-mix(in srgb,var(--glass) 70%,transparent)}
+.wizard-progress li{position:relative;z-index:1;display:grid;grid-template-columns:28px minmax(0,1fr);
+  grid-template-rows:auto auto;column-gap:9px;color:var(--faint)}
+.wizard-progress li:not(:last-child):after{content:"";position:absolute;z-index:-1;top:13px;left:28px;
+  right:8px;height:1px;background:var(--line-strong)}
+.wizard-progress li>span{grid-row:1/3;width:28px;height:28px;border:1px solid var(--line-strong);
+  border-radius:50%;display:grid;place-items:center;background:var(--surface);font-size:10px;font-weight:720}
+.wizard-progress li>b{align-self:end;font-size:11px;color:var(--muted)}.wizard-progress li>small{
+  align-self:start;font-size:9.5px;white-space:nowrap}.wizard-progress li.active>span,.wizard-progress li.complete>span{
+  border-color:var(--blue);background:var(--blue);color:#fff;box-shadow:0 4px 12px rgba(22,113,232,.22)}
+.wizard-progress li.active>b{color:var(--text)}.wizard-progress li.complete:not(:last-child):after{background:var(--blue)}
+.project-wizard-body{min-height:0;flex:1;overflow:auto}.project-step{margin:0}.project-step[hidden]{display:none}
+.project-step:not([hidden]){animation:step-arrive .22s var(--spring) both}@keyframes step-arrive{
+  from{opacity:0;transform:translateX(8px)}to{opacity:1;transform:none}}
+.step-heading{margin-bottom:21px}.step-heading>span{display:block;margin-bottom:5px;color:var(--blue);
+  font-size:10px;font-weight:720;letter-spacing:.055em;text-transform:uppercase}.step-heading h3{margin:0;
+  font-size:18px;line-height:1.2;letter-spacing:-.025em}.step-heading p{max-width:610px;margin:6px 0 0;
+  color:var(--muted);font-size:11.5px;line-height:1.55}
+.advanced-options{border:1px solid var(--line);border-radius:12px;background:var(--surface-2);overflow:hidden}
+.advanced-options summary{height:42px;display:flex;align-items:center;padding:0 13px;cursor:pointer;
+  color:var(--muted);font-size:11px;font-weight:650;list-style:none}.advanced-options summary::-webkit-details-marker{display:none}
+.advanced-options summary:after{content:"+";margin-left:auto;color:var(--faint);font-size:17px;font-weight:400}
+.advanced-options[open] summary:after{content:"−"}.advanced-options-body{padding:2px 13px 14px;border-top:1px solid var(--line)}
+.advanced-options-body>.field{margin-top:12px}.role-choice-grid{align-items:start}.role-card-head{display:flex;
+  align-items:center;gap:10px;margin-bottom:13px}.role-card-head b{margin:0}.role-card-head small{display:block;
+  margin-top:2px;color:var(--muted);font-size:9.5px}.role-index{width:28px;height:28px;border-radius:9px;
+  display:grid;place-items:center;background:var(--blue-bg);color:var(--blue);font-size:10px;font-weight:760}
+.role-index.auditor{background:var(--violet-bg);color:var(--violet)}
+.role-details{margin-top:11px;border-top:1px solid var(--line);padding-top:9px}.role-details>summary{
+  min-height:28px;display:flex;align-items:center;gap:7px;color:var(--muted);cursor:pointer;list-style:none;
+  font-size:10px;font-weight:620}.role-details>summary::-webkit-details-marker{display:none}.role-details>summary:after{
+  content:'⌄';margin-left:auto;color:var(--faint);transition:transform .2s var(--spring)}.role-details[open]>summary:after{
+  transform:rotate(180deg)}.role-details-body{padding-top:5px}.role-details-body>.field+.field{margin-top:10px}
+.project-review{margin-top:14px;border:1px solid var(--line);border-radius:13px;background:var(--surface);
+  padding:13px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.project-review-item{min-width:0}.project-review-item span{display:block;color:var(--faint);font-size:9px;
+  text-transform:uppercase;letter-spacing:.06em}.project-review-item b{display:block;margin-top:3px;font-size:11px;
+  font-weight:620;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.project-wizard-foot{flex:none}
+
+/* Settings follow the macOS preference-window pattern: category rail + one detail pane. */
+.settings-wizard{width:min(980px,100%);height:min(740px,calc(100vh - 40px));display:flex;
+  flex-direction:column;overflow:hidden}.settings-wizard>.wizard-head,.settings-wizard>.wizard-foot{flex:none}
+.settings-shell{min-height:0;flex:1;padding:0;display:grid;grid-template-columns:210px minmax(0,1fr);overflow:hidden}
+.settings-nav{display:flex;flex-direction:column;gap:5px;padding:13px;border-right:1px solid var(--line);
+  background:color-mix(in srgb,var(--panel) 88%,transparent)}
+.settings-nav-button{position:relative;width:100%;min-height:52px;padding:8px 9px;border:0;border-radius:11px;
+  display:grid;grid-template-columns:28px minmax(0,1fr) auto;align-items:center;gap:9px;background:transparent;
+  color:var(--muted);text-align:left;transition:background .16s ease,transform .22s var(--spring)}
+.settings-nav-button:hover{background:var(--hover);color:var(--text)}.settings-nav-button:active{transform:scale(.98)}
+.settings-nav-button.active{background:var(--glass-strong);color:var(--text);box-shadow:0 4px 15px rgba(42,52,70,.08),
+  inset 0 0 0 1px var(--line)}.settings-nav-button b{display:block;font-size:11.5px}.settings-nav-button small{
+  display:block;margin-top:2px;color:var(--faint);font-size:9px}.settings-nav-button i{min-width:20px;padding:2px 5px;
+  border-radius:99px;background:var(--surface-2);color:var(--muted);font-size:9px;font-style:normal;text-align:center}
+.settings-nav-button i.ok{background:var(--green-bg);color:var(--green)}.settings-nav-button i.bad{
+  background:var(--red-bg);color:var(--red)}.settings-nav-button i.attention{background:var(--amber-bg);color:var(--amber)}
+.settings-nav-icon{width:28px;height:28px;border-radius:9px;display:grid;place-items:center;background:var(--surface-2);
+  color:var(--muted)}.settings-nav-icon:before{content:"";width:15px;height:15px;background:currentColor;
+  -webkit-mask:var(--settings-icon) center/contain no-repeat;mask:var(--settings-icon) center/contain no-repeat}
+.settings-nav-icon.general{--settings-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round'%3E%3Cpath d='M4 6h10M18 6h2M4 12h2M10 12h10M4 18h7M15 18h5'/%3E%3Ccircle cx='16' cy='6' r='2'/%3E%3Ccircle cx='8' cy='12' r='2'/%3E%3Ccircle cx='13' cy='18' r='2'/%3E%3C/svg%3E")}
+.settings-nav-icon.providers{--settings-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='4' y='3' width='16' height='7' rx='2'/%3E%3Crect x='4' y='14' width='16' height='7' rx='2'/%3E%3Cpath d='M8 6.5h.01M8 17.5h.01M12 6.5h4M12 17.5h4'/%3E%3C/svg%3E")}
+.settings-content{min-width:0;overflow:auto;padding:24px 25px}.settings-pane{margin:0}.settings-pane[hidden]{display:none}
+.settings-heading{margin-bottom:20px}.doctor-panel:not(.expanded) .doctor-list{display:none}.doctor-details-toggle{min-width:86px}
+#provider-credentials{grid-template-columns:1fr}.credential-card{padding:0;overflow:hidden}.credential-card+.credential-card{margin-top:0}
+details.credential-card>.credential-head{min-height:52px;margin:0;padding:10px 13px;cursor:pointer;list-style:none}
+details.credential-card>.credential-head::-webkit-details-marker{display:none}details.credential-card>.credential-head:after{
+  content:"";width:14px;height:14px;margin-left:3px;background:var(--faint);transition:transform .2s var(--spring);
+  -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m8 10 4 4 4-4'/%3E%3C/svg%3E") center/contain no-repeat;
+  mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m8 10 4 4 4-4'/%3E%3C/svg%3E") center/contain no-repeat}
+details.credential-card[open]>.credential-head:after{transform:rotate(180deg)}.credential-body{padding:0 13px 14px;
+  border-top:1px solid var(--line)}.credential-body>.connection-method,.credential-body>.provider-note{margin-top:12px}
+
 @media(max-width:1120px){
   .inspector{top:var(--topbar-height)}
 }
 @media(max-width:720px){
-  .sidebar{top:var(--topbar-height);width:min(258px,calc(100vw - 44px))}
+  .icon-button,.compose-button{min-width:44px;min-height:44px}.nav-item,.new-task,.primary,.secondary,
+  .runtime-button{min-height:44px}.brand-button{min-width:44px;min-height:44px}
+  .topbar,.hub-bar{height:52px;margin:6px 6px 0;border-radius:15px}
+  .sidebar{top:var(--topbar-height);bottom:6px;width:min(258px,calc(100vw - 44px));margin:0 0 0 6px}
   .scrim{inset:var(--topbar-height) 0 0}.scrim.sidebar-open{left:min(258px,calc(100vw - 44px))}
   .thread-head{padding:0 14px}.thread-inner{width:calc(100% - 30px)}
-  .composer-wrap{left:0;padding:30px 12px 10px}.hub-main{width:calc(100% - 24px);padding-top:30px}
+  .workspace{margin:0 6px 6px}.composer-wrap{left:0;padding:30px 12px 10px}
+  .hub-main{width:calc(100% - 24px);padding-top:30px}
+  .settings-shell{grid-template-columns:1fr;grid-template-rows:auto minmax(0,1fr)}
+  .settings-nav{flex-direction:row;padding:8px;border-right:0;border-bottom:1px solid var(--line);overflow-x:auto}
+  .settings-nav-button{min-width:160px;flex:1}.settings-content{padding:19px 17px}
+  .runtime-wizard{height:min(760px,calc(100vh - 16px))}.runtime-shell{grid-template-columns:1fr;
+    grid-template-rows:auto minmax(0,1fr)}.runtime-nav{flex-direction:row;padding:8px;border-right:0;
+    border-bottom:1px solid var(--line);overflow-x:auto}.runtime-nav-button{min-width:136px;flex:1}
+  .runtime-content{padding:19px 17px}
+  .project-wizard{height:min(760px,calc(100vh - 16px))}.wizard-progress{padding:12px 17px}
   #branch-label{display:none}.top-project{max-width:180px}
 }
 @media(max-width:560px){
+  .runtime-grid,.runtime-content .form-grid{grid-template-columns:1fr}.runtime-wizard>.wizard-head p{display:none}
   .topbar,.hub-bar{padding:0 8px;gap:4px}.brand-button{padding-right:3px;margin-right:auto}
   .top-project,#current-project-pin,.live-pill,.version{display:none}.thread-head{height:58px}
   .thread-title p{display:none}
   .composer{border-radius:17px}.project-modal{padding:0}.wizard{max-height:100vh;height:100vh;
     border-radius:0;border-left:0;border-right:0}.wizard-head{padding:18px 17px 15px}
   .wizard-body{padding:18px 17px}.wizard-foot{padding:13px 17px;padding-bottom:max(13px,env(safe-area-inset-bottom))}
+  .project-wizard,.settings-wizard{height:100dvh;max-height:100dvh}.project-wizard-body{padding:18px 17px}
+  .wizard-progress li{grid-template-columns:26px minmax(0,1fr);column-gap:7px}.wizard-progress li>span{width:26px;height:26px}
+  .wizard-progress li>small{display:none}.wizard-progress li:not(:last-child):after{top:12px;left:26px}
+  .settings-shell{padding:0}.settings-nav{padding:7px}.settings-nav-button{min-width:0;min-height:48px;
+    grid-template-columns:26px minmax(0,1fr);padding:7px}.settings-nav-button i,.settings-nav-button small{display:none}
+  .settings-nav-icon{width:26px;height:26px}.settings-content{padding:18px 17px}
+  .doctor-head{flex-wrap:wrap}.doctor-head .doctor-details-toggle{margin-left:27px}.role-choice-grid{grid-template-columns:1fr}
+  .project-review{grid-template-columns:1fr}.project-wizard-foot>span{display:none}
+  .project-row{grid-template-columns:minmax(0,1fr) auto 44px 44px;gap:8px;padding:14px}
+  .project-row>span:first-child{grid-column:1/-1}.project-row>.project-stat:not(.project-tier){grid-column:1}
+  .project-row>.status{grid-column:2}.project-row>.project-pin{grid-column:3}.project-row>.project-delete{grid-column:4}
+  .project-pin,.project-delete,.artifact-action{width:44px;height:44px}.project-arrow{display:none}
 }
 @media(max-width:420px){
-  .brand-button{font-size:0;gap:0}.brand-button .brand-mark{font-size:14px}
+  .brand-button{font-size:0;gap:0}.brand-button .brand-mark{font-size:0}
   .thread-head .participants{display:none}
+}
+@media(prefers-contrast:more){
+  :root{--line:rgba(31,38,50,.3);--line-strong:rgba(31,38,50,.48);--muted:#4e5560;
+    --glass-edge:rgba(31,38,50,.26)}
+  :root[data-theme="dark"]{--line:rgba(255,255,255,.28);--line-strong:rgba(255,255,255,.46);
+    --muted:#c8ced7;--glass-edge:rgba(255,255,255,.32)}
+  .topbar,.hub-bar,.sidebar,.workspace,.inspector,.composer,.wizard,.project-table{border-width:2px}
 }
 @media(prefers-reduced-motion:reduce){
   *,*:before,*:after{scroll-behavior:auto!important;animation-duration:.001ms!important;
@@ -884,7 +1064,7 @@ a:focus-visible{outline:3px solid color-mix(in srgb,var(--blue) 34%,transparent)
 </style></head>
 <body>
 <section class="project-hub" id="project-hub" aria-label="Projects">
-  <header class="hub-bar"><button class="brand-button" id="hub-brand"><span class="brand-mark">◇</span>
+  <header class="hub-bar"><button class="brand-button" id="hub-brand"><span class="brand-mark" aria-hidden="true">◇</span>
     CrossAudit <span class="version" id="hub-version">V4.14.0</span></button><span class="spacer"></span>
     <button class="icon-button" id="hub-locale" aria-label="Switch to Chinese" title="Switch language">中文</button>
     <button class="icon-button" id="hub-settings" aria-label="Settings" title="Settings">⚙</button>
@@ -902,12 +1082,16 @@ a:focus-visible{outline:3px solid color-mix(in srgb,var(--blue) 34%,transparent)
 </section>
 
 <div class="project-modal" id="project-modal" role="dialog" aria-modal="true" aria-labelledby="wizard-title">
-  <form class="wizard" id="project-form"><div class="wizard-head"><div><h2 id="wizard-title">Create a supervised project</h2>
-    <p>Configure both roles and, if you choose, create the separated GitHub repositories.</p></div>
+  <form class="wizard project-wizard" id="project-form"><div class="wizard-head"><div><h2 id="wizard-title">Create a supervised project</h2>
+    <p>Set up the workspace first, then choose the independent model team and GitHub delivery.</p></div>
     <span class="spacer"></span><button type="button" class="icon-button" id="close-project-modal" aria-label="Close">×</button></div>
-    <div class="wizard-body"><section class="form-section"><div class="form-title">Project</div><div class="form-grid">
+    <ol class="wizard-progress" id="project-progress" aria-label="Project setup progress">
+      <li class="active" data-project-indicator="1" aria-current="step"><span>1</span><b>Project</b><small>Name and workspace</small></li>
+      <li data-project-indicator="2"><span>2</span><b>Model team</b><small>Generator and auditor</small></li>
+      <li data-project-indicator="3"><span>3</span><b>GitHub</b><small>Delivery and review</small></li>
+    </ol>
+    <div class="wizard-body project-wizard-body"><section class="form-section project-step" data-project-step="1" tabindex="-1"><div class="step-heading"><span>Step 1 of 3</span><h3>Start with the project</h3><p>Choose where the work lives and describe the result you expect.</p></div><div class="form-grid">
       <label class="field"><span>Project name</span><input name="name" id="project-name" maxlength="80" required placeholder="chem-agent"></label>
-      <label class="field"><span>Automatic revision limit</span><select name="max_rounds" id="max-rounds-choice"><option value="1">1 — quick stop</option><option value="3" selected>3 — recommended</option><option value="5">5 — persistent</option><option value="10">10 — maximum</option></select><small class="field-help" id="round-limit-help">Up to 3 generator → auditor rounds, then the task pauses for you. It never auto-passes.</small></label>
       <label class="field full"><span>Local project folder</span><div class="path-picker"><input id="project-workspace" readonly required aria-label="Selected local project folder"><button type="button" class="secondary" id="choose-project-workspace">Choose folder…</button></div><small class="path-preview" id="project-path-preview">Choose the exact folder CrossAudit should use. The project name will not create another subfolder.</small></label>
       <label class="field full"><span>Project type</span><select name="project_type" id="project-type">
         <option value="general" selected>General work — documents, reviews, code</option>
@@ -915,22 +1099,29 @@ a:focus-visible{outline:3px solid color-mix(in srgb,var(--blue) 34%,transparent)
       <label class="field full"><span>What are you building, and what would count as a mistake?</span>
         <textarea name="description" maxlength="4000" required placeholder="A user-facing review that must be accurate, balanced, and delivered as one clear document."></textarea></label>
       <div class="field full"><span id="project-contract-hint">General projects use format, reference, link, and completeness checks. They do not require scientific metadata sidecars.</span></div>
+      <details class="advanced-options field full"><summary>Advanced audit settings</summary><div class="advanced-options-body">
+        <label class="field"><span>Automatic revision limit</span><select name="max_rounds" id="max-rounds-choice"><option value="1">1 — quick stop</option><option value="3" selected>3 — recommended</option><option value="5">5 — persistent</option><option value="10">10 — maximum</option></select><small class="field-help" id="round-limit-help">Up to 3 generator → auditor rounds, then the task pauses for you. It never auto-passes.</small></label>
+      </div></details>
     </div></section>
-    <section class="form-section"><div class="form-title">Independent roles</div><div class="form-grid">
-      <div class="role-card"><b>Auditor</b><label class="field"><span>Provider</span><select name="auditor_vendor" id="auditor-vendor"></select></label>
-        <label class="field"><span>Connection</span><select name="auditor_connection" id="auditor-connection" required></select></label>
-        <label class="field"><span>API region</span><select name="auditor_endpoint" id="auditor-endpoint"></select><small class="field-help">The region must match the API key.</small></label>
-        <label class="field"><span>Model</span><select name="auditor_model_choice" id="auditor-model"></select></label>
-        <label class="field custom-model off" id="auditor-custom-wrap"><span>Custom model ID</span><input id="auditor-custom" maxlength="120" placeholder="Model available to your account"></label>
-        <div class="model-actions"><button type="button" class="secondary" data-refresh-models="auditor">Refresh from provider</button></div></div>
-      <div class="role-card"><b>Generator</b><label class="field"><span>Provider</span><select name="generator_vendor" id="generator-vendor"></select></label>
+    <section class="form-section project-step" data-project-step="2" tabindex="-1" hidden><div class="step-heading"><span>Step 2 of 3</span><h3>Choose the independent model team</h3><p>The generator creates the work. A different provider audits it before delivery.</p></div><div class="form-grid role-choice-grid">
+      <div class="role-card"><div class="role-card-head"><span class="role-index">G</span><div><b>Generator</b><small>Creates and revises the work</small></div></div><label class="field"><span>Provider</span><select name="generator_vendor" id="generator-vendor"></select></label>
         <label class="field"><span>Connection</span><select name="generator_connection" id="generator-connection" required></select></label>
-        <label class="field"><span>API region</span><select name="generator_endpoint" id="generator-endpoint"></select><small class="field-help">The region must match the API key.</small></label>
         <label class="field"><span>Model</span><select name="generator_model_choice" id="generator-model"></select></label>
-        <label class="field custom-model off" id="generator-custom-wrap"><span>Custom model ID</span><input id="generator-custom" maxlength="120" placeholder="Model available to your account"></label>
-        <div class="model-actions"><button type="button" class="secondary" data-refresh-models="generator">Refresh from provider</button></div></div>
+        <details class="role-details" id="generator-details"><summary>Connection details</summary><div class="role-details-body">
+          <label class="field"><span>API region</span><select name="generator_endpoint" id="generator-endpoint"></select><small class="field-help">The region must match the API key.</small></label>
+          <label class="field custom-model off" id="generator-custom-wrap"><span>Custom model ID</span><input id="generator-custom" maxlength="120" placeholder="Model available to your account"></label>
+          <div class="model-actions"><button type="button" class="secondary" data-refresh-models="generator">Refresh from provider</button></div>
+        </div></details></div>
+      <div class="role-card"><div class="role-card-head"><span class="role-index auditor">A</span><div><b>Independent auditor</b><small>Checks the result and cannot generate it</small></div></div><label class="field"><span>Provider</span><select name="auditor_vendor" id="auditor-vendor"></select></label>
+        <label class="field"><span>Connection</span><select name="auditor_connection" id="auditor-connection" required></select></label>
+        <label class="field"><span>Model</span><select name="auditor_model_choice" id="auditor-model"></select></label>
+        <details class="role-details" id="auditor-details"><summary>Connection details</summary><div class="role-details-body">
+          <label class="field"><span>API region</span><select name="auditor_endpoint" id="auditor-endpoint"></select><small class="field-help">The region must match the API key.</small></label>
+          <label class="field custom-model off" id="auditor-custom-wrap"><span>Custom model ID</span><input id="auditor-custom" maxlength="120" placeholder="Model available to your account"></label>
+          <div class="model-actions"><button type="button" class="secondary" data-refresh-models="auditor">Refresh from provider</button></div>
+        </div></details></div>
     </div></section>
-    <section class="form-section"><div class="form-title">GitHub</div><div class="github-box">
+    <section class="form-section project-step" data-project-step="3" tabindex="-1" hidden><div class="step-heading"><span>Step 3 of 3</span><h3>Choose delivery and review</h3><p>GitHub pairing is optional. Review the local and model setup before creating anything.</p></div><div class="github-box">
       <label class="toggle-line"><input type="checkbox" name="github" id="github-toggle" checked><span><b>Create and connect two repositories</b>
         <small>The work repository holds deliverables. The audit repository holds rules, reports and the auditor secret.</small></span></label>
       <div class="connection" id="github-connection">Checking GitHub connection…</div>
@@ -939,9 +1130,11 @@ a:focus-visible{outline:3px solid color-mix(in srgb,var(--blue) 34%,transparent)
         <label class="field"><span>Audit repository name</span><input name="audit_repo" id="audit-repo" maxlength="161" placeholder="owner/project-audit"></label>
         <label class="toggle-line full"><input type="checkbox" name="adopt_existing" id="adopt-existing"><span><b>Use accessible repositories if these names already exist</b><small>Off by default. Leave it off when you want two new repositories.</small></span></label>
         <label class="toggle-line full"><input type="checkbox" name="public"><span><b>Public repositories</b><small>Off by default. Private is safer for a new project.</small></span></label>
-      </div><div class="repo-actions"><button type="button" class="secondary" id="check-repositories">Check names</button><span class="repo-check" id="repo-check">Names will be checked again before anything is created.</span></div></div></div><div class="wizard-error" id="wizard-error"></div></section></div>
-    <div class="wizard-foot"><span>Creating may send the description to the auditor model and create repositories in your connected GitHub account.</span>
-      <button type="button" class="secondary" id="cancel-project">Cancel</button><button class="primary" id="submit-project">Create project</button></div>
+      </div><div class="repo-actions"><button type="button" class="secondary" id="check-repositories">Check names</button><span class="repo-check" id="repo-check">Names will be checked again before anything is created.</span></div></div></div>
+      <div class="project-review" id="project-review" aria-live="polite"></div></section><div class="wizard-error" id="wizard-error" role="alert"></div></div>
+    <div class="wizard-foot project-wizard-foot"><span id="project-foot-note">Nothing is created until the final step.</span>
+      <button type="button" class="secondary" id="cancel-project">Cancel</button><button type="button" class="secondary" id="project-back" hidden>Back</button>
+      <button type="button" class="primary" id="project-next">Continue</button><button class="primary" id="submit-project" hidden>Create project</button></div>
   </form>
 </div>
 
@@ -1011,48 +1204,58 @@ a:focus-visible{outline:3px solid color-mix(in srgb,var(--blue) 34%,transparent)
 </div>
 
 <div class="project-modal" id="runtime-modal" role="dialog" aria-modal="true" aria-labelledby="runtime-title">
-  <form class="wizard" id="runtime-form"><div class="wizard-head"><div><h2 id="runtime-title">Models, reasoning & audit loop</h2>
-    <p>Change project controls for the next provider call without restarting this workspace.</p></div>
+  <form class="wizard runtime-wizard" id="runtime-form"><div class="wizard-head"><div><h2 id="runtime-title">Project controls</h2>
+    <p>Choose how this project works. Changes apply to the next provider call.</p></div>
     <span class="spacer"></span><button type="button" class="icon-button" id="close-runtime" aria-label="Close">×</button></div>
-    <div class="wizard-body"><div class="runtime-grid">
-      <section class="role-card" id="runtime-generator-card"><div class="runtime-role-head"><b>Generator</b><span id="runtime-generator-vendor">…</span></div>
-        <label class="field"><span>Model</span><select id="runtime-generator-model"></select></label>
-        <label class="field custom-model off" id="runtime-generator-custom-wrap"><span>Custom model ID</span><input id="runtime-generator-custom" maxlength="120" placeholder="Exact provider model ID"></label>
-        <label class="field"><span>Reasoning effort</span><select id="runtime-generator-effort"></select><small class="effort-help" id="runtime-generator-effort-help"></small></label>
-        <div class="model-actions"><button type="button" class="secondary" data-runtime-refresh="generator">Refresh models</button></div>
+    <div class="wizard-body runtime-shell"><nav class="runtime-nav" aria-label="Project control categories">
+      <button type="button" class="runtime-nav-button active" data-runtime-panel="models" aria-pressed="true"><b>Models</b><small>Team & reasoning</small></button>
+      <button type="button" class="runtime-nav-button" data-runtime-panel="automation" aria-pressed="false"><b>Automation</b><small>Audit & recovery</small></button>
+      <button type="button" class="runtime-nav-button" data-runtime-panel="budgets" aria-pressed="false"><b>Budgets</b><small>Limits & warnings</small></button>
+      <button type="button" class="runtime-nav-button" data-runtime-panel="instructions" aria-pressed="false"><b>Instructions</b><small>Project guidance</small></button>
+    </nav><div class="runtime-content">
+      <section class="runtime-pane" data-runtime-pane="models" tabindex="-1"><div class="runtime-pane-heading"><h3>Models, reasoning & audit loop</h3><p>Choose one model to do the work and a different provider to review it independently.</p></div>
+        <div class="runtime-grid"><section class="role-card" id="runtime-generator-card"><div class="runtime-role-head"><b>Generator</b><span id="runtime-generator-vendor">…</span></div>
+          <label class="field"><span>Model</span><select id="runtime-generator-model"></select></label>
+          <label class="field custom-model off" id="runtime-generator-custom-wrap"><span>Custom model ID</span><input id="runtime-generator-custom" maxlength="120" placeholder="Exact provider model ID"></label>
+          <label class="field"><span>Reasoning effort</span><select id="runtime-generator-effort"></select><small class="effort-help" id="runtime-generator-effort-help"></small></label>
+          <div class="model-actions"><button type="button" class="secondary" data-runtime-refresh="generator">Refresh models</button></div>
+        </section><section class="role-card" id="runtime-auditor-card"><div class="runtime-role-head"><b>Independent auditor</b><span id="runtime-auditor-vendor">…</span></div>
+          <label class="field"><span>Model</span><select id="runtime-auditor-model"></select></label>
+          <label class="field custom-model off" id="runtime-auditor-custom-wrap"><span>Custom model ID</span><input id="runtime-auditor-custom" maxlength="120" placeholder="Exact provider model ID"></label>
+          <label class="field"><span>Reasoning effort</span><select id="runtime-auditor-effort"></select><small class="effort-help" id="runtime-auditor-effort-help"></small></label>
+          <div class="model-actions"><button type="button" class="secondary" data-runtime-refresh="auditor">Refresh models</button></div>
+        </section></div><div class="runtime-note" id="runtime-note"><b>Safe handoff.</b> A running audit keeps the models and controls it started with. These changes apply to the next call.</div>
       </section>
-      <section class="role-card" id="runtime-auditor-card"><div class="runtime-role-head"><b>Independent auditor</b><span id="runtime-auditor-vendor">…</span></div>
-        <label class="field"><span>Model</span><select id="runtime-auditor-model"></select></label>
-        <label class="field custom-model off" id="runtime-auditor-custom-wrap"><span>Custom model ID</span><input id="runtime-auditor-custom" maxlength="120" placeholder="Exact provider model ID"></label>
-        <label class="field"><span>Reasoning effort</span><select id="runtime-auditor-effort"></select><small class="effort-help" id="runtime-auditor-effort-help"></small></label>
-        <div class="model-actions"><button type="button" class="secondary" data-runtime-refresh="auditor">Refresh models</button></div>
+      <section class="runtime-pane" data-runtime-pane="automation" tabindex="-1" hidden><div class="runtime-pane-heading"><h3>Audit automation</h3><p>CrossAudit revises automatically, then pauses for you instead of silently accepting an unresolved result.</p></div>
+        <section class="form-section"><div class="form-title">Audit loop</div><label class="field"><span>Automatic revision limit</span><select id="runtime-max-rounds"><option value="1">1 — quick stop</option><option value="3">3 — recommended</option><option value="5">5 — persistent</option><option value="10">10 — maximum</option></select><small class="field-help">After this many generator → auditor rounds, the task pauses and explains what needs your decision. It never auto-passes.</small></label></section>
+        <details class="runtime-advanced"><summary>Advanced provider recovery</summary><div class="runtime-advanced-body"><div class="form-title">Automatic provider recovery</div>
+          <div class="runtime-grid"><div class="role-card"><div class="runtime-role-head"><b>Generator fallback chain</b><span>in order</span></div><div class="fallback-list" id="runtime-generator-fallbacks"></div><div class="model-actions"><button type="button" class="secondary" data-add-fallback="generator">＋ Add fallback</button></div></div>
+          <div class="role-card"><div class="runtime-role-head"><b>Auditor fallback chain</b><span>in order</span></div><div class="fallback-list" id="runtime-auditor-fallbacks"></div><div class="model-actions"><button type="button" class="secondary" data-add-fallback="auditor">＋ Add fallback</button></div></div></div>
+          <div class="form-grid" style="margin-top:13px"><label class="field"><span>Attempts per route</span><input id="runtime-max-attempts" type="number" min="1" max="10"></label>
+            <label class="field"><span>Initial retry delay (seconds)</span><input id="runtime-initial-backoff" type="number" min="0" max="60" step="0.1"></label>
+            <label class="field"><span>Maximum retry delay (seconds)</span><input id="runtime-max-backoff" type="number" min="0" max="300" step="0.1"></label>
+            <label class="field"><span>Honor Retry-After up to (seconds)</span><input id="runtime-retry-after-cap" type="number" min="0" max="900" step="1"></label>
+            <label class="field"><span>Open circuit after failures</span><input id="runtime-circuit-failures" type="number" min="1" max="20"></label>
+            <label class="field"><span>Circuit cooldown (seconds)</span><input id="runtime-circuit-cooldown" type="number" min="1" max="3600" step="1"></label></div>
+          <small class="field-help">Retries stay inside one provider call and do not consume Generator → Auditor revision rounds. Fallback routes run only after the route before them fails.</small>
+        </div></details>
       </section>
-    </div><section class="form-section" style="margin-top:12px"><div class="form-title">Automatic provider recovery</div>
-      <div class="runtime-grid"><div class="role-card"><div class="runtime-role-head"><b>Generator fallback chain</b><span>in order</span></div><div class="fallback-list" id="runtime-generator-fallbacks"></div><div class="model-actions"><button type="button" class="secondary" data-add-fallback="generator">＋ Add fallback</button></div></div>
-      <div class="role-card"><div class="runtime-role-head"><b>Auditor fallback chain</b><span>in order</span></div><div class="fallback-list" id="runtime-auditor-fallbacks"></div><div class="model-actions"><button type="button" class="secondary" data-add-fallback="auditor">＋ Add fallback</button></div></div></div>
-      <div class="form-grid" style="margin-top:13px"><label class="field"><span>Attempts per route</span><input id="runtime-max-attempts" type="number" min="1" max="10"></label>
-        <label class="field"><span>Initial retry delay (seconds)</span><input id="runtime-initial-backoff" type="number" min="0" max="60" step="0.1"></label>
-        <label class="field"><span>Maximum retry delay (seconds)</span><input id="runtime-max-backoff" type="number" min="0" max="300" step="0.1"></label>
-        <label class="field"><span>Honor Retry-After up to (seconds)</span><input id="runtime-retry-after-cap" type="number" min="0" max="900" step="1"></label>
-        <label class="field"><span>Open circuit after failures</span><input id="runtime-circuit-failures" type="number" min="1" max="20"></label>
-        <label class="field"><span>Circuit cooldown (seconds)</span><input id="runtime-circuit-cooldown" type="number" min="1" max="3600" step="1"></label></div>
-      <small class="field-help">Retries stay inside one provider call and never consume Generator → Auditor revision rounds. A fallback is used only after its earlier route fails.</small>
-    </section><section class="form-section" style="margin-top:12px"><div class="form-title">Usage guardrails</div>
-      <div class="form-grid"><label class="field"><span>Daily token warning</span><input id="runtime-daily-token-warning" type="number" min="1" placeholder="No warning"></label>
-        <label class="field"><span>Daily token hard limit</span><input id="runtime-daily-token-limit" type="number" min="1" placeholder="No limit"></label>
-        <label class="field"><span>Monthly API-value warning (USD)</span><input id="runtime-monthly-cost-warning" type="number" min="0.01" step="0.01" placeholder="No warning"></label>
-        <label class="field"><span>Monthly API-value hard limit (USD)</span><input id="runtime-monthly-cost-limit" type="number" min="0.01" step="0.01" placeholder="No limit"></label></div>
-      <div class="guardrail-state" id="runtime-guardrail-state">Limits are local safeguards; provider billing remains authoritative.</div>
-    </section><section class="form-section" style="margin-top:12px"><div class="form-title">Audit loop</div>
-      <label class="field"><span>Automatic revision limit</span><select id="runtime-max-rounds"><option value="1">1 — quick stop</option><option value="3">3 — recommended</option><option value="5">5 — persistent</option><option value="10">10 — maximum</option></select><small class="field-help">After this many generator → auditor rounds, the task pauses for your explicit decision. It never auto-passes.</small></label>
-    </section><section class="form-section" style="margin-top:12px"><div class="form-title">Generator guidance</div>
-      <div class="form-grid"><label class="field"><span>Edit guidance</span><select id="runtime-skill-select"><option value="__new__">Create new guidance…</option></select></label>
-        <label class="field"><span>Name</span><input id="runtime-skill-name" maxlength="60" placeholder="house-style"></label>
-        <label class="field full"><span>Applies to paths (optional)</span><input id="runtime-skill-scope" maxlength="500" placeholder="work/reports, work/data"><small class="field-help">Comma-separated project-relative prefixes. Leave blank to apply on every task.</small></label>
-        <label class="field full"><span>Instructions for the generator</span><textarea id="runtime-skill-body" maxlength="60000" placeholder="Describe the tone, output shape, conventions or checklist this project should follow."></textarea><small class="field-help">Guidance changes how the generator works. It never changes the Constitution or what the independent auditor enforces.</small></label></div>
-      <div class="model-actions"><button type="button" class="secondary" id="save-runtime-skill">Save guidance</button><span class="repo-check" id="runtime-skill-status"></span></div>
-    </section><div class="runtime-note" id="runtime-note"><b>Committed project controls.</b> Models and loop limits update crossaudit.yml; generator guidance is versioned in the project. A running audit keeps the controls it started with.</div>
-      <div class="wizard-error" id="runtime-error"></div></div>
+      <section class="runtime-pane" data-runtime-pane="budgets" tabindex="-1" hidden><div class="runtime-pane-heading"><h3>Usage guardrails</h3><p>Optional local warnings and stops. Your provider remains the authority for billing.</p></div>
+        <div class="form-grid"><label class="field"><span>Daily token warning</span><input id="runtime-daily-token-warning" type="number" min="1" placeholder="No warning"></label>
+          <label class="field"><span>Daily token hard limit</span><input id="runtime-daily-token-limit" type="number" min="1" placeholder="No limit"></label>
+          <label class="field"><span>Monthly API-value warning (USD)</span><input id="runtime-monthly-cost-warning" type="number" min="0.01" step="0.01" placeholder="No warning"></label>
+          <label class="field"><span>Monthly API-value hard limit (USD)</span><input id="runtime-monthly-cost-limit" type="number" min="0.01" step="0.01" placeholder="No limit"></label></div>
+        <div class="guardrail-state" id="runtime-guardrail-state">Limits are local safeguards; provider billing remains authoritative.</div>
+      </section>
+      <section class="runtime-pane" data-runtime-pane="instructions" tabindex="-1" hidden><div class="runtime-pane-heading"><h3>Generator guidance</h3><p>Reusable project instructions shape the work without weakening the independent audit rules.</p></div>
+        <div class="form-grid"><label class="field"><span>Edit guidance</span><select id="runtime-skill-select"><option value="__new__">Create new guidance…</option></select></label>
+          <label class="field"><span>Name</span><input id="runtime-skill-name" maxlength="60" placeholder="house-style"></label>
+          <label class="field full"><span>Applies to paths (optional)</span><input id="runtime-skill-scope" maxlength="500" placeholder="work/reports, work/data"><small class="field-help">Comma-separated project-relative prefixes. Leave blank to apply on every task.</small></label>
+          <label class="field full"><span>Instructions for the generator</span><textarea id="runtime-skill-body" maxlength="60000" placeholder="Describe the tone, output shape, conventions or checklist this project should follow."></textarea><small class="field-help">Guidance changes how the generator works. It never changes the Constitution or what the independent auditor enforces.</small></label></div>
+        <div class="model-actions"><button type="button" class="secondary" id="save-runtime-skill">Save guidance</button><span class="repo-check" id="runtime-skill-status"></span></div>
+      </section>
+      <div class="wizard-error" id="runtime-error"></div>
+    </div></div>
     <div class="wizard-foot"><span id="runtime-foot">Automatic means the provider chooses its documented default.</span>
       <button type="button" class="secondary" id="cancel-runtime">Cancel</button><button class="primary" id="save-runtime">Save for next call</button></div>
   </form>
@@ -1071,8 +1274,10 @@ a:focus-visible{outline:3px solid color-mix(in srgb,var(--blue) 34%,transparent)
         <div class="decision-issues" id="resolution-issues"></div></section>
       <section class="decision-section"><div class="decision-title">What CrossAudit needs from you</div>
         <p class="decision-request" id="resolution-request">Choose whether to provide concrete correction guidance for one more round or stop this task.</p>
+        <button type="button" class="secondary" id="resolution-open-settings" hidden>Review provider connection</button>
+        <button type="button" class="secondary" id="resolution-open-runtime" hidden>Change model or fallback</button>
         <div class="decision-options">
-          <label class="decision-option"><input type="radio" name="resolution-choice" value="reopen" required><span><b>Revise and continue</b><small>Give the generator specific correction guidance and unlock one additional audited round.</small></span></label>
+          <label class="decision-option"><input type="radio" name="resolution-choice" value="reopen" required><span><b id="resolution-reopen-title">Revise and continue</b><small id="resolution-reopen-copy">Give the generator specific correction guidance and unlock one additional audited round.</small></span></label>
           <label class="decision-option"><input type="radio" name="resolution-choice" value="close" required><span><b>Stop this task</b><small>Keep the current output unadmitted and close the audit cycle with your reason.</small></span></label>
         </div>
         <label class="field decision-guidance"><span id="resolution-reason-label">Your guidance or reason</span><textarea id="resolution-reason" maxlength="400" required placeholder="Select an action, then explain what CrossAudit should do."></textarea></label>
@@ -1084,25 +1289,30 @@ a:focus-visible{outline:3px solid color-mix(in srgb,var(--blue) 34%,transparent)
 </div>
 
 <div class="project-modal" id="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
-  <form class="wizard" id="settings-form"><div class="wizard-head"><div><h2 id="settings-title">CrossAudit settings</h2>
-    <p>Check this Mac, repair setup issues, and connect model providers without using Terminal.</p></div>
+  <form class="wizard settings-wizard" id="settings-form"><div class="wizard-head"><div><h2 id="settings-title">CrossAudit settings</h2>
+    <p>Manage this Mac and model connections without using Terminal.</p></div>
     <span class="spacer"></span><button type="button" class="icon-button" id="close-settings" aria-label="Close settings">×</button></div>
-    <div class="wizard-body"><section class="form-section"><div class="form-title">Application readiness</div>
+    <div class="wizard-body settings-shell"><nav class="settings-nav" aria-label="Settings sections">
+      <button type="button" class="settings-nav-button active" data-settings-panel="general" aria-pressed="true"><span class="settings-nav-icon general" aria-hidden="true"></span><span><b>General</b><small>Workspace and this Mac</small></span><i id="settings-general-state">…</i></button>
+      <button type="button" class="settings-nav-button" data-settings-panel="providers" aria-pressed="false"><span class="settings-nav-icon providers" aria-hidden="true"></span><span><b>Model providers</b><small>Subscriptions and API keys</small></span><i id="settings-provider-count">0</i></button>
+    </nav><div class="settings-content">
+    <section class="form-section settings-pane" data-settings-pane="general" tabindex="-1"><div class="step-heading settings-heading"><span>General</span><h3>Workspace and application readiness</h3><p>CrossAudit checks required software and offers a direct recovery action when something needs attention.</p></div>
       <div class="settings-readiness"><div class="readiness-item">Git<span id="git-state">…</span></div>
         <div class="readiness-item">GitHub connection tool<span id="ghcli-state">…</span></div>
         <div class="readiness-item">Application build<span id="runtime-state">…</span></div>
         <div class="readiness-item">Code identity<span id="digest-state">…</span></div></div>
       <div class="doctor-panel"><div class="doctor-head"><span class="doctor-state" id="doctor-state"></span>
         <div class="doctor-head-copy"><b>Environment Doctor</b><small id="doctor-summary">Preparing checks…</small></div>
+        <button type="button" class="secondary doctor-details-toggle" id="toggle-doctor-details" aria-expanded="false">Show details</button>
         <button type="button" class="secondary" id="run-doctor">Run check</button></div>
         <div class="doctor-list" id="doctor-checks"><div class="doctor-empty">Checking required software…</div></div>
         <div class="doctor-message" id="doctor-message"></div></div>
       <label class="field" style="margin-top:12px"><span>Project workspace</span><div class="path-picker"><input id="settings-workspace" readonly><button type="button" class="secondary" id="choose-settings-workspace">Choose folder…</button></div></label>
-    </section><section class="form-section"><div class="form-title">Provider credentials</div>
+    </section><section class="form-section settings-pane" data-settings-pane="providers" tabindex="-1" hidden><div class="step-heading settings-heading"><span>Model providers</span><h3>Connect the services you use</h3><p>Open only the provider you want to configure. Existing secrets are never displayed again.</p></div>
       <div class="provider-note"><b>Developer access and consumer subscriptions are different products.</b> CrossAudit only offers web sign-in where the provider publishes a supported third-party inference flow. It never imports browser cookies or CLI session files.</div>
       <div id="provider-credentials"></div>
-    </section><div class="wizard-error" id="settings-error"></div></div>
-    <div class="wizard-foot"><span>API keys are write-only macOS Keychain items. Subscription credentials stay with the official provider runtime.</span>
+    </section><div class="wizard-error" id="settings-error" role="alert"></div></div></div>
+    <div class="wizard-foot"><span id="settings-foot-note">API keys are write-only macOS Keychain items. Subscription credentials stay with the official provider runtime.</span>
       <button type="button" class="secondary" id="cancel-settings">Cancel</button><button class="primary" id="save-settings">Save settings</button></div>
   </form>
 </div>
@@ -1208,9 +1418,9 @@ a:focus-visible{outline:3px solid color-mix(in srgb,var(--blue) 34%,transparent)
     <button class="icon-button mobile-sidebar" id="sidebar-toggle" aria-label="Open navigation"
       aria-controls="sidebar-panel" aria-expanded="false">☰</button>
     <button class="icon-button" id="back-projects" aria-label="Back to projects" title="Back to projects">←</button>
-    <button class="brand-button" id="projects-home"><span class="brand-mark">◇</span>CrossAudit
+    <button class="brand-button" id="projects-home"><span class="brand-mark" aria-hidden="true">◇</span>CrossAudit
       <span class="version" id="version-badge">V4.14.0</span></button>
-    <button class="top-project" id="project-switcher"><b id="proj">…</b> <span id="branch-label">/ project folder</span>⌄</button>
+    <button class="top-project" id="project-switcher"><b id="proj">…</b> <span id="branch-label">/ project folder</span></button>
     <button class="icon-button" id="current-project-pin" aria-label="Pin project" title="Pin project">☆</button>
     <span class="spacer"></span>
     <div class="live-pill"><span class="live-dot" id="livedot"></span><span id="conn-text">connecting</span></div>
@@ -1224,14 +1434,16 @@ a:focus-visible{outline:3px solid color-mix(in srgb,var(--blue) 34%,transparent)
   <button class="scrim" id="scrim" aria-label="Close open panel"></button>
 
   <aside class="sidebar" id="sidebar-panel" aria-label="Tasks">
-    <button class="new-task" id="new-task"><span>＋</span>New chat<span>⌘ N</span></button>
+    <button class="new-task" id="new-task"><span aria-hidden="true">＋</span>New chat<span>⌘ N</span></button>
     <nav class="nav" aria-label="Workspace views">
-      <button type="button" class="nav-item active" data-view="tasks" aria-pressed="true"><span class="nav-icon">◫</span>Chat</button>
-      <button type="button" class="nav-item" data-view="artifacts" aria-pressed="false"><span class="nav-icon">▱</span>Artifacts</button>
-      <button type="button" class="nav-item" data-view="audits" aria-pressed="false"><span class="nav-icon">◇</span>Audits</button>
-      <button type="button" class="nav-item" data-view="usage" aria-pressed="false"><span class="nav-icon">◒</span>Usage</button>
-      <button type="button" class="nav-item" data-view="compute" aria-pressed="false"><span class="nav-icon">⌁</span>Compute</button>
-      <button type="button" class="nav-item" data-view="tools" aria-pressed="false"><span class="nav-icon">⌘</span>Tools & Skills</button></nav>
+      <button type="button" class="nav-item active" data-view="tasks" aria-pressed="true"><span class="nav-icon" aria-hidden="true">◫</span>Chat</button>
+      <button type="button" class="nav-item" data-view="artifacts" aria-pressed="false"><span class="nav-icon" aria-hidden="true">▱</span>Files</button>
+      <details class="nav-disclosure" id="workspace-tools"><summary><span class="nav-more-icon" aria-hidden="true">···</span><span>More</span></summary>
+        <div class="nav-secondary"><button type="button" class="nav-item" data-view="audits" aria-pressed="false"><span class="nav-icon" aria-hidden="true">◇</span>Audit history</button>
+          <button type="button" class="nav-item" data-view="usage" aria-pressed="false"><span class="nav-icon" aria-hidden="true">◒</span>Usage</button>
+          <button type="button" class="nav-item" data-view="compute" aria-pressed="false"><span class="nav-icon" aria-hidden="true">⌁</span>Remote compute</button>
+          <button type="button" class="nav-item" data-view="tools" aria-pressed="false"><span class="nav-icon" aria-hidden="true">⌘</span>Tools & Skills</button></div>
+      </details></nav>
     <div class="task-list" id="task-list"></div>
     <div class="sidebar-foot"><b id="side-project">…</b><span id="tier-label">local controller</span></div>
   </aside>
@@ -1251,42 +1463,17 @@ a:focus-visible{outline:3px solid color-mix(in srgb,var(--blue) 34%,transparent)
   <div class="composer-wrap"><form class="composer" id="f" autocomplete="off">
     <input id="file-input" type="file" multiple hidden>
     <div class="contract-preview" id="contract-preview"></div>
-    <section class="task-choices" id="task-choices" aria-label="Task delivery choices">
-      <div class="choice-head"><div><b>Before I start</b><span>Confirm the choices that materially change the deliverable.</span></div>
-        <button type="button" class="choice-close" id="close-task-choices" aria-label="Close choices">×</button></div>
-      <div class="choice-group"><span class="choice-label">Focus</span><div class="choice-options">
-        <label class="choice-option"><input type="radio" name="task_focus" value="Balanced coverage" checked><span>Balanced</span></label>
-        <label class="choice-option"><input type="radio" name="task_focus" value="Technical depth"><span>Technical depth</span></label>
-        <label class="choice-option"><input type="radio" name="task_focus" value="Everyday use and practical experience"><span>Everyday use</span></label>
-        <label class="choice-option"><input type="radio" name="task_focus" value="Value and purchase recommendation"><span>Value</span></label>
-      </div></div>
-      <div class="choice-group"><span class="choice-label">Format</span><div class="choice-options">
-        <label class="choice-option"><input type="radio" name="task_format" value="Markdown (.md)" checked><span>Markdown</span></label>
-        <label class="choice-option"><input type="radio" name="task_format" value="Plain text (.txt)"><span>Plain text</span></label>
-        <label class="choice-option"><input type="radio" name="task_format" value="HTML (.html)"><span>HTML</span></label>
-        <label class="choice-option" title="Rendered locally and audited from the final binary"><input type="radio" name="task_format" value="PDF (.pdf)"><span>PDF</span></label>
-        <label class="choice-option" title="Rendered locally and audited from the final binary"><input type="radio" name="task_format" value="Word (.docx)"><span>DOCX</span></label>
-      </div></div><p class="choice-note">PDF and DOCX are rendered locally; only the final audited file is shown.</p>
-      <div class="choice-group"><span class="choice-label">Tone</span><div class="choice-options">
-        <label class="choice-option"><input type="radio" name="task_tone" value="Editorial and readable" checked><span>Editorial</span></label>
-        <label class="choice-option"><input type="radio" name="task_tone" value="Technical and precise"><span>Technical</span></label>
-        <label class="choice-option"><input type="radio" name="task_tone" value="Concise and direct"><span>Concise</span></label>
-        <label class="choice-option"><input type="radio" name="task_tone" value="Persuasive but evidence-led"><span>Persuasive</span></label>
-      </div></div>
-      <div class="choice-actions"><button type="button" class="secondary" id="use-prompt-as-written">Use prompt as written</button>
-        <button type="button" class="primary" id="run-with-choices">Run with selections</button></div>
-    </section>
     <div class="attachments" id="attachments"></div>
-    <div class="transfer-consent" id="transfer-consent"><span><b>Confirm file transfer</b>
-      <span id="consent-copy"></span></span><button type="button" id="confirm-transfer">Send files</button></div>
     <div class="audience-bar" aria-label="Message recipient"><span class="audience-label">To</span>
       <button type="button" class="audience-chip active" data-audience="auto">Auto</button>
       <button type="button" class="audience-chip" data-audience="generator">@ Generator</button>
       <button type="button" class="audience-chip" data-audience="auditor">@ Auditor</button></div>
     <div class="compose-row"><button type="button" class="compose-button" id="attach" aria-label="Add files" title="Add files">＋</button>
       <textarea id="say" rows="1" placeholder="Message the group, or @ someone…"></textarea>
+      <button type="button" id="stop-run" class="compose-button stop" aria-label="Cancel running task" title="Cancel running task" hidden>■</button>
       <button id="send" class="compose-button send" aria-label="Run task">↑</button></div>
-    <div class="composer-meta"><span id="model-summary">Generator → Auditor</span><span class="spacer"></span>
+    <div class="composer-meta"><span id="model-summary">Generator → Auditor</span>
+      <span class="autonomy-summary" title="Generator infers focus, format, tone, and structure unless you specify them.">Auto-planning</span><span class="spacer"></span>
       <span>Enter to send · Shift+Enter for new line</span></div><div class="route" id="route"></div>
   </form></div>
 
@@ -1319,6 +1506,15 @@ const ZH={
   "Discovering workspace…":"正在发现工作区…","Creating project":"正在创建项目","Validating settings…":"正在验证设置…",
   "Open project":"打开项目","Search projects…":"搜索项目…","New project":"新建项目","＋ New project":"＋ 新建项目",
   "Create a supervised project":"创建受监督项目","Configure both roles and, if you choose, create the separated GitHub repositories.":"配置两个角色，并可选择创建相互隔离的 GitHub 仓库。",
+  "Set up the workspace first, then choose the independent model team and GitHub delivery.":"先设置工作区，再选择相互独立的模型团队和 GitHub 交付方式。",
+  "Project setup progress":"项目设置进度","Name and workspace":"名称和工作区","Model team":"模型团队","Generator and auditor":"生成者和审计者","Delivery and review":"交付与确认",
+  "Step 1 of 3":"第 1 / 3 步","Step 2 of 3":"第 2 / 3 步","Step 3 of 3":"第 3 / 3 步",
+  "Start with the project":"先定义项目","Choose where the work lives and describe the result you expect.":"选择工作所在位置，并描述你期望的结果。",
+  "Advanced audit settings":"高级审计设置","Choose the independent model team":"选择相互独立的模型团队",
+  "The generator creates the work. A different provider audits it before delivery.":"生成者负责完成工作，交付前由另一家供应商独立审计。",
+  "Creates and revises the work":"创建并修订工作","Checks the result and cannot generate it":"检查结果，且不能参与生成",
+  "Choose delivery and review":"选择交付方式并确认","GitHub pairing is optional. Review the local and model setup before creating anything.":"GitHub 配对是可选项。创建任何内容前，请确认本地与模型设置。",
+  "Nothing is created until the final step.":"到最后一步前不会创建任何内容。","Back":"返回","Continue":"继续",
   "Project":"项目","Project name":"项目名称","Project type":"项目类型","General work — documents, reviews, code":"通用工作——文档、评审、代码",
   "Scientific / data workflow — structured experiment outputs":"科学 / 数据工作流——结构化实验输出",
   "General projects use format, reference, link, and completeness checks. They do not require scientific metadata sidecars.":"通用项目检查格式、引用、链接和完整性，不要求科学元数据附属文件。",
@@ -1330,7 +1526,7 @@ const ZH={
   "Local workspace folder":"本地工作区文件夹","Local project folder":"本地项目文件夹","Choose folder…":"选择文件夹…","Selected local workspace":"已选择的本地工作区","Selected local project folder":"已选择的本地项目文件夹",
   "Choose where this project's local folder will be created.":"选择创建该项目本地文件夹的位置。","Choose the exact folder CrossAudit should use. The project name will not create another subfolder.":"请选择 CrossAudit 直接使用的文件夹；项目名称不会再创建子文件夹。",
   "Independent roles":"独立角色","Generator":"生成者","Independent auditor":"独立审计者","Provider":"供应商","Connection":"连接方式",
-  "API region":"API 区域","The region must match the API key.":"区域必须与 API key 匹配。","Model":"模型",
+  "Connection details":"连接详情","API region":"API 区域","The region must match the API key.":"区域必须与 API key 匹配。","Model":"模型",
   "Model available to your account":"你的账户可用的模型","Custom model ID":"自定义模型 ID","Exact provider model ID":"准确的供应商模型 ID",
   "Refresh from provider":"从供应商刷新","GitHub":"GitHub","Create and connect two repositories":"创建并连接两个仓库",
   "The work repository holds deliverables. The audit repository holds rules, reports and the auditor secret.":"工作仓库存放交付物；审计仓库存放规则、报告和审计密钥。",
@@ -1344,7 +1540,13 @@ const ZH={
   "Correct the repository settings and continue from the last durable step.":"修正仓库设置，并从最近的持久化步骤继续。",
   "Work repository":"工作仓库","Audit repository":"审计仓库","Connect GitHub":"连接 GitHub","Open GitHub help ↗":"打开 GitHub 帮助 ↗",
   "Retry setup":"重试设置","Retry is idempotent: repositories created before the interruption are reused, not duplicated.":"重试是幂等的：中断前已创建的仓库会被复用，不会重复创建。",
-  "Models, reasoning & audit loop":"模型、推理与审计循环","Change project controls for the next provider call without restarting this workspace.":"无需重启工作区，即可修改下一次供应商调用使用的项目控制。",
+  "Project controls":"项目控制","Choose how this project works. Changes apply to the next provider call.":"选择此项目的工作方式；更改会从下一次供应商调用开始生效。",
+  "Project control categories":"项目控制分类","Models":"模型","Team & reasoning":"团队与推理","Automation":"自动化","Audit & recovery":"审计与恢复",
+  "Budgets":"预算","Limits & warnings":"上限与预警","Instructions":"指令","Project guidance":"项目指导",
+  "Models, reasoning & audit loop":"模型、推理与审计循环","Choose one model to do the work and a different provider to review it independently.":"选择一个模型执行工作，并由另一家供应商的模型独立审查。",
+  "Audit automation":"审计自动化","CrossAudit revises automatically, then pauses for you instead of silently accepting an unresolved result.":"CrossAudit 会自动修订；若问题仍未解决则暂停等待你决定，绝不会静默接受。",
+  "Advanced provider recovery":"高级供应商恢复","Optional local warnings and stops. Your provider remains the authority for billing.":"可选的本地预警与停止线；最终计费仍以供应商为准。",
+  "Reusable project instructions shape the work without weakening the independent audit rules.":"可复用的项目指令会规范工作方式，但不会削弱独立审计规则。",
   "Reasoning effort":"推理强度","Refresh models":"刷新模型","Audit loop":"审计循环",
   "Automatic provider recovery":"供应商自动恢复","Generator fallback chain":"生成者备用路由链","Auditor fallback chain":"审计者备用路由链","in order":"按顺序",
   "＋ Add fallback":"＋ 添加备用路由","Attempts per route":"每条路由尝试次数","Initial retry delay (seconds)":"首次重试延迟（秒）",
@@ -1362,7 +1564,8 @@ const ZH={
   "Applies to paths (optional)":"适用路径（可选）","Comma-separated project-relative prefixes. Leave blank to apply on every task.":"以逗号分隔的项目相对路径前缀。留空则适用于所有任务。",
   "Instructions for the generator":"给生成者的说明","Describe the tone, output shape, conventions or checklist this project should follow.":"描述此项目应遵循的语气、输出形式、约定或检查清单。",
   "Guidance changes how the generator works. It never changes the Constitution or what the independent auditor enforces.":"指导只改变生成者的工作方式，不会修改 Constitution 或独立审计者执行的标准。",
-  "Save guidance":"保存指导","Committed project controls.":"已提交的项目控制。",
+  "Save guidance":"保存指导","Safe handoff.":"安全交接。",
+  "A running audit keeps the models and controls it started with. These changes apply to the next call.":"运行中的审计会保持启动时的模型与控制设置；这些更改从下一次调用生效。",
   "Models and loop limits update crossaudit.yml; generator guidance is versioned in the project. A running audit keeps the controls it started with.":"模型和循环上限会更新 crossaudit.yml；生成者指导在项目中进行版本控制。运行中的审计保持启动时的控制设置。",
   "Automatic means the provider chooses its documented default.":"自动表示由供应商采用其文档规定的默认值。","Save for next call":"保存供下次调用使用",
   "Automatic loop paused":"自动循环已暂停","The audit needs your decision":"审计需要你作出决定",
@@ -1380,7 +1583,23 @@ const ZH={
   "Stop without admission":"停止且不准入","The automatic loop could not continue safely":"自动循环无法安全继续",
   "No structured findings were recorded. Review the stop reason above before continuing.":"未记录结构化问题。继续前请检查上方的停止原因。",
   "Choose whether to revise and continue, or stop this task.":"请选择修订并继续，或停止此任务。","Review issues & decide":"查看问题并决定",
+  "Generator connection stopped":"生成者连接已停止","The task is waiting for a working Generator connection":"任务正在等待可用的生成者连接",
+  "CrossAudit stopped before an audit began. No result was admitted and the original task is ready to retry.":"CrossAudit 在审计开始前已安全暂停。没有结果被准入，原任务可直接重试。",
+  "No audit findings were created because the Generator stopped before producing a reviewable result.":"生成者在产出可审查结果前停止，因此没有生成审计问题。",
+  "Retry the same task now, review the model connection first, or stop this task.":"立即重试同一任务、先检查模型连接，或停止此任务。",
+  "Retry provider":"重试供应商","Use the current connection and rerun the original task.":"使用当前连接重新运行原任务。",
+  "Review provider connection":"检查供应商连接","Change model or fallback":"更改模型或备用路由","Retry provider now":"立即重试供应商","Provider retry started.":"供应商重试已开始。",
+  "The original task is running again; live progress will appear here.":"原任务已重新运行；实时进度会显示在这里。",
+  "Retry note (optional)":"重试备注（可选）","Optional note for the audit ledger.":"可选：为审计账本添加备注。",
+  "Open folder":"打开文件夹","Dismiss":"移除此提示","Project creation stopped":"项目创建已暂停",
+  "Review local changes before setup":"设置前请检查本地改动","Checking the project again":"正在重新检查项目",
   "CrossAudit settings":"CrossAudit 设置","Check this Mac, repair setup issues, and connect model providers without using Terminal.":"检查此 Mac、修复设置问题并连接模型供应商，全程无需终端。",
+  "Manage this Mac and model connections without using Terminal.":"管理此 Mac 与模型连接，全程无需终端。","Settings sections":"设置分类",
+  "General":"通用","Workspace and this Mac":"工作区与此 Mac","Model providers":"模型供应商","Subscriptions and API keys":"订阅与 API key",
+  "Workspace and application readiness":"工作区与应用就绪状态","CrossAudit checks required software and offers a direct recovery action when something needs attention.":"CrossAudit 会检查必需软件，并在发现问题时直接提供修复操作。",
+  "Show details":"显示详情","Hide details":"隐藏详情","Connect the services you use":"连接你使用的服务",
+  "Open only the provider you want to configure. Existing secrets are never displayed again.":"只展开需要配置的供应商；已保存的密钥永远不会再次显示。","Done":"完成",
+  "Workspace changes apply immediately. Run Doctor after moving or updating this Mac.":"工作区修改会立即生效；迁移或更新此 Mac 后请再次运行环境诊断。",
   "Application readiness":"应用就绪状态","Git":"Git","GitHub connection tool":"GitHub 连接工具","Application build":"应用构建","Code identity":"代码身份",
   "Environment Doctor":"环境诊断","Preparing checks…":"正在准备检查…","Run check":"运行检查","Checking required software…":"正在检查所需软件…",
   "Project workspace":"项目工作区","Provider credentials":"供应商凭据",
@@ -1418,14 +1637,15 @@ const ZH={
   "Input files":"输入文件","Optional. Files are streamed to inputs/ on the remote host with no CrossAudit size or count quota.":"可选。文件会流式传输到远端主机的 inputs/，CrossAudit 不限制数量或大小。",
   "Job script":"任务脚本","I approve this remote execution":"我批准此次远程执行",
   "The script can access anything my account can read or write on this host. Closing CrossAudit will not stop it.":"脚本可访问我的账户在该主机上有权读写的所有内容。关闭 CrossAudit 不会停止它。","Submit job":"提交任务",
-  "Tasks":"任务","New chat":"新对话","＋ New chat":"＋ 新对话","Workspace views":"工作区视图","Chat":"对话","Artifacts":"交付文件","Audits":"审计","Usage":"用量","Compute":"计算","Tools & Skills":"工具与技能",
+  "Tasks":"任务","New chat":"新对话","＋ New chat":"＋ 新对话","Workspace views":"工作区视图","Chat":"对话","Files":"文件","More":"更多",
+  "Audit history":"审计记录","Usage":"用量","Remote compute":"远程计算","Tools & Skills":"工具与技能",
   "Back to projects":"返回项目列表","Pin project":"置顶项目","Settings":"设置","Switch theme":"切换主题","Toggle audit context":"切换审计上下文","Open navigation":"打开导航","Close open panel":"关闭面板",
   "Conversation participants":"对话参与者","You":"你","Auditor":"审计者","New task":"新任务","Independent generation and audit":"独立生成与审计","Project controls":"项目控制",
   "Message recipient":"消息接收方","To":"发送给","Auto":"自动","@ Generator":"@ 生成者","@ Auditor":"@ 审计者","Add files":"添加文件","＋ Add files":"＋ 添加文件",
-  "Message the group, or @ someone…":"给群组发送消息，或 @ 某一方…","Run task":"运行任务","Generator → Auditor":"生成者 → 审计者","Enter to send · Shift+Enter for new line":"Enter 发送 · Shift+Enter 换行",
+  "Message the group, or @ someone…":"给群组发送消息，或 @ 某一方…","Run task":"运行任务","Generator → Auditor":"生成者 → 审计者","Auto-planning":"自动规划","Generator infers focus, format, tone, and structure unless you specify them.":"除非你明确指定，否则生成者会自动判断重点、格式、语气和结构。","Enter to send · Shift+Enter for new line":"Enter 发送 · Shift+Enter 换行",
+  "What should CrossAudit work on?":"希望 CrossAudit 完成什么？","Describe what you need or add files. CrossAudit will do the work and independently check the result before showing it here.":"描述你的需求或添加文件。CrossAudit 会完成工作，并在结果显示到这里之前进行独立检查。",
   "Audit context":"审计上下文","Close audit context":"关闭审计上下文","Models":"模型","Loop parameters":"循环参数","Maximum rounds":"最大轮数","Current round":"当前轮次","Constitution":"审计章程","Admission tier":"准入级别","Deterministic checks":"确定性检查","Ledger":"账本","Needs attention":"需要处理",
-  "Task delivery choices":"任务交付选项","Confirm the choices that materially change the deliverable.":"确认会实质影响交付物的选项。","Before I start":"开始之前","Focus":"重点","Balanced":"均衡","Technical depth":"技术深度","Everyday use":"日常使用","Value":"价值","Format":"格式","Markdown":"Markdown","Plain text":"纯文本","HTML":"HTML","PDF":"PDF","DOCX":"DOCX","PDF and DOCX are rendered locally; only the final audited file is shown.":"PDF 和 DOCX 在本地渲染；界面只显示通过审计的最终文件。","Tone":"语气","Editorial":"编辑风格","Technical":"技术风格","Concise":"简洁","Persuasive":"说服性","Close choices":"关闭选项","Use prompt as written":"按原提示执行","Run with selections":"按所选项运行",
-  "Confirm file transfer":"确认文件传输","Drop files to add them":"拖放文件以添加","No CrossAudit file-count or file-size quota. Available storage, filesystem limits and provider context still apply.":"CrossAudit 不限制文件数量或大小，但仍受可用存储、文件系统和供应商上下文限制。","Send files":"发送文件",
+  "Drop files to add them":"拖放文件以添加","No CrossAudit file-count or file-size quota. Available storage, filesystem limits and provider context still apply.":"CrossAudit 不限制文件数量或大小，但仍受可用存储、文件系统和供应商上下文限制。",
   "Rendered locally and audited from the final binary":"在本地渲染，并从最终二进制文件回读审计","File preview":"文件预览","Preparing preview…":"正在准备预览…","Loading audited deliverable…":"正在加载已审计的交付文件…","Download":"下载","Close preview":"关闭预览","The complete file remains available to download.":"完整文件始终可供下载。","Preview unavailable for this file type. Download the complete file to open it in a compatible app.":"此文件类型无法安全预览。请下载完整文件并使用兼容应用打开。","The reading preview is shortened for responsiveness; the download is complete.":"为保证界面流畅，阅读预览已截短；下载文件是完整的。","Preview is reconstructed from the final audited DOCX binary.":"预览内容从最终通过审计的 DOCX 二进制文件中重建。","HTML preview is isolated from the app and cannot access the network.":"HTML 预览与应用隔离，且无法访问网络。","ready":"就绪","connecting":"正在连接","Connected":"已连接","Not connected":"未连接","Checking…":"正在检查…","Loading projects…":"正在加载项目…","Something went wrong":"发生了错误","Open help ↗":"打开帮助 ↗",
   "Close":"关闭","Close settings":"关闭设置","No matching projects.":"没有匹配的项目。","Switch to dark theme":"切换到深色主题","Switch to light theme":"切换到浅色主题",
   "Delete project":"删除项目","Review the local and GitHub impact before anything is changed.":"更改任何内容前，请检查本地与 GitHub 影响。",
@@ -1587,9 +1807,6 @@ let pendingContinuation={cycle:'',chat:''};
 let pendingFiles = [];
 let uploadProgress = new Map();
 let transferBusy = false;
-let attachmentConsent = false;
-let taskChoiceMode = '';
-let pendingChoiceTask = '';
 let activeView = 'tasks';
 let newTaskMode = false;
 let activeChatId = '';
@@ -1662,11 +1879,16 @@ function chooseWorkspace(context){
   if(!bridge){workspaceError('Use the CrossAudit macOS app to choose a local folder. The browser console cannot read arbitrary folder paths.');return;}
   bridge.postMessage({action:'chooseWorkspace',current});
 }
+function revealProjectFolder(path){
+  const bridge=window.webkit&&window.webkit.messageHandlers&&window.webkit.messageHandlers.crossaudit;
+  if(!bridge||!path)return false;
+  bridge.postMessage({action:'revealInFinder',path});return true;
+}
 window.crossauditWorkspaceSelected=async choice=>{
   if(!choice||!choice.path)return;
   try{const result=await api('/api/workspace/select',{path:choice.path});
     if(workspacePickerContext==='project')selectedProjectFolder=result.workspace;
-    if(projectState)projectState.workspace=result.workspace;updateWorkspaceFields(result.workspace);
+    if(projectState)projectState.workspace=result.workspace;updateWorkspaceFields(result.workspace);syncProjectReview();
     await refreshProjects();
   }catch(e){showInlineError(workspacePickerContext==='settings'?'settings-error':'wizard-error',e);}
 };
@@ -1674,9 +1896,25 @@ window.crossauditWorkspaceSelected=async choice=>{
 const settingsModal=document.getElementById('settings-modal');
 const settingsForm=document.getElementById('settings-form');
 let settingsSource=null;let settingsState=null;
+let activeSettingsPanel='general';
+function showSettingsPanel(name,focus=true){
+  const next=name==='providers'?'providers':'general';activeSettingsPanel=next;
+  document.querySelectorAll('[data-settings-panel]').forEach(button=>{const active=button.dataset.settingsPanel===next;
+    button.classList.toggle('active',active);button.setAttribute('aria-pressed',String(active));});
+  document.querySelectorAll('[data-settings-pane]').forEach(pane=>pane.hidden=pane.dataset.settingsPane!==next);
+  const save=document.getElementById('save-settings');save.hidden=next!=='providers';
+  document.getElementById('cancel-settings').textContent=currentLocale==='zh'?(next==='providers'?'取消':'完成'):(next==='providers'?'Cancel':'Done');
+  document.getElementById('settings-foot-note').textContent=currentLocale==='zh'
+    ?(next==='providers'?'API key 以只写方式存入 macOS 钥匙串；订阅凭据始终由官方供应商运行时持有。':'工作区修改会立即生效；迁移或更新此 Mac 后请再次运行环境诊断。')
+    :(next==='providers'?'API keys are write-only macOS Keychain items. Subscription credentials stay with the official provider runtime.':'Workspace changes apply immediately. Run Doctor after moving or updating this Mac.');
+  if(focus)requestAnimationFrame(()=>document.querySelector('[data-settings-pane="'+next+'"]')?.focus());
+}
+document.querySelector('.settings-nav').onclick=ev=>{const button=ev.target.closest('[data-settings-panel]');
+  if(button)showSettingsPanel(button.dataset.settingsPanel,false);};
 function renderProviderCards(d){
   const host=document.getElementById('provider-credentials');
-  const vendors=Object.keys(d.providers||{});
+  const vendors=Object.keys(d.providers||{}).sort((a,b)=>{const rank=vendor=>vendor==='openai'?0:(d.providers[vendor]||{}).configured?1:2;
+    return rank(a)-rank(b)||String((d.providers[a]||{}).label||a).localeCompare(String((d.providers[b]||{}).label||b));});
   if(host.getAttribute('data-vendors')===vendors.join(','))return;
   host.setAttribute('data-vendors',vendors.join(','));
   host.innerHTML=vendors.map(vendor=>{const p=d.providers[vendor]||{};const label=p.label||vendor;
@@ -1685,11 +1923,11 @@ function renderProviderCards(d){
       :'<div class="provider-note"><b>API access.</b> '+esc((p.subscription||{}).detail||'Use an official developer API key.')+'</div>';
     const links=(p.console_url?'<a class="login-link" href="'+esc(p.console_url)+'" target="_blank" rel="noopener">Get key ↗</a> ':'')
       +(p.docs_url?'<a class="login-link" href="'+esc(p.docs_url)+'" target="_blank" rel="noopener">API docs ↗</a>':'');
-    return '<div class="credential-card"><div class="credential-head"><b>'+esc(label)+'</b><span class="credential-state" id="'+esc(vendor)+'-state">Checking…</span></div>'
+    return '<details class="credential-card"'+(vendor==='openai'?' open':'')+'><summary class="credential-head"><b>'+esc(label)+'</b><span class="credential-state" id="'+esc(vendor)+'-state">Checking…</span></summary><div class="credential-body">'
       +subscription+'<div class="secret-row"><label class="field"><span>New API key · '+links+'</span><input type="password" id="'+esc(vendor)+'-key" data-provider-key="'+esc(vendor)+'" autocomplete="new-password" placeholder="Leave blank to keep the saved key"></label>'
       +'<label class="toggle-line"><input type="checkbox" id="remove-'+esc(vendor)+'" data-provider-remove="'+esc(vendor)+'"><span><b>Remove</b><small>Delete saved key</small></span></label></div>'
       +'<div class="secret-row"><label class="field"><span>Backup API key (optional)</span><input type="password" id="'+esc(vendor)+'-backup-key" data-provider-key="'+esc(vendor)+'_backup" autocomplete="new-password" placeholder="Used only by an explicit fallback route"></label>'
-      +'<label class="toggle-line"><input type="checkbox" id="remove-'+esc(vendor)+'-backup" data-provider-remove="'+esc(vendor)+'_backup"><span><b>Remove</b><small>Delete backup key</small></span></label></div></div>';
+      +'<label class="toggle-line"><input type="checkbox" id="remove-'+esc(vendor)+'-backup" data-provider-remove="'+esc(vendor)+'_backup"><span><b>Remove</b><small>Delete backup key</small></span></label></div></div></details>';
   }).join('');
 }
 function renderDoctor(doctor){
@@ -1712,6 +1950,10 @@ function renderDoctor(doctor){
     const version=row.version?'<span class="doctor-version">v'+esc(row.version)+'</span>':'';
     return '<div class="doctor-check '+esc(row.status||'unknown')+'"><span class="doctor-mark">'+(marks[row.status]||'?')+'</span><div class="doctor-copy"><b>'+esc(row.label||row.id)+'</b><small>'+esc(row.detail||'')+'</small></div>'+version+action+'</div>';
   }).join(''):'<div class="doctor-empty">'+(status==='running'?'Checking required software…':'Run the check to inspect this Mac.')+'</div>';
+  const panel=document.querySelector('.doctor-panel'),toggle=document.getElementById('toggle-doctor-details');
+  if(['blocked','failed','attention'].includes(status))panel.classList.add('expanded');
+  const expanded=panel.classList.contains('expanded');toggle.setAttribute('aria-expanded',String(expanded));
+  toggle.textContent=currentLocale==='zh'?(expanded?'隐藏详情':'显示详情'):(expanded?'Hide details':'Show details');
 }
 function renderSettings(d){
   settingsState=d;
@@ -1748,9 +1990,15 @@ function renderSettings(d){
   updateWorkspaceFields(d.workspace||'Not selected');
   const runtime=d.runtime||{};document.getElementById('runtime-state').textContent=runtime.install_mode||'unknown';
   document.getElementById('digest-state').textContent=runtime.code_digest||'unavailable';
+  const providerRows=Object.values(d.providers||{}),connected=providerRows.filter(row=>row.configured).length;
+  document.getElementById('settings-provider-count').textContent=connected+'/'+providerRows.length;
+  const doctorStatus=d.doctor&&d.doctor.status||'idle';const generalState=document.getElementById('settings-general-state');
+  generalState.textContent=['blocked','failed'].includes(doctorStatus)?'!':doctorStatus==='attention'?'1':doctorStatus==='ready'?'✓':'…';
+  generalState.className=['blocked','failed'].includes(doctorStatus)?'bad':doctorStatus==='attention'?'attention':doctorStatus==='ready'?'ok':'';
   renderDoctor(d.doctor);
 }
-async function openSettings(){
+async function openSettings(panel){
+  const requested=typeof panel==='string'?panel:'general';showSettingsPanel(requested,false);
   settingsModal.className='project-modal on';document.getElementById('settings-error').className='wizard-error';
   try{renderSettings(await api('/api/settings'));if(!settingsSource){
     settingsSource=new EventSource('/api/settings/stream?t='+encodeURIComponent(T));
@@ -1765,6 +2013,9 @@ document.getElementById('hub-settings').onclick=openSettings;
 document.getElementById('close-settings').onclick=closeSettings;
 document.getElementById('cancel-settings').onclick=closeSettings;
 document.getElementById('choose-settings-workspace').onclick=()=>chooseWorkspace('settings');
+document.getElementById('toggle-doctor-details').onclick=()=>{const panel=document.querySelector('.doctor-panel');
+  panel.classList.toggle('expanded');const expanded=panel.classList.contains('expanded'),button=document.getElementById('toggle-doctor-details');
+  button.setAttribute('aria-expanded',String(expanded));button.textContent=currentLocale==='zh'?(expanded?'隐藏详情':'显示详情'):(expanded?'Hide details':'Show details');};
 function doctorMessage(text,bad=false){const box=document.getElementById('doctor-message');box.textContent=text||'';
   box.className='doctor-message'+(text?' on':'')+(bad?' bad':'');}
 document.getElementById('run-doctor').onclick=async()=>{doctorMessage('');
@@ -1806,6 +2057,17 @@ settingsForm.onsubmit=async ev=>{ev.preventDefault();const save=document.getElem
 const runtimeModal=document.getElementById('runtime-modal');
 const runtimeForm=document.getElementById('runtime-form');
 let runtimeRoles={};let runtimeSkills=[];let runtimeFallbackCatalog=[];let runtimeCapabilityNonce={generator:0,auditor:0};
+let activeRuntimePanel='models';
+function showRuntimePanel(name,focus=true){
+  const allowed=['models','automation','budgets','instructions'];const next=allowed.includes(name)?name:'models';
+  activeRuntimePanel=next;document.querySelectorAll('[data-runtime-panel]').forEach(button=>{
+    const active=button.dataset.runtimePanel===next;button.classList.toggle('active',active);
+    button.setAttribute('aria-pressed',String(active));});
+  document.querySelectorAll('[data-runtime-pane]').forEach(pane=>pane.hidden=pane.dataset.runtimePane!==next);
+  if(focus)requestAnimationFrame(()=>document.querySelector('[data-runtime-pane="'+next+'"]')?.focus());
+}
+document.querySelector('.runtime-nav').onclick=ev=>{const button=ev.target.closest('[data-runtime-panel]');
+  if(button)showRuntimePanel(button.dataset.runtimePanel,false);};
 function runtimeEl(role,name){return document.getElementById('runtime-'+role+'-'+name);}
 function runtimeModel(role){const select=runtimeEl(role,'model');return select.value==='__custom__'
   ?runtimeEl(role,'custom').value.trim():select.value;}
@@ -1875,7 +2137,7 @@ function openRuntime(){const config=lastState&&lastState.runtime_config;if(!conf
     guard.state==='blocked'?(guard.reasons||[]).join(' '):guard.state==='warning'?(guard.warnings||[]).join(' '):'Limits are local safeguards; provider billing remains authoritative.';
   renderRuntimeSkills(config.skills||[]);
   if(config.skills_error)document.getElementById('runtime-skill-status').textContent=config.skills_error;
-  syncRuntimeBusy(lastState);runtimeModal.className='project-modal on';}
+  showRuntimePanel('models',false);syncRuntimeBusy(lastState);runtimeModal.className='project-modal on';}
 function closeRuntime(){runtimeModal.className='project-modal';runtimeForm.reset();}
 for(const role of ['generator','auditor']){
   runtimeEl(role,'model').onchange=()=>{runtimeEl(role,'custom-wrap').className='field custom-model'
@@ -1965,8 +2227,14 @@ function resolutionChoice(action){
   document.getElementById('resolution-action').value=action||'';
   resolutionForm.querySelectorAll('input[name="resolution-choice"]').forEach(input=>input.checked=input.value===action);
   const label=document.getElementById('resolution-reason-label'),reason=document.getElementById('resolution-reason');
-  const submit=document.getElementById('submit-resolution');
-  if(action==='reopen'){
+  const submit=document.getElementById('submit-resolution'),provider=Boolean(activeResolution&&activeResolution.kind==='provider');
+  const guidance=reason.closest('label');guidance.hidden=provider&&action==='reopen';
+  reason.required=!(provider&&action==='reopen');
+  if(action==='reopen'&&provider){
+    label.textContent='Retry note (optional)';
+    reason.placeholder='Optional note for the audit ledger.';
+    submit.textContent='Retry provider now';
+  }else if(action==='reopen'){
     label.textContent='Correction guidance for the next round';
     reason.placeholder='Describe exactly what should change before the next audit.';
     submit.textContent='Record guidance & unlock round';
@@ -1988,14 +2256,17 @@ function openResolution(value,action='',sha=''){
     requested:'Review why the loop stopped, then decide whether to revise or stop.'};
   activeResolution=row;promptedEscalations.add(row.cycle_id);
   document.getElementById('resolution-cycle').value=row.cycle_id||'';
-  document.getElementById('resolution-reason').value='';resolutionChoice(action);
+  document.getElementById('resolution-reason').value='';
   const used=Number(row.round||0),maximum=Number(row.max_rounds||(lastState&&lastState.max_rounds)||0);
-  document.getElementById('resolution-flag').textContent=row.limit_reached?'Automatic audit limit reached':'Automatic loop paused';
-  document.getElementById('resolution-title').textContent='The audit needs your decision';
-  document.getElementById('resolution-summary').textContent=row.limit_reached
+  const provider=row.kind==='provider';
+  document.getElementById('resolution-flag').textContent=provider?'Generator connection stopped':row.limit_reached?'Automatic audit limit reached':'Automatic loop paused';
+  document.getElementById('resolution-title').textContent=provider?'The task is waiting for a working Generator connection':'The audit needs your decision';
+  document.getElementById('resolution-summary').textContent=provider
+    ?'CrossAudit stopped before an audit began. No result was admitted and the original task is ready to retry.'
+    :row.limit_reached
     ?'CrossAudit used all '+used+' of '+maximum+' automatic rounds without a passing result. Nothing will continue or be admitted until you decide.'
     :'CrossAudit stopped safely. Nothing will continue or be admitted until you decide.';
-  document.getElementById('resolution-limit-title').textContent=row.limit_reached
+  document.getElementById('resolution-limit-title').textContent=provider?'Generator connection stopped':row.limit_reached
     ?'Automatic rounds used: '+used+' / '+maximum:'The automatic loop could not continue safely';
   const attempts=(row.attempts||[]).map(item=>'Round '+item.round+': '+item.verdict+' · '+item.findings+' issue'+(item.findings===1?'':'s')).join(' → ');
   document.getElementById('resolution-limit-copy').textContent=attempts
@@ -2007,8 +2278,19 @@ function openResolution(value,action='',sha=''){
     '<article class="decision-issue"><div class="decision-issue-head"><span>'+esc(issue.severity||'BLOCKER')+'</span><b>'
     +esc(issue.rule||'Issue '+(index+1))+'</b></div><p>'+esc(issue.observation||'No explanation was recorded.')+'</p>'
     +(issue.artifact?'<small>Affects '+esc(issue.artifact)+'</small>':'')+'</article>').join('')
-    :'<div class="decision-empty">No structured findings were recorded. Review the stop reason above before continuing.</div>';
-  document.getElementById('resolution-request').textContent=row.requested||'Choose whether to revise and continue, or stop this task.';
+    :'<div class="decision-empty">'+(provider
+      ?'No audit findings were created because the Generator stopped before producing a reviewable result.'
+      :'No structured findings were recorded. Review the stop reason above before continuing.')+'</div>';
+  document.getElementById('resolution-request').textContent=provider
+    ?'Retry the same task now, review the model connection first, or stop this task.'
+    :(row.requested||'Choose whether to revise and continue, or stop this task.');
+  document.getElementById('resolution-reopen-title').textContent=provider?'Retry provider':'Revise and continue';
+  document.getElementById('resolution-reopen-copy').textContent=provider
+    ?'Use the current connection and rerun the original task.'
+    :'Give the generator specific correction guidance and unlock one additional audited round.';
+  document.getElementById('resolution-open-runtime').hidden=!provider;
+  document.getElementById('resolution-open-settings').hidden=!provider;
+  resolutionChoice(action||(provider?'reopen':''));
   document.getElementById('resolution-error').className='wizard-error';
   resolutionModal.className='project-modal on';
   setTimeout(()=>{const target=action?document.getElementById('resolution-reason')
@@ -2018,16 +2300,22 @@ function closeResolution(){resolutionModal.className='project-modal';resolutionF
 resolutionForm.querySelectorAll('input[name="resolution-choice"]').forEach(input=>input.onchange=()=>resolutionChoice(input.value));
 document.getElementById('close-resolution').onclick=closeResolution;
 document.getElementById('cancel-resolution').onclick=closeResolution;
+document.getElementById('resolution-open-runtime').onclick=()=>{closeResolution();openRuntime();};
+document.getElementById('resolution-open-settings').onclick=()=>{closeResolution();openSettings('providers');};
 resolutionModal.addEventListener('click',ev=>{if(ev.target===resolutionModal)closeResolution();});
 resolutionForm.onsubmit=async ev=>{ev.preventDefault();const button=document.getElementById('submit-resolution');
   const cycleId=document.getElementById('resolution-cycle').value;
   const action=document.getElementById('resolution-action').value,reason=document.getElementById('resolution-reason').value.trim();
+  const provider=Boolean(activeResolution&&activeResolution.kind==='provider');
   if(!action){showInlineError('resolution-error','Choose whether to revise and continue, or stop this task.');return;}
-  if(!reason){showInlineError('resolution-error','Add concrete guidance or a reason so the decision is auditable.');return;}
+  if(!reason&&!(provider&&action==='reopen')){showInlineError('resolution-error','Add concrete guidance or a reason so the decision is auditable.');return;}
   button.disabled=true;document.getElementById('resolution-error').className='wizard-error';
-  try{await api('/api/escalation',{cycle_id:cycleId,action,reason});
+  try{await api('/api/escalation',{cycle_id:cycleId,action:provider&&action==='reopen'?'retry_provider':action,reason});
     closeResolution();route.className='route on';
-    if(action==='reopen'){
+    if(provider&&action==='reopen'){
+      pendingContinuation={cycle:'',chat:''};
+      route.innerHTML='<b>Provider retry started.</b> The original task is running again; live progress will appear here.';
+    }else if(action==='reopen'){
       pendingContinuation={cycle:cycleId,chat:activeChatId};
       say.value=reason;route.innerHTML='<b>Another audited attempt is unlocked.</b> Your guidance is in the composer. Review it, then press Run task.';
       setTimeout(()=>say.focus(),0);
@@ -2040,6 +2328,7 @@ let activeProjectJob=null;
 let createdRoot=null;
 let repoNameTouched={science:false,audit:false};
 let repositoryCheckNonce=0;
+let projectStep=1;
 const projectModal=document.getElementById('project-modal');
 const projectForm=document.getElementById('project-form');
 const recoveryModal=document.getElementById('recovery-modal');
@@ -2085,7 +2374,9 @@ function endpointOptions(vendor,target){
 }
 function syncCustomModel(role){
   const select=role==='auditor'?auditorModel:generatorModel;
-  document.getElementById(role+'-custom-wrap').className='field custom-model'+(select.value==='__custom__'?'':' off');
+  const custom=select.value==='__custom__';
+  document.getElementById(role+'-custom-wrap').className='field custom-model'+(custom?'':' off');
+  if(custom)document.getElementById(role+'-details').open=true;
 }
 function syncRoleChoices(){
   const av=auditorVendor.value;const gv=generatorVendor.value;
@@ -2185,16 +2476,22 @@ function guidanceMarkup(row){
   const root=row.root||'';let actions='';
   if(issue.action==='connect_github')actions+='<button type="button" class="secondary" data-job-action="connect_github">Connect GitHub</button>';
   if(issue.action==='edit_repositories')actions+='<button type="button" class="secondary" data-job-action="'+(row.recoverable?'edit_repositories':'edit_new_repositories')+'" data-root="'+esc(root)+'">Edit repository names</button>';
-  if(issue.action==='choose_workspace')actions+='<button type="button" class="secondary" data-job-action="choose_workspace">Choose another folder</button>';
+  if(issue.action==='review_workspace')actions+='<button type="button" class="secondary" data-job-action="reveal_folder" data-root="'+esc(root)+'">Open folder</button>';
+  if(issue.action==='review_workspace'||issue.action==='choose_workspace')actions+='<button type="button" class="secondary" data-job-action="choose_new_workspace">Choose another folder</button>';
+  if(issue.retryable&&!row.recoverable)actions+='<button type="button" class="primary" data-job-action="retry_job">Try again</button>';
   if(issue.action==='retry'&&root)actions+='<button type="button" class="secondary" data-job-action="retry" data-root="'+esc(root)+'">Try again</button>';
   if(issue.url)actions+='<a class="secondary" href="'+esc(issue.url)+'" target="_blank" rel="noopener">Open help ↗</a>';
+  if(row.status==='failed')actions+='<button type="button" class="secondary" data-job-action="dismiss_job">Dismiss</button>';
   return '<b>'+esc(issue.title||'Setup needs attention')+'</b><p>'+esc(row.detail||'Review the settings and retry.')+'</p>'
     +(actions?'<div class="guidance-actions">'+actions+'</div>':'');
 }
 function renderProjectJob(jobs){
-  const row=(jobs||[]).find(j=>j.id===activeProjectJob);
+  const rows=jobs||[];let row=rows.find(j=>j.id===activeProjectJob);
+  if(!row){row=rows.filter(j=>j.status==='running'||j.status==='failed')
+    .sort((a,b)=>Number(b.finished||b.started||0)-Number(a.finished||a.started||0))[0];
+    if(row)activeProjectJob=row.id;}
   const panel=document.getElementById('project-job');
-  if(!row){panel.className='job-panel';return;}
+  if(!row){activeProjectJob=null;panel.className='job-panel';return;}
   panel.className='job-panel on '+row.status;
   document.getElementById('job-title').textContent=row.status==='complete'?'Project ready'
     :row.status==='failed'?'Project creation stopped':'Creating '+row.project;
@@ -2341,24 +2638,60 @@ deleteProjectForm.onsubmit=async ev=>{ev.preventDefault();if(!deleteProjectPrevi
     document.getElementById('job-steps').innerHTML='';document.getElementById('job-guidance').className='job-guidance';
   }catch(e){if(e.action==='authorize_delete'){deleteNeedsGithubAuthorization=true;renderDeleteGithubAuthorization();}
     showInlineError('delete-project-error',e);syncDeleteProject();}};
+function projectModelLabel(role){const select=role==='generator'?generatorModel:auditorModel;
+  const vendor=role==='generator'?generatorVendor:auditorVendor;const custom=document.getElementById(role+'-custom');
+  return (vendor.value||'—')+' · '+(select.value==='__custom__'?(custom.value.trim()||'custom model'):(select.value||'not connected'));}
+function syncProjectReview(){const host=document.getElementById('project-review');if(!host)return;
+  const github=document.getElementById('github-toggle').checked;
+  const labels=currentLocale==='zh'
+    ?[['项目',document.getElementById('project-name').value.trim()||'未命名'],['本地文件夹',selectedProjectFolder||'未选择'],
+      ['生成者',projectModelLabel('generator')],['审计者',projectModelLabel('auditor')],['GitHub',github?'创建两个仓库':'仅本地']]
+    :[['Project',document.getElementById('project-name').value.trim()||'Untitled'],['Local folder',selectedProjectFolder||'Not selected'],
+      ['Generator',projectModelLabel('generator')],['Auditor',projectModelLabel('auditor')],['GitHub',github?'Create two repositories':'Local only']];
+  host.innerHTML=labels.map(row=>'<div class="project-review-item"><span>'+esc(row[0])+'</span><b title="'+esc(row[1])+'">'+esc(row[1])+'</b></div>').join('');}
+function setProjectStep(step,focus=true){projectStep=Math.max(1,Math.min(3,Number(step)||1));
+  document.querySelectorAll('[data-project-step]').forEach(section=>section.hidden=Number(section.dataset.projectStep)!==projectStep);
+  document.querySelectorAll('[data-project-indicator]').forEach(item=>{const n=Number(item.dataset.projectIndicator);
+    item.classList.toggle('active',n===projectStep);item.classList.toggle('complete',n<projectStep);
+    if(n===projectStep)item.setAttribute('aria-current','step');else item.removeAttribute('aria-current');});
+  document.getElementById('project-back').hidden=projectStep===1;document.getElementById('project-next').hidden=projectStep===3;
+  document.getElementById('submit-project').hidden=projectStep!==3;
+  document.getElementById('project-foot-note').textContent=currentLocale==='zh'
+    ?(projectStep===3?'检查确认后才会创建文件夹和仓库。':'完成当前步骤后继续；现在不会创建任何内容。')
+    :(projectStep===3?'Nothing is created until you confirm this review.':'Continue after this step; nothing is created yet.');
+  if(projectStep===3)syncProjectReview();
+  if(focus)requestAnimationFrame(()=>{const pane=document.querySelector('[data-project-step="'+projectStep+'"]');
+    (pane.querySelector('input:not([disabled]),select:not([disabled]),textarea:not([disabled]),button:not([disabled])')||pane).focus();});}
+function validateProjectStep(step){document.getElementById('wizard-error').className='wizard-error';
+  if(step===1&&!selectedProjectFolder){showInlineError('wizard-error',currentLocale==='zh'?'请选择本地项目文件夹。':'Choose a local project folder.');
+    document.getElementById('choose-project-workspace').focus();return false;}
+  const pane=document.querySelector('[data-project-step="'+step+'"]');const controls=[...pane.querySelectorAll('input,select,textarea')]
+    .filter(control=>!control.disabled&&control.type!=='hidden');
+  for(const control of controls){if(!control.checkValidity()){control.reportValidity();control.focus();return false;}}
+  if(step===2){for(const role of ['generator','auditor']){const select=role==='generator'?generatorModel:auditorModel;
+    if(select.value==='__custom__'&&!document.getElementById(role+'-custom').value.trim()){
+      showInlineError('wizard-error',currentLocale==='zh'?(role==='generator'?'请输入生成者模型 ID。':'请输入审计者模型 ID。')
+        :('Enter the '+role+' model ID.'));document.getElementById(role+'-custom').focus();return false;}}}
+  return true;}
 function openProjectModal(){projectForm.reset();document.getElementById('wizard-error').className='wizard-error';
   if(settingsState&&settingsState.doctor&&settingsState.doctor.status==='blocked'){
-    openSettings();doctorMessage('Fix the required Environment Doctor items before creating a project.',true);return;}
+    openSettings('general');doctorMessage('Fix the required Environment Doctor items before creating a project.',true);return;}
   repoNameTouched={science:false,audit:false};selectedProjectFolder='';resetRepositoryCheck();
   configureProjectForm();const vendors=Object.keys((projectState&&projectState.models)||{});
   auditorVendor.value=vendors.includes('openai')?'openai':vendors[0];
   generatorVendor.value=vendors.includes('anthropic')?'anthropic':vendors.find(v=>v!==auditorVendor.value);
   syncRoleChoices();syncProjectType();syncRepoNames(true);updateWorkspaceFields(projectState&&projectState.workspace);
-  projectModal.className='project-modal on';
+  projectModal.className='project-modal on';setProjectStep(1,false);
   setTimeout(()=>document.getElementById('project-name').focus(),0);}
-function closeProjectModal(){projectModal.className='project-modal';}
+function closeProjectModal(){projectModal.className='project-modal';setProjectStep(1,false);}
 
-auditorVendor.onchange=syncRoleChoices;generatorVendor.onchange=syncRoleChoices;
-auditorConnection.onchange=()=>modelOptions(auditorVendor.value,auditorModel);
-generatorConnection.onchange=()=>modelOptions(generatorVendor.value,generatorModel);
-auditorEndpoint.onchange=()=>modelOptions(auditorVendor.value,auditorModel);
-generatorEndpoint.onchange=()=>modelOptions(generatorVendor.value,generatorModel);
-auditorModel.onchange=()=>syncCustomModel('auditor');generatorModel.onchange=()=>syncCustomModel('generator');
+auditorVendor.onchange=()=>{syncRoleChoices();syncProjectReview();};generatorVendor.onchange=()=>{syncRoleChoices();syncProjectReview();};
+auditorConnection.onchange=()=>{modelOptions(auditorVendor.value,auditorModel);syncProjectReview();};
+generatorConnection.onchange=()=>{modelOptions(generatorVendor.value,generatorModel);syncProjectReview();};
+auditorEndpoint.onchange=()=>{modelOptions(auditorVendor.value,auditorModel);syncProjectReview();};
+generatorEndpoint.onchange=()=>{modelOptions(generatorVendor.value,generatorModel);syncProjectReview();};
+auditorModel.onchange=()=>{syncCustomModel('auditor');syncProjectReview();};generatorModel.onchange=()=>{syncCustomModel('generator');syncProjectReview();};
+document.getElementById('auditor-custom').oninput=syncProjectReview;document.getElementById('generator-custom').oninput=syncProjectReview;
 document.querySelectorAll('[data-refresh-models]').forEach(button=>button.onclick=async()=>{
   const role=button.getAttribute('data-refresh-models');const vendor=role==='auditor'?auditorVendor.value:generatorVendor.value;
   const method=role==='auditor'?auditorConnection.value:generatorConnection.value;
@@ -2372,7 +2705,7 @@ document.querySelectorAll('[data-refresh-models]').forEach(button=>button.onclic
     error.textContent=e.message;error.className='wizard-error on';}
   finally{button.disabled=false;setTimeout(()=>button.textContent='Refresh from provider',3500);}
 });
-document.getElementById('project-name').addEventListener('input',()=>syncRepoNames(false));
+document.getElementById('project-name').addEventListener('input',()=>{syncRepoNames(false);syncProjectReview();});
 document.getElementById('science-repo').addEventListener('input',()=>{repoNameTouched.science=true;resetRepositoryCheck();});
 document.getElementById('audit-repo').addEventListener('input',()=>{repoNameTouched.audit=true;resetRepositoryCheck();});
 document.getElementById('adopt-existing').onchange=resetRepositoryCheck;
@@ -2382,7 +2715,9 @@ document.getElementById('max-rounds-choice').onchange=ev=>{
   const n=Number(ev.target.value);document.getElementById('round-limit-help').textContent='Up to '+n
     +' generator → auditor round'+(n===1?'':'s')+', then the task pauses for you. It never auto-passes.';};
 projectType.onchange=syncProjectType;
-document.getElementById('github-toggle').onchange=syncGithubFields;
+document.getElementById('github-toggle').onchange=()=>{syncGithubFields();syncProjectReview();};
+document.getElementById('project-next').onclick=()=>{if(validateProjectStep(projectStep))setProjectStep(projectStep+1);};
+document.getElementById('project-back').onclick=()=>setProjectStep(projectStep-1);
 document.getElementById('github-connection').onclick=async ev=>{
   const connect=ev.target.closest('[data-connect-github]');const copy=ev.target.closest('[data-copy-github]');
   if(copy){try{await navigator.clipboard.writeText(copy.getAttribute('data-copy-github'));copy.textContent='Copied';}catch(e){}
@@ -2445,19 +2780,53 @@ document.getElementById('recovery-connection').onclick=async ev=>{
 };
 recoveryForm.onsubmit=ev=>{ev.preventDefault();resumeProject(document.getElementById('recovery-root').value,
   document.getElementById('recovery-science').value.trim(),document.getElementById('recovery-audit').value.trim());};
-document.getElementById('project-job').onclick=ev=>{const action=ev.target.closest('[data-job-action]');if(!action)return;
+function restoreProjectDraft(row){
+  const draft=row&&row.draft||{};openProjectModal();if(!projectModal.classList.contains('on'))return false;
+  const set=(selector,value)=>{const el=document.querySelector(selector);if(el&&value!==undefined&&value!==null)el.value=String(value);};
+  set('#project-name',draft.name||row.project);set('[name="description"]',draft.description);
+  set('#project-type',draft.project_type);set('#max-rounds-choice',draft.max_rounds);
+  if([...auditorVendor.options].some(o=>o.value===draft.auditor_vendor))auditorVendor.value=draft.auditor_vendor;
+  if([...generatorVendor.options].some(o=>o.value===draft.generator_vendor))generatorVendor.value=draft.generator_vendor;
+  syncRoleChoices();
+  const setRole=(role,connection,endpoint,model)=>{const connectionEl=role==='auditor'?auditorConnection:generatorConnection;
+    const endpointEl=role==='auditor'?auditorEndpoint:generatorEndpoint,modelEl=role==='auditor'?auditorModel:generatorModel;
+    if([...connectionEl.options].some(o=>o.value===connection&&!o.disabled))connectionEl.value=connection;
+    if([...endpointEl.options].some(o=>o.value===endpoint))endpointEl.value=endpoint;
+    modelOptions(role==='auditor'?auditorVendor.value:generatorVendor.value,modelEl);
+    if([...modelEl.options].some(o=>o.value===model))modelEl.value=model;
+    else if(model){modelEl.value='__custom__';document.getElementById(role+'-custom').value=model;}
+    syncCustomModel(role);};
+  setRole('auditor',draft.auditor_connection,draft.auditor_endpoint,draft.auditor_model);
+  setRole('generator',draft.generator_connection,draft.generator_endpoint,draft.generator_model);
+  document.getElementById('github-toggle').checked=draft.github!==false;
+  document.getElementById('adopt-existing').checked=draft.adopt_existing===true;
+  document.querySelector('[name="public"]').checked=draft.public===true;
+  set('#science-repo',draft.science_repo||row.science);set('#audit-repo',draft.audit_repo||row.audit);
+  repoNameTouched={science:Boolean(draft.science_repo),audit:Boolean(draft.audit_repo)};
+  selectedProjectFolder=String(draft.workspace||row.workspace||row.root||'');
+  updateWorkspaceFields(selectedProjectFolder);syncProjectType();syncGithubFields();syncProjectReview();resetRepositoryCheck();
+  return true;
+}
+document.getElementById('project-job').onclick=async ev=>{const action=ev.target.closest('[data-job-action]');if(!action)return;
   const kind=action.getAttribute('data-job-action'),root=action.getAttribute('data-root');
+  const row=(projectState&&projectState.jobs||[]).find(j=>j.id===activeProjectJob);
   if(kind==='connect_github')document.querySelector('[data-connect-github]')?.click();
   else if(kind==='edit_repositories'&&root)openRecovery(root);
-  else if(kind==='edit_new_repositories'){const row=(projectState&&projectState.jobs||[]).find(j=>j.id===activeProjectJob);
-    openProjectModal();if(row){document.getElementById('project-name').value=row.project||'';
-      document.getElementById('science-repo').value=row.science||'';document.getElementById('audit-repo').value=row.audit||'';
-      repoNameTouched={science:true,audit:true};resetRepositoryCheck();}}
-  else if(kind==='choose_workspace')chooseWorkspace('project');
-  else if(kind==='retry'&&root)openRecovery(root);};
+  else if(kind==='edit_new_repositories'&&row){restoreProjectDraft(row);setProjectStep(3);}
+  else if(kind==='choose_new_workspace'&&row){if(restoreProjectDraft(row))chooseWorkspace('project');}
+  else if(kind==='reveal_folder'&&root){if(!revealProjectFolder(root))document.getElementById('job-detail').textContent='Open this folder in Finder, commit or stash its local changes, then choose Try again.';}
+  else if(kind==='retry'&&root)openRecovery(root);
+  else if(kind==='retry_job'&&row){action.disabled=true;
+    try{const result=await api('/api/projects/job',{action:'retry',job_id:row.id});activeProjectJob=result.job;
+      renderProjectJob([{id:result.job,status:'running',project:row.project,detail:'Checking the project again',steps:[]}]);}
+    catch(e){action.disabled=false;document.getElementById('job-detail').textContent=e.message;}}
+  else if(kind==='dismiss_job'&&row){action.disabled=true;
+    try{await api('/api/projects/job',{action:'dismiss',job_id:row.id});activeProjectJob=null;renderProjectJob([]);await refreshProjects();}
+    catch(e){action.disabled=false;document.getElementById('job-detail').textContent=e.message;}}};
 document.getElementById('open-created').onclick=()=>createdRoot&&openProject(createdRoot,false);
 projectModal.addEventListener('click',ev=>{if(ev.target===projectModal)closeProjectModal();});
-projectForm.onsubmit=async ev=>{ev.preventDefault();const submit=document.getElementById('submit-project');
+projectForm.onsubmit=async ev=>{ev.preventDefault();if(projectStep<3){if(validateProjectStep(projectStep))setProjectStep(projectStep+1);return;}
+  const submit=document.getElementById('submit-project');
   const error=document.getElementById('wizard-error');error.className='wizard-error';submit.disabled=true;
   const fd=new FormData(projectForm);const payload=Object.fromEntries(fd.entries());
   payload.auditor_model=auditorModel.value==='__custom__'?document.getElementById('auditor-custom').value.trim():auditorModel.value;
@@ -2632,9 +3001,10 @@ function runCard(d){
     : outcome === 'running' ? '' : ' bad';
   const reached = pipeline.filter(s => s.state !== 'pending').length;
   const meter = pipeline.length ? Math.round(reached / pipeline.length * 100) : 0;
-  const roundEvents = p && p.steps ? p.steps.filter(s => s.actor === 'loop' && s.text.startsWith('round ')) : [];
-  const roundMatch = roundEvents.length ? roundEvents[roundEvents.length-1].text.match(/\d+/) : null;
-  const round = roundMatch ? roundMatch[0] : latestCycle ? latestCycle.round : '—';
+  const roundEvents = p && p.steps ? p.steps.filter(s => s.kind === 'round_started') : [];
+  const roundEvent = roundEvents.length ? roundEvents[roundEvents.length-1] : null;
+  const round = roundEvent ? roundEvent.round_no : latestCycle ? latestCycle.round : '—';
+  const roundLimit = roundEvent&&roundEvent.round_limit ? roundEvent.round_limit : d.max_rounds;
   const focus = pipeline.find(s => s.state === 'current') || pipeline.find(s => s.state === 'failed')
     || pipeline.find(s => s.state === 'pending') || pipeline[pipeline.length-1];
   const focusLabel = focus.state === 'current' ? 'Current gate' : focus.state === 'failed' ? 'Stopped at'
@@ -2656,7 +3026,7 @@ function runCard(d){
     + '<div class="run-overview"><div class="run-top"><span class="pulse' + pulse + '"></span>'
     + '<span class="run-eyebrow">Audit loop</span><span class="status ' + esc(outcome) + '">'
     + esc(outcome) + '</span></div><div class="run-task">' + esc(task) + '</div><div class="run-meta">'
-    + '<span>Round <strong>' + esc(round) + '</strong> of ' + esc(d.max_rounds) + '</span>'
+    + '<span>Round <strong>' + esc(round) + '</strong> of ' + esc(roundLimit) + '</span>'
     + '<span><strong>' + reached + '</strong> of ' + pipeline.length + ' gates reached</span>'
     + '<span>' + (p ? p.elapsed + 's elapsed' : 'Ledger snapshot') + '</span></div>'
     + '<div class="run-meter" role="progressbar" aria-label="Audit gates reached" aria-valuemin="0" '
@@ -2675,8 +3045,7 @@ function runCard(d){
 }
 function welcome(){
   return '<div class="welcome"><div class="welcome-mark">◇</div><h2>What should CrossAudit work on?</h2>'
-    + '<p>Describe a task in plain language. A generator will make the change, deterministic checks will run, '
-    + 'and an independent model will audit every round before admission.</p></div>';
+    + '<p>Describe what you need or add files. CrossAudit will do the work and independently check the result before showing it here.</p></div>';
 }
 function allMessages(d){
   // Tasks is direct user input/output, never a raw audit log. Draft generator
@@ -2909,8 +3278,9 @@ function renderInspector(d){
   document.getElementById('max-rounds').textContent = d.max_rounds;
   const progress=chatProgress(d),cycles=chatCycles(d);
   const current = progress && progress.steps ? progress.steps.filter(s =>
-    s.actor === 'loop' && s.text.startsWith('round ')).slice(-1)[0] : null;
-  document.getElementById('current-round').textContent = current ? current.text.replace('round ','')
+    s.kind === 'round_started').slice(-1)[0] : null;
+  document.getElementById('current-round').textContent = current
+    ? current.round_no + ' / ' + current.round_limit
     : cycles.length ? cycles[cycles.length-1].round + ' / ' + d.max_rounds : '—';
   document.getElementById('rules-count').textContent = d.rules + ' blocker rules';
   document.getElementById('tier-value').textContent = d.tier.tier;
@@ -2951,8 +3321,8 @@ function render(d){
   document.getElementById('tier-label').textContent = d.tier.tier + ' · local controller';
   const files = artifactRows(d);
   const auditRows = d.auditor_stream.filter(m => m.kind === 'auditor'&&(m.chat_id||'history')===activeChatId);
-  const heading = newTaskMode ? 'New chat' : activeView === 'artifacts' ? 'Artifacts'
-    : activeView === 'audits' ? 'Audits' : activeView === 'usage' ? 'Usage' : activeView === 'compute' ? 'Compute' : activeView === 'tools' ? 'Tools & Skills' : titleOf(d);
+  const heading = newTaskMode ? 'New chat' : activeView === 'artifacts' ? 'Files'
+    : activeView === 'audits' ? 'Audit history' : activeView === 'usage' ? 'Usage' : activeView === 'compute' ? 'Remote compute' : activeView === 'tools' ? 'Tools & Skills' : titleOf(d);
   const subtitle = newTaskMode ? 'Independent generation and audit'
     : activeView === 'artifacts' ? files.length + ' audited deliverables'
     : activeView === 'audits' ? auditRows.length + ' independent audit reports'
@@ -2967,6 +3337,11 @@ function render(d){
   const badge = document.getElementById('thread-status');
   badge.textContent = state;badge.className = 'status ' + state;
   document.getElementById('model-summary').textContent = d.generator + ' → ' + d.auditor;
+  const activeRun=chatProgress(d),canCancel=Boolean(activeRun&&!activeRun.finished);
+  stopRun.hidden=!canCancel;send.hidden=canCancel;
+  stopRun.disabled=Boolean(activeRun&&activeRun.state==='CANCELLING');
+  stopRun.setAttribute('aria-label',currentLocale==='zh'?'停止正在运行的任务':'Cancel running task');
+  stopRun.title=stopRun.getAttribute('aria-label');
   const projectPin=document.getElementById('current-project-pin'),projectPinned=Boolean(d.chats&&d.chats.project_pinned);
   projectPin.textContent=projectPinned?'★':'☆';projectPin.classList.toggle('pinned',projectPinned);
   projectPin.title=projectPinned?'Unpin project':'Pin project';projectPin.setAttribute('aria-label',projectPin.title);
@@ -2975,10 +3350,13 @@ function render(d){
   const interruptedChat=d.interrupted&&(d.interrupted.chat_id||'history');
   const interruptedChatExists=Boolean(interruptedChat&&(d.chats&&d.chats.items||[]).some(item=>item.id===interruptedChat));
   if(d.interrupted&&(interruptedChat===activeChatId||!interruptedChatExists) && !(chatProgress(d) && !chatProgress(d).finished)){
-    const interruptedTask=esc(d.interrupted.task.replace(/\s+/g,' ').slice(0,72)),interruptedPhase=esc(d.interrupted.phase||'unknown');
+    const interruptedTask=esc(d.interrupted.task.replace(/\s+/g,' ').slice(0,72));
+    const phaseNames=currentLocale==='zh'?{generator:'生成者',auditor:'审计者',input:'输入',loop:'审计循环',tool:'工具',compute:'远程计算'}:{};
+    const interruptedPhase=esc(phaseNames[d.interrupted.phase]||d.interrupted.phase||'unknown');
+    const interruptedDetail=d.interrupted.detail?'<span class="interrupted-detail">'+esc(d.interrupted.detail)+'</span>':'';
     iv.className = 'interrupted on';iv.innerHTML = currentLocale==='zh'
-      ?'<b>任务已安全中断</b><br>“'+interruptedTask+'”。最后可见阶段：'+interruptedPhase+'。已提交轮次均已保留；重试会从最近的持久 Git 提交继续，忽略提示也不会改动文件。<div class="interrupted-actions"><button type="button" data-interrupted="retry">重试任务</button><button type="button" data-interrupted="dismiss">忽略提示</button></div>'
-      :'<b>Task interrupted safely</b><br>"'+interruptedTask+'". Last visible phase: '+interruptedPhase+'. Committed rounds are preserved. Retry resumes from the last durable commit; dismiss keeps files unchanged.<div class="interrupted-actions"><button type="button" data-interrupted="retry">Retry task</button><button type="button" data-interrupted="dismiss">Dismiss notice</button></div>';
+      ?'<b>任务已安全中断</b><br>“'+interruptedTask+'”。最后可见阶段：'+interruptedPhase+'。'+interruptedDetail+'已提交轮次均已保留；重试会从最近的持久 Git 提交继续，忽略提示也不会改动文件。<div class="interrupted-actions"><button type="button" data-interrupted="retry">重试任务</button><button type="button" data-interrupted="dismiss">忽略提示</button></div>'
+      :'<b>Task interrupted safely</b><br>"'+interruptedTask+'". Last visible phase: '+interruptedPhase+'. '+interruptedDetail+'Committed rounds are preserved. Retry resumes from the last durable commit; dismiss keeps files unchanged.<div class="interrupted-actions"><button type="button" data-interrupted="retry">Retry task</button><button type="button" data-interrupted="dismiss">Dismiss notice</button></div>';
   }else iv.className = 'interrupted';
   maybePromptForHuman(d);
 }
@@ -2991,6 +3369,7 @@ document.getElementById('interrupted').onclick=async ev=>{const button=ev.target
 function selectView(view){
   activeView = ['tasks','artifacts','audits','usage','compute','tools'].includes(view) ? view : 'tasks';
   if(activeView!=='compute')stopComputeTimers();
+  if(['audits','usage','compute','tools'].includes(activeView))document.getElementById('workspace-tools').open=true;
   newTaskMode = false;
   document.querySelectorAll('.nav-item').forEach(button => {
     const selected = button.getAttribute('data-view') === activeView;
@@ -3015,9 +3394,9 @@ function startStream(){let source;try{source=new EventSource('/api/stream?t='+en
   connected(true,'live');}catch(e){}};source.onerror=()=>startPolling('reconnecting');}
 
 const form=document.getElementById('f');const say=document.getElementById('say');
-const send=document.getElementById('send');const route=document.getElementById('route');
+const send=document.getElementById('send');const stopRun=document.getElementById('stop-run');
+const route=document.getElementById('route');
 const filesBox=document.getElementById('attachments');const fileInput=document.getElementById('file-input');
-const consentBox=document.getElementById('transfer-consent');
 const sidebar=document.querySelector('.sidebar');const inspector=document.getElementById('inspector');
 const scrim=document.getElementById('scrim');
 function syncScrim(){
@@ -3048,12 +3427,11 @@ function drawFiles(){filesBox.className='attachments'+(pendingFiles.length?' on'
     +(pendingFiles.length?'<div class="attachment-note"><b>'+pendingFiles.length+' file'+(pendingFiles.length===1?'':'s')+' · '+formatBytes(total)+'</b>'
       +(pendingFiles.length>visible.length?'<span class="attachment-more">+'+(pendingFiles.length-visible.length)+' more selected</span>':'')
       +'<span>Stored in chunks without an app quota. Model inspection depends on file support and context.</span></div>':'');}
-function resetConsent(){attachmentConsent=false;consentBox.className='transfer-consent';}
 function uniqueFileName(original){let name=original||'untitled';const used=new Set(pendingFiles.map(e=>e.name.toLowerCase()));
   if(!used.has(name.toLowerCase()))return name;const dot=name.lastIndexOf('.');const base=dot>0?name.slice(0,dot):name;
   const ext=dot>0?name.slice(dot):'';let n=2;while(used.has((base+' ('+n+')'+ext).toLowerCase()))n++;
   return base+' ('+n+')'+ext;}
-function addFiles(list){resetConsent();for(const file of Array.from(list||[])){
+function addFiles(list){for(const file of Array.from(list||[])){
   if(transferBusy)return;
   pendingFiles.push({file,name:uniqueFileName(file.name)});
 }drawFiles();}
@@ -3073,12 +3451,6 @@ async function uploadFiles(files){const batch=uploadId();let next=0;const worker
   const settled=await Promise.allSettled(workers);const failed=settled.find(result=>result.status==='rejected');
   if(failed)throw failed.reason;return batch;
 }
-function showTransferConsent(){
-  const target=lastState?lastState.generator:'the configured generator';
-  document.getElementById('consent-copy').textContent=pendingFiles.length+' file(s) will be stored in this project. Supported text content will be sent to '+target+'.';
-  document.getElementById('confirm-transfer').textContent='Upload and send';
-  consentBox.className='transfer-consent on';
-}
 const mentionPrefix=/^\s*@(generator|executor|auditor|audit|生成端|执行端|审计端|审计)(?=\s|[,:：-]|$)[\s,:：-]*/i;
 function audienceOf(){const m=say.value.match(mentionPrefix);if(!m)return'auto';
   return ['generator','executor','生成端','执行端'].includes(m[1].toLowerCase())?'generator':'auditor';}
@@ -3090,8 +3462,7 @@ function setAudience(audience){const body=say.value.replace(mentionPrefix,'').tr
 document.getElementById('attach').onclick=()=>fileInput.click();fileInput.onchange=()=>{addFiles(fileInput.files);fileInput.value='';};
 filesBox.onclick=ev=>{const button=ev.target.closest('[data-remove]');if(button){const i=Number(button.getAttribute('data-remove'));
   if(transferBusy)return;
-  uploadProgress.delete(pendingFiles[i]);pendingFiles.splice(i,1);resetConsent();drawFiles();}};
-document.getElementById('confirm-transfer').onclick=()=>{attachmentConsent=true;consentBox.className='transfer-consent';form.requestSubmit();};
+  uploadProgress.delete(pendingFiles[i]);pendingFiles.splice(i,1);drawFiles();}};
 const dropOverlay=document.getElementById('drop-overlay');let dragDepth=0;
 function fileDrag(ev){return Array.from((ev.dataTransfer&&ev.dataTransfer.types)||[]).includes('Files');}
 window.addEventListener('dragenter',ev=>{if(!fileDrag(ev))return;ev.preventDefault();dragDepth++;
@@ -3105,16 +3476,6 @@ window.addEventListener('drop',ev=>{if(!fileDrag(ev))return;ev.preventDefault();
 say.addEventListener('input',()=>{say.style.height='auto';say.style.height=Math.min(say.scrollHeight,150)+'px';syncAudience();});
 say.addEventListener('keydown',ev=>{if(ev.key==='Enter'&&!ev.shiftKey&&!ev.isComposing){ev.preventDefault();form.requestSubmit();}});
 document.querySelectorAll('.audience-chip').forEach(button=>button.onclick=()=>setAudience(button.getAttribute('data-audience')));
-const taskChoices=document.getElementById('task-choices');
-function resetTaskChoices(){taskChoiceMode='';pendingChoiceTask='';taskChoices.className='task-choices';}
-function likelyContentTask(text){return /(?:\b(?:write|draft|review|report|article|essay|brief|summary|copy|document)\b|写|撰写|评测|评论|报告|文章|总结)/i.test(text);}
-function needsTaskChoices(text){return audienceOf()!=='auditor'&&likelyContentTask(text);}
-function selectedChoice(name){const item=document.querySelector('input[name="'+name+'"]:checked');return item?item.value:'';}
-function taskChoicePayload(){return taskChoiceMode==='prompt'?{mode:'prompt'}:{mode:'selected',
-  focus:selectedChoice('task_focus'),format:selectedChoice('task_format'),tone:selectedChoice('task_tone')};}
-document.getElementById('close-task-choices').onclick=()=>{taskChoices.className='task-choices';say.focus();};
-document.getElementById('use-prompt-as-written').onclick=()=>{taskChoiceMode='prompt';taskChoices.className='task-choices';form.requestSubmit();};
-document.getElementById('run-with-choices').onclick=()=>{taskChoiceMode='selected';taskChoices.className='task-choices';form.requestSubmit();};
 const computeHostModal=document.getElementById('compute-host-modal');
 const computeHostForm=document.getElementById('compute-host-form');
 const computeJobModal=document.getElementById('compute-job-modal');
@@ -3293,9 +3654,8 @@ document.getElementById('new-task').onclick=async()=>{
   activeView='tasks';newTaskMode=true;say.value='';route.className='route';pendingFiles=[];
   pendingContinuation={cycle:'',chat:''};
   uploadProgress=new Map();
-  resetTaskChoices();
   syncAudience();
-  fileInput.value='';resetConsent();drawFiles();
+  fileInput.value='';drawFiles();
   document.querySelectorAll('.nav-item').forEach(button => {
     const selected=button.getAttribute('data-view')==='tasks';button.classList.toggle('active',selected);
     button.setAttribute('aria-pressed',selected?'true':'false');
@@ -3339,24 +3699,27 @@ document.addEventListener('keydown',ev=>{const modal=activeModal();
     else if(filePreviewModal.classList.contains('on'))closeFilePreview();else closePanels();}
 });
 window.addEventListener('resize',()=>{if(innerWidth>1120)closePanels();});
+stopRun.onclick=async()=>{const progress=lastState&&chatProgress(lastState);if(!progress||progress.finished)return;
+  stopRun.disabled=true;route.className='route on';route.textContent=currentLocale==='zh'?'正在安全停止…':'Stopping safely…';
+  try{await api('/api/run',{action:'cancel',run_id:progress.run_id||''});route.innerHTML=currentLocale==='zh'
+    ?'<b>已请求停止。</b> 当前步骤结束后，任务会安全停止。'
+    :'<b>Stop requested.</b> The task will stop safely at the next execution boundary.';}
+  catch(e){route.className='route on error';route.textContent=e.message;stopRun.disabled=false;}};
 form.onsubmit=async ev=>{ev.preventDefault();const rawText=say.value.trim();if(!rawText)return;
   const continuing=pendingContinuation.chat===activeChatId&&Boolean(pendingContinuation.cycle);
-  if(needsTaskChoices(rawText)&&!taskChoiceMode&&!continuing){pendingChoiceTask=rawText;taskChoices.className='task-choices on';return;}
-  const text=rawText;const deliveryChoices=taskChoiceMode&&pendingChoiceTask===rawText?taskChoicePayload():null;
-  if(pendingFiles.length&&!attachmentConsent){showTransferConsent();return;}
+  const text=rawText;
   newTaskMode=false;activeView='tasks';if(lastState)render(lastState);
   send.disabled=true;say.disabled=true;transferBusy=true;document.getElementById('attach').disabled=true;route.className='route on';
   route.textContent=pendingFiles.length?'Sending your files…':'Starting…';
   try{const uploadBatch=pendingFiles.length?await uploadFiles(pendingFiles):null;
-    const r=await api('/api/say',{text,chat_id:activeChatId,upload_batch:uploadBatch,attachment_consent:attachmentConsent,
-      delivery_choices:continuing?null:deliveryChoices,continuation_cycle:continuing?pendingContinuation.cycle:''});if(r.asked){route.innerHTML='<b class="ask">Needs clarification</b> — '
-    + esc(r.clarify);resetConsent();resetTaskChoices();}else{activeChatId=r.chat_id||activeChatId;route.innerHTML=r.lane==='generator'
+    const r=await api('/api/say',{text,chat_id:activeChatId,upload_batch:uploadBatch,attachment_consent:pendingFiles.length>0,
+      continuation_cycle:continuing?pendingContinuation.cycle:''});if(r.asked){route.innerHTML='<b class="ask">Needs clarification</b> — '
+    + esc(r.clarify);}else{activeChatId=r.chat_id||activeChatId;route.innerHTML=r.lane==='generator'
       ?'<b>Task started.</b> The result will appear in this conversation.'
       :'<b>Message delivered.</b>';
     if(r.lane==='generator')pendingContinuation={cycle:'',chat:''};
-    if(!pendingFiles.length||r.attachments_accepted){say.value='';pendingFiles=[];uploadProgress=new Map();fileInput.value='';drawFiles();syncAudience();resetTaskChoices();}
-    resetConsent();}}
-  catch(e){resetConsent();route.innerHTML='<b>Refused</b> — '+esc(e.message);}
+    if(!pendingFiles.length||r.attachments_accepted){say.value='';pendingFiles=[];uploadProgress=new Map();fileInput.value='';drawFiles();syncAudience();}}}
+  catch(e){route.innerHTML='<b>Refused</b> — '+esc(e.message);}
   transferBusy=false;document.getElementById('attach').disabled=false;send.disabled=false;say.disabled=false;say.focus();};
 api('/api/state').then(render).catch(e=>{document.getElementById('thread-title').textContent='Disconnected — '+e.message;});
 startStream();
@@ -3367,7 +3730,7 @@ async function initialReadiness(){
       const providers=Object.values(s.providers||{}).filter(p=>p.configured).length;
       const blocked=s.doctor&&s.doctor.status==='blocked';
       if(s.app_mode&&location.hash==='#projects'&&(providers<2||blocked)){
-        await openSettings();if(blocked)doctorMessage('Required setup needs attention before creating a project.',true);return;}
+        await openSettings(blocked?'general':'providers');if(blocked)doctorMessage('Required setup needs attention before creating a project.',true);return;}
       if(!s.doctor||s.doctor.status!=='running')return;
     }catch(e){return;}
     await new Promise(resolve=>setTimeout(resolve,500));

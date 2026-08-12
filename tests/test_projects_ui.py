@@ -11,6 +11,7 @@ from crossaudit.cli import pair
 from crossaudit.config import load
 from crossaudit.console import chats, daemon, projects
 from crossaudit.errors import ConfigDenial
+from crossaudit.runtime import ProvisioningJournal, journal_path
 
 
 def payload(**changes):
@@ -241,6 +242,93 @@ def test_background_validation_never_writes_setup_state_outside_workspace(
     assert marker.read_text() == '{"status":"belongs-to-someone-else"}'
 
 
+def test_stopped_project_job_can_retry_and_be_dismissed_without_touching_files(
+        tmp_path, monkeypatch):
+    monkeypatch.delenv("CROSSAUDIT_AUDITOR_KEY", raising=False)
+    projects.create_project(tmp_path, payload(name="control"), lambda *_: None)
+    current = load(tmp_path / "control" / "crossaudit.yml")
+    attempts = []
+
+    def fail_then_succeed(_base, request, _step):
+        attempts.append(dict(request))
+        if len(attempts) == 1:
+            raise ConfigDenial(
+                "local changes need attention", issue="workspace_dirty",
+                action="review_workspace")
+        return {"root": str(tmp_path / "retry-me")}
+
+    monkeypatch.setattr(projects, "create_project", fail_then_succeed)
+    jobs = projects.ProjectJobs()
+    started = jobs.start(
+        current, payload(name="retry-me", description="preserve this draft"),
+        lambda: None)
+    deadline = time.monotonic() + 2
+    while jobs.snapshot()[0]["status"] == "running" and time.monotonic() < deadline:
+        time.sleep(0.01)
+    first = jobs.snapshot()[0]
+    assert first["status"] == "failed"
+    assert first["issue"]["action"] == "review_workspace"
+    assert first["draft"]["description"] == "preserve this draft"
+
+    # A new application process can reconstruct both the UI card and the exact
+    # safe retry operation; no in-memory closure is required.
+    reopened = projects.ProjectJobs()
+    assert reopened.snapshot(current)[0]["draft"]["description"] == "preserve this draft"
+    retried = reopened.retry(started["job"], lambda: None, current)
+    deadline = time.monotonic() + 2
+    while next(row for row in reopened.snapshot(current) if row["id"] == retried["job"])[
+            "status"] == "running" and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert next(row for row in reopened.snapshot(current) if row["id"] == retried["job"])[
+        "status"] == "complete"
+    assert len(attempts) == 2
+
+    assert reopened.dismiss(started["job"], current) == {"dismissed": True}
+    assert all(row["id"] != started["job"] for row in reopened.snapshot(current))
+
+
+def test_project_setup_owned_by_a_dead_process_becomes_retryable(tmp_path, monkeypatch):
+    monkeypatch.delenv("CROSSAUDIT_AUDITOR_KEY", raising=False)
+    projects.create_project(tmp_path, payload(name="control"), lambda *_: None)
+    current = load(tmp_path / "control" / "crossaudit.yml")
+    journal = ProvisioningJournal(journal_path(current))
+    journal.create(
+        job_id="deadbeef1234", kind="create", project="unfinished",
+        current_config=str(current.path), workspace=str(tmp_path),
+        specification={"kind": "create", "base": str(tmp_path),
+                       "payload": payload(name="unfinished")},
+        root=str(tmp_path / "unfinished"),
+        context={"draft": payload(name="unfinished")}, owner_pid=999999)
+
+    rows = projects.ProjectJobs().snapshot(current)
+    row = next(item for item in rows if item["id"] == "deadbeef1234")
+    assert row["status"] == "failed" and row["stage"] == "interrupted"
+    assert row["issue"]["action"] == "retry"
+
+
+def test_adopting_a_dirty_worktree_returns_a_retryable_ui_recovery_action(
+        tmp_path, monkeypatch):
+    target = tmp_path / "existing"
+    target.mkdir()
+    subprocess.run(["git", "init", "-q", "-b", "main"], cwd=target, check=True)
+    subprocess.run(["git", "remote", "add", "origin",
+                    "https://github.com/owner/existing.git"], cwd=target, check=True)
+    (target / "user-notes.md").write_text("do not overwrite me")
+    monkeypatch.setattr(projects, "github_status", lambda force=False: {
+        "connected": True, "owner": "owner", "detail": "Connected as owner"})
+    monkeypatch.setattr(pair, "_exists", lambda _repo: True)
+
+    with pytest.raises(ConfigDenial, match="choose Try again") as caught:
+        projects.create_project(target, payload(
+            name="existing", github=True, science_repo="owner/existing",
+            audit_repo="owner/existing-audit", adopt_existing=True,
+            use_selected_folder=True, workspace=str(target)), lambda *_: None)
+
+    assert caught.value.detail == {
+        "issue": "workspace_dirty", "action": "review_workspace"}
+    assert (target / "user-notes.md").read_text() == "do not overwrite me"
+
+
 def test_pairing_never_overwrites_an_unrelated_origin(tmp_path, monkeypatch):
     root = tmp_path / "project"
     root.mkdir()
@@ -368,7 +456,10 @@ def test_project_page_contains_the_control_plane_contract():
                  "Connect GitHub", "/api/github/connect", "Open GitHub",
                  "Local project folder", "Choose folder…",
                  "/api/workspace/select", "/api/github/check",
-                 "Check names", "Edit repository names", "recovery-modal"):
+                 "Check names", "Edit repository names", "recovery-modal",
+                 "/api/projects/job", "retry_job", "dismiss_job",
+                 "revealInFinder", "restoreProjectDraft",
+                 "j.status==='running'||j.status==='failed'"):
         assert text in PAGE
     for text in ("New chat", "Pinned", "/api/chats/new", "/api/chats/pin",
                  "/api/projects/pin", "data-pin-chat", "data-pin-project",
@@ -384,14 +475,26 @@ def test_project_page_contains_the_control_plane_contract():
     assert "payload.use_selected_folder=true" in PAGE
     for text in ("Models, reasoning & audit loop", "/api/runtime/options",
                  "/api/runtime", "Save for next call", "Reasoning effort",
-                 "Automatic revision limit", "Committed project controls",
+                 "Automatic revision limit", "Safe handoff",
                  "Generator guidance", "/api/skills", "Save guidance"):
+        assert text in PAGE
+    for text in ('id="workspace-tools"', "Files", "Audit history",
+                 "Remote compute", 'data-runtime-panel="models"',
+                 'data-runtime-panel="automation"',
+                 'data-runtime-panel="budgets"',
+                 'data-runtime-panel="instructions"',
+                 "Advanced provider recovery"):
         assert text in PAGE
     for text in ("The audit needs your decision", "/api/escalation",
                  "Automatic audit limit reached", "What is still blocking the result",
                  "Revise and continue", "Stop this task", "Review issues & decide",
                  "promptedEscalations", "maybePromptForHuman",
-                 "continuation_cycle", "pendingContinuation"):
+                 "continuation_cycle", "pendingContinuation", "Retry provider now",
+                 "Review provider connection", "Change model or fallback",
+                 "retry_provider"):
+        assert text in PAGE
+    for text in ('id="stop-run"', "Cancel running task", "/api/run",
+                 "Stopping safely"):
         assert text in PAGE
     assert "data-copy-recovery-github" in PAGE
     assert "This dialog updates automatically after approval." in PAGE
@@ -744,7 +847,7 @@ def test_failed_github_setup_is_visible_and_resumes_idempotently(tmp_path, monke
 
     monkeypatch.setattr(pair, "apply_pair", fail_once)
     jobs = projects.ProjectJobs()
-    started = jobs.start(current, payload(name="recover", github=True), lambda: None)
+    jobs.start(current, payload(name="recover", github=True), lambda: None)
     deadline = time.monotonic() + 3
     while jobs.snapshot()[0]["status"] == "running" and time.monotonic() < deadline:
         time.sleep(0.01)

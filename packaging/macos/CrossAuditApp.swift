@@ -336,6 +336,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
             }
             return
         }
+        if local, action == "revealInFinder", let path = body["path"] as? String,
+           !path.isEmpty, FileManager.default.fileExists(atPath: path) {
+            NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
+            return
+        }
         guard local, action == "chooseWorkspace" else { return }
         let panel = NSOpenPanel()
         panel.title = "Choose CrossAudit Workspace"

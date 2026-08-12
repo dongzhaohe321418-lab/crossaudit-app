@@ -12,6 +12,7 @@ import os
 import sys
 from pathlib import Path
 
+from ..autonomy import prepare_task
 from .. import constitution as const_mod
 from .. import router as router_mod
 from ..config import Config, load
@@ -169,10 +170,11 @@ def lane_generator(cfg: Config, routing) -> str:
     runs: write, commit, audit, and repeat on findings."""
     from .build import cmd_build
 
+    task = prepare_task(routing.restated)
     print(f"\n  That is a change to the work: {routing.restated}")
 
     class _Args:
-        words = routing.restated.split()
+        words = task.split()
 
     try:
         code = cmd_build(_Args())
@@ -283,8 +285,8 @@ def cmd_talk(args) -> int:
     if not utterance:
         raise ConfigDenial("say something: `crossaudit talk \"...\"`")
 
-    routing = router_mod.route_addressed(utterance, complete=_auditor_complete(cfg),
-                                         context=_context(cfg))
+    routing = router_mod.apply_safe_default(router_mod.route_addressed(
+        utterance, complete=_auditor_complete(cfg), context=_context(cfg)))
     print(f"\n  → {routing.lane} ({routing.confidence:.0%} sure) — {routing.reasoning}")
 
     if not routing.certain:

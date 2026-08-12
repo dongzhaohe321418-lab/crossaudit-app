@@ -1,6 +1,6 @@
 # CrossAudit 4.14.0 enterprise release assessment
 
-Date: 2026-08-04
+Date: 2026-08-12
 
 Target: Apple Silicon macOS 13 or later
 
@@ -24,7 +24,7 @@ Policy rather than hidden behind an installation workaround.
 
 | Area | Release gate | Result |
 |---|---|---|
-| Python regression | Complete automated suite | Passed: 559, with 2 paid checks skipped |
+| Python regression | Complete automated suite | Passed: 620, with 2 paid checks skipped |
 | Provider compatibility | Protocol mocks plus opt-in live checks | Passed; paid API checks remain opt-in |
 | Native packaging | Swift typecheck, PyInstaller analysis, arm64 binaries | Passed |
 | App structure | `plutil` and deep strict `codesign` validation | Passed |
@@ -34,7 +34,7 @@ Policy rather than hidden behind an installation workaround.
 | Credential boundary | Keychain write/read/delete; no secret in argv or response | Automated and local smoke |
 | Native editing | Responder-chain Edit menu; copy/paste in secure API-key fields | Automated and installed-app UI smoke |
 | Localization | English/Chinese across hub, workspaces, settings, setup, usage and compute; cross-port persistence | Automated, browser, and installed-app restart smoke |
-| Subscription boundary | Official ChatGPT browser flow; allowlisted state; text-only fail-closed turns | Automated and live smoke |
+| Subscription boundary | Official ChatGPT login; allowlisted state; isolated text-only turns with denied-tool recovery | Automated and live smoke |
 | Live state | Same-process event latency below 250 ms; external fallback at 100 ms | Automated |
 | Usage metering | Provider/runtime counts, cache normalization, local-only ledger, unknown-price refusal | Automated and local smoke |
 | Project isolation | Separate worker, token, lock, ledger, and progress state | Automated |
@@ -55,6 +55,54 @@ and CI logs. Tests that spend provider credits remain explicitly opt-in and use
 repository secrets in CI.
 
 ## V4.14.0 product-readiness evidence
+
+- The 2026-08-12 hardening pass introduced a transactional operational run
+  journal and resumable project-provisioning journal. The old crash marker is
+  migration-only; run state, events, owner process and recovery decisions now
+  share one SQLite WAL boundary.
+- An installed-build forced-crash exercise killed a project worker while the
+  Generator was drafting. On restart, the frozen application preserved the
+  task, Chat, last actor and useful phase detail; dismissing the notice removed
+  no files or audit evidence.
+- A Codex subscription turn no longer aborts merely because the underlying
+  agent first requests a tool. The request is denied, the temporary workspace
+  remains read-only and offline, and the model may recover to final text. Unit
+  tests cover recovery and no-text fail-closed behavior; a real signed-in
+  `gpt-5.6-sol` completion returned the requested exact text.
+- CLI, UI, retry and cancel now cross one `RunCommandService`; the former
+  in-memory Tracker lifecycle and current-version crash marker were deleted.
+  Cancellation is durable, idempotent and wins a late-worker race. Opening a
+  progress view is tested to perform no recovery write or other state mutation.
+- The full release gate passed with **620 tests passed, 2 explicitly skipped**,
+  **71% branch coverage**, no known installed dependency vulnerabilities, a
+  fresh-environment wheel self-test, PDF/DOCX round-trips and repository hygiene.
+- Installed build 9 reported V4.14.0, returned 403 without its loopback token,
+  produced a valid SSE first frame, exposed structured Doctor state and passed
+  the frozen PDF/DOCX/TLS/DCL self-test. Its DMG SHA-256 is
+  `e1b451e85498a36cadc34b0d2431dc876e9934aca7436db677ca4236724545a4`.
+- Safe autonomy removed the mandatory focus/format/tone dialog and redundant
+  attachment confirmation. Reversible presentation decisions now belong to the
+  Generator; pressing Run once authorizes its visibly attached files. Explicit
+  PDF/DOCX intent is still deterministically bound to local rendering, and the
+  HTTP boundary still refuses files without an explicit send-authorization bit.
+- Low-confidence work and read-only questions use a recorded safe default;
+  Constitution changes, disputes, resolutions, destructive actions and new
+  capabilities continue to require a human. Tests verify both sides of that
+  boundary and that the original confidence remains in the routing ledger.
+- An installed frozen-app migration exercise started an idle build-8 Project
+  worker, then opened it through the build-9 controller. The old PID exited,
+  the new worker recorded its frozen version and code digest, and the served UI
+  contained Auto-planning with both obsolete modals absent. A separate test
+  proves an older worker with active work is never interrupted for an update.
+- The installed AppKit/WebKit shell was inspected in an unlocked session. The
+  project hub and Demo workspace exposed their bilingual labels, back action,
+  file input, task composer, live state and audit context through the macOS
+  accessibility tree. A separate temporary frozen-core project projected a
+  synthetic GENERATING Run, accepted a token-authenticated UI cancel command,
+  persisted `cancel_requested`, reached CANCELLED and left no test project. A
+  second frozen-core test killed the worker immediately after that command;
+  restart completed the durable intent as CANCELLED with `run_cancelled` and no
+  false interruption notice.
 
 - The release gate now tests installed wheels rather than editable source
   layouts across Python 3.10–3.13 on Linux, macOS, and Windows. It enforces a
@@ -84,7 +132,7 @@ repository secrets in CI.
   global localization. Custom modals now trap keyboard focus, close with Escape
   and return focus to their trigger.
 - Final Apple Silicon DMG: `CrossAudit-4.14.0-arm64.dmg`, SHA-256
-  `0f1998bc4b888542dc1089a61880660d1f2a95a70c13a7c0b5a0938b95f038bc`.
+  `e1b451e85498a36cadc34b0d2431dc876e9934aca7436db677ca4236724545a4`.
   The mounted 4.14.0 core repeated the document and loopback-security self-test;
   a final browser pass found no console errors or warnings.
 

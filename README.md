@@ -82,6 +82,11 @@ structured content.
   model output.
 - Independent background workers per project and immediate event-driven UI
   updates through Server-Sent Events.
+- Safe autonomy by default: one plain-language request is enough. The Generator
+  infers reversible choices such as focus, tone, structure, filename, and the
+  simplest useful output format. Low-confidence ordinary work continues through
+  the supervised loop; rule changes, audit rulings, destructive actions, and new
+  capabilities still require an explicit human decision.
 - Claude Science-style remote compute: register existing OpenSSH hosts, probe
   workstations or Slurm login nodes, submit detached jobs, follow scheduler
   state and logs in real time, cancel explicitly, and stream remote outputs
@@ -202,10 +207,11 @@ project, or contact a model provider. Setup begins only when you run
 3. Leave GitHub off for a local project, or select the two-repository option and
    use **Connect GitHub**. CrossAudit shows GitHub's official device code and
    resumes automatically after authorization.
-4. Open the new workspace, type the request, attach any inputs, choose the
-   desired output format, and select **Run task**.
-5. Confirm the named provider destination. Watch the generator, deterministic
-   checks, auditor, and correction rounds update live. Download only the final
+4. Open the new workspace, type the request, attach any inputs, and select
+   **Run task**. State a format only when it matters; otherwise the Generator
+   chooses the simplest useful one automatically.
+5. Watch the generator, deterministic checks, auditor, and correction rounds
+   update live. Download only the final
    user-facing artifacts from their conversation cards. After PASS, select
    **Admit result** to re-verify and consume the receipt once; a second attempt
    is refused.
@@ -607,10 +613,10 @@ text model that it has not read their contents. This is intentionally honest:
 upload capacity is not the same thing as a model's context-window or modality
 support.
 
-Selecting a file does not transmit it. The first **Run task** click shows the
-exact configured generator vendor and model that would receive the contents.
-Only the separate provider-specific confirmation sends the files. The server
-independently requires the same consent, validates names and chunk offsets,
+Selecting a file does not transmit it. Pressing **Run task** is the single,
+explicit authorization to send the written instruction and the files visibly
+attached to that instruction to the configured Generator. The server
+independently requires that send authorization, validates names and chunk offsets,
 rejects path traversal, and stores the accepted batch under the gitignored
 controller inbox with restrictive permissions and SHA-256 digests. File contents are clearly
 delimited as untrusted task data in the generator prompt.
@@ -633,8 +639,8 @@ action instead. Text previews are bounded for interface responsiveness, but the
 download always contains the complete file and has no CrossAudit size quota.
 
 PDF and Word are complete delivery formats, not browser placeholders. When the
-user chooses **PDF** or **DOCX** in the task options, the Generator authors one
-temporary Markdown source and the local controller converts it with a
+user explicitly asks for PDF or DOCX in the instruction, CrossAudit binds the
+request to one temporary Markdown source and the local controller converts it with a
 deterministic renderer. CrossAudit validates the final PDF/OOXML container,
 recovers its text from the exact final bytes, removes the temporary source, and
 commits only the requested document. The independent Auditor therefore reviews

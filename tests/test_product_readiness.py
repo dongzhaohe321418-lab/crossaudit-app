@@ -102,9 +102,15 @@ def test_spatial_ui_keeps_glass_contextual_and_accessible():
         ".composer{",
         "@media(prefers-reduced-transparency:reduce)",
         "@media(prefers-reduced-motion:reduce)",
+        "@media(prefers-contrast:more)",
         "@media(forced-colors:active)",
         "@supports not ((-webkit-backdrop-filter:blur(1px))",
         "button:focus-visible",
+        "--z-content:1;--z-chrome:40;--z-composer:50;--z-overlay:100",
+        ".project-modal.on .wizard{transform-origin:50% 14%;animation:materialize",
+        ".icon-button,.compose-button{min-width:44px;min-height:44px}",
+        "A single outline icon language avoids font-dependent symbols",
+        '-webkit-mask:var(--ui-icon) center/contain no-repeat',
         ".top-project,#current-project-pin,.live-pill,.version{display:none}",
     ):
         assert contract in PAGE
@@ -114,6 +120,41 @@ def test_spatial_ui_keeps_glass_contextual_and_accessible():
     assert ".finding,.output-file,.usage-card" in PAGE
 
 
+def test_complex_setup_flows_use_progressive_disclosure():
+    """Creation and preferences expose one decision group at a time."""
+    for contract in (
+        "[hidden]{display:none!important}",
+        'class="wizard project-wizard"',
+        'data-project-step="1"',
+        'data-project-step="2"',
+        'data-project-step="3"',
+        'data-project-indicator="1"',
+        'id="project-back" hidden',
+        'id="project-next"',
+        'id="submit-project" hidden',
+        'function setProjectStep(step,focus=true)',
+        'function validateProjectStep(step)',
+        'class="wizard-error" id="wizard-error" role="alert"',
+        'class="settings-nav" aria-label="Settings sections"',
+        'data-settings-panel="general"',
+        'data-settings-panel="providers"',
+        'data-settings-pane="general"',
+        'data-settings-pane="providers"',
+        'function showSettingsPanel(name,focus=true)',
+        '<details class="credential-card"',
+        'id="toggle-doctor-details" aria-expanded="false"',
+        'class="wizard-error" id="settings-error" role="alert"',
+    ):
+        assert contract in PAGE
+
+
+def test_live_round_projection_uses_typed_event_fields_not_english_text():
+    assert "s.kind === 'round_started'" in PAGE
+    assert "roundEvent.round_no" in PAGE
+    assert "current.round_no + ' / ' + current.round_limit" in PAGE
+    assert "s.text.startsWith('round ')" not in PAGE
+
+
 def test_embedded_ui_javascript_is_valid_when_node_is_available():
     node = shutil.which("node")
     if not node:
@@ -121,7 +162,7 @@ def test_embedded_ui_javascript_is_valid_when_node_is_available():
     scripts = re.findall(r"<script>(.*?)</script>", PAGE, re.DOTALL)
     assert scripts
     result = subprocess.run([node, "--check", "-"], input="\n".join(scripts),
-                            text=True, capture_output=True)
+                            text=True, capture_output=True, check=False)
     assert result.returncode == 0, result.stderr
 
 

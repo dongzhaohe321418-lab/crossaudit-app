@@ -20,7 +20,7 @@ from __future__ import annotations
 import json
 import re
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 
 from .constitution import parse_json_reply
@@ -76,7 +76,8 @@ class Routing:
 
     @property
     def certain(self) -> bool:
-        return self.confidence >= CONFIDENCE_FLOOR
+        return (self.confidence >= CONFIDENCE_FLOOR
+                or self.routing_mode == "automatic_safe_default")
 
     def as_dict(self) -> dict:
         return asdict(self)
@@ -148,6 +149,28 @@ def route_addressed(utterance: str, *, complete, context: str = "") -> Routing:
         reasoning="the project owner explicitly addressed the Auditor" + detail,
         restated=classified.restated or body, t=int(time.time()),
         addressed_to="auditor", routing_mode="explicit")
+
+
+def apply_safe_default(routing: Routing) -> Routing:
+    """Continue low-risk ambiguous speech without interrupting the owner.
+
+    Work requests and project descriptions both safely enter the supervised
+    Generator loop; queries are read-only.  Rule changes, disputes and human
+    resolutions can alter the control plane, so ambiguity there still asks.
+    The original model confidence remains in the ledger for observability.
+    """
+    if routing.certain:
+        return routing
+    if routing.lane not in {"generator", "project", "query"}:
+        return routing
+    lane = "generator" if routing.lane in {"generator", "project"} else "query"
+    reason = routing.reasoning.rstrip(".; ")
+    suffix = ("safe autonomy sent this reversible request through the supervised "
+              "Generator loop" if lane == "generator"
+              else "safe autonomy kept this request read-only")
+    return replace(
+        routing, lane=lane, clarify="", routing_mode="automatic_safe_default",
+        reasoning=f"{reason}; {suffix}" if reason else suffix)
 
 
 def record(path: Path, routing: Routing, executed: str) -> Path:

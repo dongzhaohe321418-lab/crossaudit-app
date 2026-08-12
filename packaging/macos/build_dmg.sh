@@ -126,6 +126,9 @@ if not all(result.get("documents", {}).get(kind, {}).get("valid")
     raise SystemExit("frozen document round-trip did not pass")
 if int(result.get("tls", {}).get("trusted_certificate_authorities", 0)) < 1:
     raise SystemExit("frozen runtime has no trusted TLS certificate authorities")
+digest = str(result.get("dcl_source_sha256", ""))
+if len(digest) != 64 or any(ch not in "0123456789abcdef" for ch in digest):
+    raise SystemExit("frozen runtime has no deterministic-layer identity")
 PY
 
 # Finder tags, quarantine state, and AppleDouble/resource-fork metadata are not

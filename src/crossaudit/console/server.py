@@ -14,8 +14,8 @@ the defences are structural rather than promised:
   credential the browser attaches for you; there is none to ride.
 * **Host pinned to localhost**, which is what turns away DNS rebinding.
 * **a strict inline-only CSP**, so nothing on the page can fetch or exfiltrate.
-* **one write path, and it is narrow.** `/api/say` accepts an instruction and,
-  only after a second explicit confirmation, completed project uploads. Large
+* **one write path, and it is narrow.** `/api/say` accepts an instruction and
+  treats the same explicit Send action as attachment-transfer authorization. Large
   files reach the local inbox through bounded `/api/upload` transport chunks;
   both paths feed the same build loop the CLI uses.
 * **keys are reported present or absent, never rendered.**
@@ -37,23 +37,42 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from socketserver import TCPServer
 from urllib.parse import parse_qs, quote, urlparse
 
+from .. import app_doctor, app_keys, connections, hpc, mcp, usage
+from ..autonomy import prepare_task
 from ..config import Config, load
-from .. import app_doctor, app_keys, connections, document_export, hpc, mcp, usage
 from ..controller import StateStore
 from ..errors import ConfigDenial, Denial
 from ..gitio import is_ancestor
-from ..receipt.verify import (admit as admit_receipt, load as load_receipt,
-                              verify as verify_receipt)
 from ..providers import resilience as provider_resilience
+from ..receipt.verify import admit as admit_receipt
+from ..receipt.verify import load as load_receipt
+from ..receipt.verify import verify as verify_receipt
 from ..router import history as routing_history
+from ..runtime import (
+    PreparedRun,
+    RunCommandService,
+    RunEvent,
+    RunLaunch,
+    RunState,
+    journal_path,
+)
 from . import chats, daemon, overview, projects
 from .page import PAGE
 from .progress import TRACKER
 from .streams import bundle
-from .transfers import (MAX_REQUEST_BYTES, TransferError, decode_attachments,
-                        prompt_section, receive_upload_chunk, resolve_artifact,
-                        resolve_upload_batch, resolve_uploads, retire_uploads,
-                        stage_attachments, preview_artifact)
+from .transfers import (
+    MAX_REQUEST_BYTES,
+    TransferError,
+    decode_attachments,
+    preview_artifact,
+    prompt_section,
+    receive_upload_chunk,
+    resolve_artifact,
+    resolve_upload_batch,
+    resolve_uploads,
+    retire_uploads,
+    stage_attachments,
+)
 
 IDLE_TIMEOUT_S = 900.0
 STREAM_POLL_S = 0.1          # fallback for changes made by another local process
@@ -196,6 +215,10 @@ class _ConsoleHTTPServer(ThreadingHTTPServer):
         watcher = self.idle_thread
         if watcher and watcher is not threading.current_thread():
             watcher.join(timeout=2)
+        # A production console owns one process and exits after close. Tests and
+        # embedded lifecycle checks can host several short-lived consoles in one
+        # interpreter; do not leave their deleted journal bound globally.
+        TRACKER.clear()
 
 
 def _notify_progress() -> None:
@@ -235,9 +258,10 @@ def _ordered_cycles(state: dict, commit_chats: dict[str, str] | None = None) -> 
 def snapshot(cfg: Config) -> dict:
     from .. import __version__
     from .. import admission as adm
-    from ..dcl import contracts as check_contracts
     from .. import skills as skills_mod
+    from ..dcl import contracts as check_contracts
 
+    TRACKER.bind(journal_path(cfg))
     store = StateStore(cfg.root / cfg.state_dir / "state.json")
     controller_state = store.snapshot()
     caps = store.capabilities()
@@ -341,126 +365,68 @@ def start_build(cfg: Config, task: str, *, before_start=None,
     reimplement it, because a second copy could drift on the only thing that
     matters: when the loop stops.
     """
-    import threading
-
     from ..cli.build import preflight, resolve_task, run_loop
 
-    if continuation_cycle:
-        if not re.fullmatch(r"[a-f0-9]{16}", continuation_cycle):
-            raise ConfigDenial("the human continuation cycle id is invalid")
-        prior = StateStore(cfg.root / cfg.state_dir / "state.json").cycle(
-            continuation_cycle)
-        if prior is None or prior.get("status") != "OPEN" or not prior.get(
-                "human_reopened"):
-            raise ConfigDenial(
-                "that audit cycle is not waiting for a human-authorized revision")
-        if prior.get("chat_id") and prior["chat_id"] != chat_id:
-            raise ConfigDenial("the audit cycle belongs to a different chat")
-        if not is_ancestor(cfg.root, prior["active_sha"], "HEAD"):
-            raise ConfigDenial(
-                "the project no longer descends from the cycle being revised")
-    preflight(cfg)
-    resolved = resolve_task(cfg, task.split())
-    staged = stage_attachments(cfg, attachments or [])
-    if before_start is not None:
-        # The console uses this seam to commit its routing decision before the
-        # worker thread can begin making generator/auditor commits.
-        before_start(resolved)
-    slot = daemon.acquire_workspace_slot(cfg)
-    try:
-        run = TRACKER.start(resolved, chat_id=chat_id)
-    except Exception:
-        daemon.release_workspace_slot(slot)
-        raise
-    if staged:
-        TRACKER.step("input", f"{len(staged)} attachment(s) received",
-                     ", ".join(item["name"] for item in staged))
-    try:
-        daemon.mark_build(cfg, resolved, chat_id=chat_id,
-                          continuation_cycle=continuation_cycle)
-    except Exception:
-        daemon.release_workspace_slot(slot)
-        raise
+    service = RunCommandService(
+        cfg, alive=daemon._pid_alive, on_change=TRACKER.notify)
+    TRACKER.bind(journal_path(cfg))
 
-    def work() -> None:
-        recoverable = False
-        try:
-            def live_step(actor: str, text: str, detail: str = "") -> None:
-                TRACKER.step(actor, text, detail)
-                daemon.update_build(cfg, actor, detail or text)
+    def prepare() -> PreparedRun:
+        if continuation_cycle:
+            if not re.fullmatch(r"[a-f0-9]{16}", continuation_cycle):
+                raise ConfigDenial("the human continuation cycle id is invalid")
+            prior = StateStore(cfg.root / cfg.state_dir / "state.json").cycle(
+                continuation_cycle)
+            if prior is None or prior.get("status") != "OPEN" or not prior.get(
+                    "human_reopened"):
+                raise ConfigDenial(
+                    "that audit cycle is not waiting for a human-authorized revision")
+            if prior.get("chat_id") and prior["chat_id"] != chat_id:
+                raise ConfigDenial("the audit cycle belongs to a different chat")
+            if not is_ancestor(cfg.root, prior["active_sha"], "HEAD"):
+                raise ConfigDenial(
+                    "the project no longer descends from the cycle being revised")
+        preflight(cfg)
+        resolved = resolve_task(cfg, task.split())
+        staged = stage_attachments(cfg, attachments or [])
+        if before_start is not None:
+            # Commit routing only while this process owns the project's single
+            # mutation lease; CLI and UI can no longer race before Run start.
+            before_start(resolved)
+        received = (() if not staged else (RunEvent(
+            kind="attachments_received", actor="input",
+            text=f"{len(staged)} attachment(s) received",
+            detail=", ".join(item["name"] for item in staged),
+            state=RunState.QUEUED),))
+        return PreparedRun(
+            task=resolved, chat_id=chat_id,
+            continuation_cycle=continuation_cycle,
+            initial_events=received, context=tuple(staged))
 
-            code = run_loop(cfg, resolved, attachments=prompt_section(staged),
-                            on_step=live_step,
-                            chat_id=chat_id,
-                            continuation_cycle=continuation_cycle)
-            TRACKER.finish({0: "passed", 11: "escalated"}.get(code, "blocked"))
-        except Denial as exc:
-            TRACKER.finish("refused", exc.reason)
-            daemon.mark_failed(cfg, "refused", exc.reason)
-            recoverable = True
-        except Exception as exc:                                  # noqa: BLE001
-            TRACKER.finish("failed", f"{type(exc).__name__}: {exc}")
-            daemon.mark_failed(cfg, "failed", f"{type(exc).__name__}: {exc}")
-            recoverable = True
-        finally:
-            if not recoverable:
-                daemon.unmark_build(cfg)
-            daemon.release_workspace_slot(slot)
+    def work(prepared: PreparedRun, emit) -> int:
+        staged = list(prepared.context or ())
+        return run_loop(
+            cfg, prepared.task, attachments=prompt_section(staged),
+            on_event=emit, chat_id=prepared.chat_id,
+            continuation_cycle=prepared.continuation_cycle)
 
-    threading.Thread(target=work, daemon=True).start()
-    return {"started": True, "task": resolved.splitlines()[0][:80],
+    launch = service.start(prepare, work, background=True)
+    assert isinstance(launch, RunLaunch)
+    staged = list(launch.prepared.context or ())
+    return {"started": True, "run_id": launch.run_id,
+            "task": launch.prepared.task.splitlines()[0][:80],
             "attachments": [{k: v for k, v in item.items() if k != "text"}
                             for item in staged]}
 
 
-DELIVERY_CHOICES = {
-    "focus": {"Balanced coverage", "Technical depth",
-              "Everyday use and practical experience",
-              "Value and purchase recommendation"},
-    "format": {"Markdown (.md)", "Plain text (.txt)", "HTML (.html)",
-               "PDF (.pdf)", "Word (.docx)"},
-    "tone": {"Editorial and readable", "Technical and precise",
-             "Concise and direct", "Persuasive but evidence-led"},
-}
-
-
-def _guided_task(text: str, choices) -> str:
-    if not isinstance(choices, dict):
-        raise ConfigDenial("delivery choices must be an object")
-    mode = str(choices.get("mode", ""))
-    if mode == "prompt":
-        return text
-    if mode != "selected":
-        raise ConfigDenial("delivery choice mode must be prompt or selected")
-    selected = {}
-    for key, allowed in DELIVERY_CHOICES.items():
-        value = str(choices.get(key, ""))
-        if value not in allowed:
-            raise ConfigDenial(f"choose a supported {key}")
-        selected[key] = value
-    task = (text + "\n\nCONFIRMED DELIVERY REQUIREMENTS\n"
-            f"- Focus: {selected['focus']}\n"
-            f"- Output format: {selected['format']}\n"
-            f"- Tone: {selected['tone']}\n"
-            "- Produce exactly one primary deliverable. Do not create supporting "
-            "or alternate-format files unless the task or configured audit "
-            "contract explicitly requires them.")
-    if selected["format"] == "PDF (.pdf)":
-        task += document_export.export_instructions("pdf")
-    elif selected["format"] == "Word (.docx)":
-        task += document_export.export_instructions("docx")
-    return task
-
-
 def say(cfg: Config, text: str, *, attachments=None,
-        attachment_consent: bool = False, delivery_choices=None,
+        attachment_consent: bool = False,
         chat_id: str = "", continuation_cycle: str = "") -> dict:
     """Route one sentence and run its lane — the same path `talk` takes.
 
-    The sentence submit is the normal action confirmation. Attachments cross a
-    separate trust boundary, so both the browser and this server require an
-    additional provider-specific confirmation before their contents may enter
-    a generator prompt.
+    Pressing Send is the action confirmation for the sentence and any attached
+    files.  The server still requires the client to state that authorization
+    explicitly, so a forged or older client cannot silently transmit files.
     """
     from .. import router as router_mod
     from ..cli import talk as talk_mod
@@ -477,17 +443,10 @@ def say(cfg: Config, text: str, *, attachments=None,
             reasoning="the owner authorized a correction to an escalated cycle",
             restated=text, t=int(time.time()), addressed_to="generator",
             routing_mode="human_continuation", chat_id=chat_id)
-    elif delivery_choices is not None:
-        task_text = router_mod.MENTION_RE.sub("", text, count=1).strip()
-        routing = router_mod.Routing(
-            utterance=text, lane="generator", confidence=1.0,
-            reasoning="the owner confirmed delivery choices and started the task",
-            restated=_guided_task(task_text, delivery_choices), t=int(time.time()),
-            addressed_to="generator", routing_mode="guided", chat_id=chat_id)
     else:
-        routing = router_mod.route_addressed(
+        routing = router_mod.apply_safe_default(router_mod.route_addressed(
             text, complete=talk_mod._auditor_complete(cfg),
-            context=talk_mod._context(cfg))
+            context=talk_mod._context(cfg)))
         routing.chat_id = chat_id
     if not routing.certain:
         talk_mod._record_routing(cfg, routing, "asked for clarification")
@@ -496,6 +455,9 @@ def say(cfg: Config, text: str, *, attachments=None,
                 "clarify": routing.clarify or "Is this about the work, or about the "
                                               "standards it is judged by?"}
     attachments_accepted = False
+
+    if routing.lane == "generator" and not continuation_cycle:
+        routing.restated = prepare_task(routing.restated)
 
     def generator_lane() -> str:
         nonlocal attachments_accepted
@@ -513,7 +475,7 @@ def say(cfg: Config, text: str, *, attachments=None,
                               attachments=prepared, chat_id=chat_id,
                               continuation_cycle=continuation_cycle)
         attachments_accepted = bool(started["attachments"])
-        suffix = (f"\nattachments: "
+        suffix = ("\nattachments: "
                   + ", ".join(item["name"] for item in started["attachments"])) \
             if started["attachments"] else ""
         return f"building: {started['task']}{suffix}"
@@ -662,7 +624,7 @@ def make_handler(cfg: Config, token: str, touch) -> type:
             # applies the new choice without a restart.
             return load(cfg.path)
 
-        def do_GET(self) -> None:                                   # noqa: N802
+        def do_GET(self) -> None:
             parsed = urlparse(self.path)
             if not self._authorised(parse_qs(parsed.query)):
                 self._deny(403, "forbidden: loopback-only, and the session token "
@@ -844,7 +806,7 @@ def make_handler(cfg: Config, token: str, touch) -> type:
             except (BrokenPipeError, ConnectionResetError, OSError):
                 return                      # the tab closed; nothing to clean up
 
-        def do_POST(self) -> None:                                  # noqa: N802
+        def do_POST(self) -> None:
             parsed = urlparse(self.path)
             if not self._authorised(parse_qs(parsed.query)):
                 self._drain_rejected_body()
@@ -852,6 +814,7 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                 return
             if parsed.path not in {"/api/say", "/api/upload", "/api/projects/create",
                                    "/api/projects/open", "/api/projects/resume",
+                                   "/api/projects/job",
                                    "/api/projects/pin", "/api/projects/delete",
                                    "/api/chats/new", "/api/chats/pin",
                                    "/api/chats/delete",
@@ -861,7 +824,7 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                                    "/api/skills",
                                    "/api/settings", "/api/providers/connect",
                                    "/api/doctor", "/api/hpc", "/api/mcp", "/api/admit",
-                                   "/api/escalation", "/api/interrupted"}:
+                                   "/api/run", "/api/escalation", "/api/interrupted"}:
                 self._deny(404, "no such action")
                 return
             touch()
@@ -876,7 +839,7 @@ def make_handler(cfg: Config, token: str, touch) -> type:
             try:
                 payload = json.loads(self.rfile.read(length) or b"{}")
                 if not isinstance(payload, dict):
-                    raise ValueError("object required")
+                    raise TypeError("object required")
                 if parsed.path == "/api/upload":
                     result = receive_upload_chunk(self._config(), payload)
                     self._send(json.dumps(result).encode(), "application/json")
@@ -884,6 +847,19 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                 if parsed.path == "/api/projects/create":
                     result = projects.JOBS.start(self._config(), payload,
                                                  STREAM_CHANGES.notify)
+                    self._send(json.dumps(result).encode(), "application/json")
+                    return
+                if parsed.path == "/api/projects/job":
+                    action = str(payload.get("action", ""))
+                    job_id = str(payload.get("job_id", ""))
+                    if action == "retry":
+                        result = projects.JOBS.retry(
+                            job_id, STREAM_CHANGES.notify, self._config())
+                    elif action == "dismiss":
+                        result = projects.JOBS.dismiss(job_id, self._config())
+                        STREAM_CHANGES.notify()
+                    else:
+                        raise ConfigDenial("project task action must be retry or dismiss")
                     self._send(json.dumps(result).encode(), "application/json")
                     return
                 if parsed.path == "/api/projects/pin":
@@ -1099,20 +1075,65 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                     STREAM_CHANGES.notify()
                     self._send(json.dumps(result).encode(), "application/json")
                     return
+                if parsed.path == "/api/run":
+                    if str(payload.get("action", "")) != "cancel":
+                        raise ConfigDenial("run action must be cancel")
+                    current = self._config()
+                    result = RunCommandService(
+                        current, alive=daemon._pid_alive,
+                        on_change=TRACKER.notify).request_cancel(
+                            str(payload.get("run_id", "")) or None)
+                    STREAM_CHANGES.notify()
+                    self._send(json.dumps(result).encode(), "application/json")
+                    return
                 if parsed.path == "/api/escalation":
                     current = self._config()
-                    result = StateStore(
-                        current.root / current.state_dir / "state.json"
-                    ).resolve_escalation(
-                        str(payload.get("cycle_id", "")),
-                        str(payload.get("action", "")),
-                        str(payload.get("reason", "")))
+                    store = StateStore(
+                        current.root / current.state_dir / "state.json")
+                    cycle_id = str(payload.get("cycle_id", ""))
+                    action = str(payload.get("action", ""))
+                    reason = str(payload.get("reason", ""))
+                    retrying_provider = action == "retry_provider"
+                    if retrying_provider:
+                        prior = store.cycle(cycle_id)
+                        if (not prior or prior.get("status") != "ESCALATED" or
+                                "provider failure" not in str(
+                                    prior.get("escalation_reason", "")).lower()):
+                            raise ConfigDenial(
+                                "only a provider-failure escalation can be retried directly")
+                        task = str(prior.get("task", "")).strip()
+                        if not task:
+                            raise ConfigDenial(
+                                "the stopped task predates direct retry; copy it into the "
+                                "composer and choose Revise and continue")
+                        reason = (reason.strip() or
+                                  "Retry after reviewing the provider connection.")
+                        result = store.resolve_escalation(
+                            cycle_id, "reopen", reason)
+                        try:
+                            started = start_build(
+                                current, task, chat_id=str(prior.get("chat_id", "")),
+                                continuation_cycle=cycle_id)
+                        except Denial as exc:
+                            store.escalate(
+                                cycle_id,
+                                f"generator provider failure retry could not start: "
+                                f"{exc.reason}",
+                                task=task)
+                            raise
+                    else:
+                        result = store.resolve_escalation(
+                            cycle_id, action, reason)
+                        started = None
                     STREAM_CHANGES.notify()
-                    self._send(json.dumps({
-                        "cycle_id": str(payload.get("cycle_id", "")),
+                    response = {
+                        "cycle_id": cycle_id,
                         "status": result["status"],
                         "round": result["round"],
-                    }).encode(), "application/json")
+                    }
+                    if started is not None:
+                        response.update(started, retrying=True)
+                    self._send(json.dumps(response).encode(), "application/json")
                     return
                 if parsed.path == "/api/interrupted":
                     current = self._config()
@@ -1128,7 +1149,14 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                                 interrupted.get("continuation_cycle", "")))
                         result["recovery"] = "restarted_from_last_durable_commit"
                     elif action == "dismiss":
-                        daemon.unmark_build(current)
+                        dismissed = RunCommandService(
+                            current, alive=daemon._pid_alive,
+                            on_change=TRACKER.notify).dismiss_interruption(
+                                str(interrupted.get("run_id", "")) or None)
+                        legacy = daemon.dismiss_legacy_interruption(current)
+                        if not (dismissed or legacy):
+                            raise ConfigDenial(
+                                "the interrupted task was already handled")
                         result = {"dismissed": True,
                                   "working_tree_preserved": True}
                     else:
@@ -1173,7 +1201,6 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                     result = say(
                         self._config(), text, attachments=attachments,
                         attachment_consent=payload.get("attachment_consent") is True,
-                        delivery_choices=payload.get("delivery_choices"),
                         chat_id=chat["id"], **continuation_args)
                 result["chat_id"] = chat["id"]
                 STREAM_CHANGES.notify()
@@ -1188,7 +1215,7 @@ def make_handler(cfg: Config, token: str, touch) -> type:
             STREAM_CHANGES.notify()
             self._send(json.dumps(result).encode(), "application/json")
 
-        def log_message(self, *args) -> None:                       # noqa: D102
+        def log_message(self, *args) -> None:
             pass
 
     return Handler
@@ -1198,6 +1225,10 @@ def serve(cfg: Config, port: int = 0, *,
           idle_timeout: float = IDLE_TIMEOUT_S,
           register: bool = False) -> tuple[str, ThreadingHTTPServer]:
     """Start the console. Returns (url carrying the session token, server)."""
+    # Recovery is a command-side responsibility. The tracker below remains a
+    # pure projection and cannot mutate state merely because a view opened.
+    RunCommandService(cfg, alive=daemon._pid_alive, on_change=TRACKER.notify)
+    TRACKER.bind(journal_path(cfg))
     token = secrets.token_urlsafe(24)
     last = [time.monotonic()]
 

@@ -25,18 +25,21 @@ import io
 import os
 import re
 
+from .. import document_export, hpc, mcp
 from .. import generator as gen_mod
-from .. import document_export
-from .. import hpc
-from .. import mcp
 from .. import skills as skills_mod
 from ..config import Config, heterogeneity, load
 from ..controller import StateStore
 from ..dcl import describe as describe_checks
-from ..errors import (EXIT_ESCALATED, EXIT_OK, ConfigDenial, Denial,
-                      ProviderDenial)
+from ..errors import EXIT_ESCALATED, EXIT_OK, ConfigDenial, Denial, ProviderDenial
 from ..gitio import git, is_repo
 from ..providers import resilience as provider_resilience
+from ..runtime import (
+    PreparedRun,
+    RunCommandService,
+    RunEvent,
+    RunState,
+)
 from ..usage import record_completion
 from .main import cmd_run
 
@@ -121,22 +124,35 @@ class _Args:
     allow_custom_endpoint = True
 
 
-def run_loop(cfg, task: str, *, on_step=None, attachments: str = "",
+def run_loop(cfg, task: str, *, on_event=None, attachments: str = "",
              chat_id: str = "", continuation_cycle: str = "") -> int:
-    """The build loop itself. `on_step(actor, text, detail)` narrates it.
+    """The build loop itself emits typed operational facts.
 
     Kept separate from cmd_build so the console can watch the same loop the CLI
     runs, rather than a reimplementation of it that could drift on the one thing
     that matters: when the loop stops.
     """
-    def report(actor: str, text: str, detail: str = "") -> None:
-        if on_step is not None:
-            on_step(actor, text, detail)
+    current_round = 0
+    operational_state = RunState.QUEUED
+
+    def emit(kind: str, actor: str, text: str, detail: str = "", *,
+             state: RunState | None = None) -> None:
+        nonlocal operational_state
+        operational_state = state or operational_state
+        if on_event is not None:
+            on_event(RunEvent(
+                kind=kind, actor=actor, text=text, detail=detail,
+                state=operational_state, round_no=current_round,
+                round_limit=cfg.max_rounds))
+
+    def generator_provider_event(actor: str, text: str, detail: str = "") -> None:
+        emit("provider_recovery", actor, text, detail,
+             state=RunState.GENERATING)
 
     if chat_id and not re.fullmatch(r"(?:history|[a-f0-9]{16})", chat_id):
         raise ConfigDenial("chat id is invalid")
     allow_custom = bool(os.environ.get("CROSSAUDIT_ALLOW_CUSTOM_ENDPOINT"))
-    complete = _generator_complete(cfg, allow_custom, report)
+    complete = _generator_complete(cfg, allow_custom, generator_provider_event)
     constitution = (cfg.root / cfg.constitution).read_text(encoding="utf-8")
     store = StateStore(cfg.root / cfg.state_dir / "state.json")
     house = skills_mod.load(cfg.root)
@@ -155,9 +171,12 @@ def run_loop(cfg, task: str, *, on_step=None, attachments: str = "",
     last_round = 0
 
     for round_no in range(1, cfg.max_rounds + 1):
+        current_round = round_no
         last_round = round_no
-        report("loop", f"round {round_no} of {cfg.max_rounds}")
-        report("generator", "writing")
+        emit("round_started", "loop", f"round {round_no} of {cfg.max_rounds}",
+             state=RunState.GENERATING)
+        emit("generation_started", "generator", "writing",
+             state=RunState.GENERATING)
         current = _current_work(cfg)
         in_force = skills_mod.select(house, list(current) or cfg.scope_dirs)
         try:
@@ -182,18 +201,24 @@ def run_loop(cfg, task: str, *, on_step=None, attachments: str = "",
                     server_id = str(outcome.request.get("server_id", ""))
                     tool_counts[server_id] = tool_counts.get(server_id, 0) + 1
                     tool_name = str(outcome.request.get("tool", "MCP tool"))
-                    report("tool", "calling MCP tool", tool_name[:200])
+                    emit("capability_requested", "tool", "calling MCP tool",
+                         tool_name[:200], state=RunState.WAITING_FOR_CAPABILITY)
                     try:
                         result = mcp.MANAGER.call_agent(
                             cfg, outcome.request, chat_id=chat_id,
                             ordinal=tool_counts[server_id],
-                            notify=lambda state, detail: report("tool", state, detail))
+                            notify=lambda status, detail: emit(
+                                "capability_progress", "tool", status, detail,
+                                state=RunState.WAITING_FOR_CAPABILITY))
                     except Denial as exc:
                         result = {"status": "refused", "message": exc.reason,
                                   "server_id": server_id, "tool": tool_name}
-                        report("tool", "refused", exc.reason[:300])
+                        emit("capability_refused", "tool", "refused",
+                             exc.reason[:300], state=RunState.WAITING_FOR_CAPABILITY)
                     tool_results.append(result)
                     current = _current_work(cfg)
+                    emit("generation_resumed", "generator", "resuming with tool result",
+                         state=RunState.GENERATING)
                     continue
                 total_compute_jobs += 1
                 if total_compute_jobs > MAX_AGENT_JOBS_PER_BUILD:
@@ -201,25 +226,32 @@ def run_loop(cfg, task: str, *, on_step=None, attachments: str = "",
                         "the Generator exceeded the automatic remote-compute call limit")
                 host_id = str(outcome.request.get("host_id", ""))
                 compute_counts[host_id] = compute_counts.get(host_id, 0) + 1
-                report("compute", "requesting remote calculation",
-                       str(outcome.request.get("name", "Generator compute"))[:200])
+                emit("capability_requested", "compute",
+                     "requesting remote calculation",
+                     str(outcome.request.get("name", "Generator compute"))[:200],
+                     state=RunState.WAITING_FOR_CAPABILITY)
                 try:
                     result = hpc.MANAGER.run_agent(
                         cfg, outcome.request, chat_id=chat_id,
                         ordinal=compute_counts[host_id],
-                        notify=lambda state, detail: report(
-                            "compute", state, detail))
+                        notify=lambda status, detail: emit(
+                            "capability_progress", "compute", status, detail,
+                            state=RunState.WAITING_FOR_CAPABILITY))
                 except Denial as exc:
                     result = {"status": "refused", "message": exc.reason,
                               "host_id": host_id}
-                    report("compute", "refused", exc.reason[:300])
+                    emit("capability_refused", "compute", "refused",
+                         exc.reason[:300], state=RunState.WAITING_FOR_CAPABILITY)
                 compute_results.append(result)
                 current = _current_work(cfg)
+                emit("generation_resumed", "generator",
+                     "resuming with compute result", state=RunState.GENERATING)
         except ProviderDenial as exc:
             # An overreaching or malformed round is a refused round, not a
             # crashed loop: the generator is told what the guard refused and
             # gets its next attempt inside the same budget.
-            report("generator", "refused", exc.reason)
+            emit("generation_refused", "generator", "refused", exc.reason,
+                 state=RunState.GENERATING)
             findings = (f"[BLOCKER] Your last round was refused before it reached "
                         f"the auditor: {exc.reason}\nReturn only files inside "
                         f"{', '.join(cfg.scope_dirs)}/ and try again.")
@@ -243,10 +275,12 @@ def run_loop(cfg, task: str, *, on_step=None, attachments: str = "",
             document_export.validate_export_work(cfg.root, work.files, task)
             written = gen_mod.apply(work, cfg.root)
             if document_export.parse_export_task(task) is not None:
-                report("generator", "rendering final document locally")
+                emit("document_rendering", "generator",
+                     "rendering final document locally", state=RunState.GENERATING)
             written = document_export.render_export(cfg.root, written, task)
         except ProviderDenial as exc:
-            report("generator", "document export refused", exc.reason)
+            emit("document_refused", "generator", "document export refused",
+                 exc.reason, state=RunState.GENERATING)
             findings = ("[BLOCKER] The local document export boundary refused the "
                         f"last round: {exc.reason}\nReturn exactly one valid "
                         f"*{document_export.SOURCE_SUFFIX} Markdown source and try again.")
@@ -255,17 +289,20 @@ def run_loop(cfg, task: str, *, on_step=None, attachments: str = "",
                     f"document export failed in round {round_no}: {exc.reason[:400]}")
                 break
             continue
-        report("generator", work.summary, ", ".join(written[:4]))
+        emit("generation_completed", "generator", work.summary,
+             ", ".join(written[:4]), state=RunState.GENERATING)
         if work.notes:
-            report("generator", "note", work.notes[:200])
+            emit("generation_note", "generator", "note", work.notes[:200],
+                 state=RunState.GENERATING)
 
         # Dirtiness is judged over what will actually be committed. Asking about
         # the whole tree lets an untracked file elsewhere fake a change, and then
         # the commit has nothing staged and fails.
         staged = _stage_generated(cfg, written)
         if not staged:
-            report("loop", "the round reproduced the previous one; nothing new to "
-                           "audit")
+            emit("revision_unchanged", "loop",
+                 "the round reproduced the previous one; nothing new to audit",
+                 state=RunState.GENERATING)
             termination_reason = (
                 f"generator produced no new auditable revision in round {round_no}")
             break
@@ -286,17 +323,20 @@ def run_loop(cfg, task: str, *, on_step=None, attachments: str = "",
             # git refusing is a refused round, like any other: the loop reports it
             # and stops cleanly rather than tearing down a run the ledger already
             # has rounds for.
-            report("loop", "the round could not be committed", exc.reason[:200])
+            emit("commit_refused", "loop", "the round could not be committed",
+                 exc.reason[:200], state=RunState.GENERATING)
             termination_reason = (
                 f"generator revision could not be committed in round {round_no}")
             break
 
         audit_sha = git("rev-parse", "HEAD", cwd=cfg.root)
-        report("auditor", "reviewing the commit")
+        emit("audit_started", "auditor", "reviewing the commit",
+             state=RunState.AUDITING)
         buffer = io.StringIO()
         run_args = _Args()
         run_args.continue_cycle = build_cycle_id
-        run_args.on_step = report
+        run_args.on_step = lambda actor, text, detail="": emit(
+            "provider_recovery", actor, text, detail, state=RunState.AUDITING)
         with contextlib.redirect_stdout(buffer):
             code = cmd_run(run_args)
         inner = buffer.getvalue()
@@ -310,21 +350,25 @@ def run_loop(cfg, task: str, *, on_step=None, attachments: str = "",
         status = latest.get("status", "?")
 
         if code == EXIT_OK:
-            report("auditor", "PASS")
+            emit("audit_passed", "auditor", "PASS", state=RunState.AUDITING)
             return EXIT_OK
         if status == "ESCALATED":
-            report("auditor", "ESCALATED", "the loop cannot settle this itself")
+            emit("audit_escalated", "auditor", "ESCALATED",
+                 "the loop cannot settle this itself", state=RunState.AUDITING)
             return EXIT_ESCALATED
         blocking = [ln.strip("- ").strip() for ln in inner.splitlines()
                     if ln.strip().startswith("- [")]
-        report("auditor", "BLOCKED", "; ".join(blocking[:2])[:300])
+        emit("audit_blocked", "auditor", "BLOCKED",
+             "; ".join(blocking[:2])[:300], state=RunState.AUDITING)
         findings = gen_mod.render_findings(_last_report(cfg))
-        report("loop", "findings returned to the generator")
+        emit("revision_requested", "loop", "findings returned to the generator",
+             state=RunState.REVISING)
 
     reason = termination_reason
     if build_cycle_id:
-        store.escalate(build_cycle_id, reason)
-        report("auditor", "ESCALATED", f"cycle {build_cycle_id} is waiting for a human")
+        store.escalate(build_cycle_id, reason, task=task)
+        emit("audit_escalated", "auditor", "ESCALATED",
+             f"cycle {build_cycle_id} is waiting for a human")
     else:
         # A provider can refuse every generator attempt before there is a work
         # commit for cmd_run to open. Anchor that stop to the current durable
@@ -332,10 +376,10 @@ def run_loop(cfg, task: str, *, on_step=None, attachments: str = "",
         # of an ephemeral "needs input" banner with nothing to resolve.
         anchor = git("rev-parse", "HEAD", cwd=cfg.root)
         cycle = store.record_build_escalation(
-            cfg.science_repo, anchor, reason, last_round, chat_id)
-        report("auditor", "ESCALATED",
-               f"cycle {cycle['cycle_id']} is waiting for a human")
-    report("loop", reason)
+            cfg.science_repo, anchor, reason, last_round, chat_id, task)
+        emit("audit_escalated", "auditor", "ESCALATED",
+             f"cycle {cycle['cycle_id']} is waiting for a human")
+    emit("loop_stopped", "loop", reason)
     return EXIT_ESCALATED
 
 
@@ -375,27 +419,38 @@ def preflight(cfg) -> None:
 def cmd_build(args) -> int:
     cfg = load()
     preflight(cfg)
-    task = resolve_task(cfg, args.words)
-    constitution = (cfg.root / cfg.constitution).read_text(encoding="utf-8")
-    house = skills_mod.load(cfg.root)
+    service = RunCommandService(cfg)
 
-    print("\nCrossAudit — building under audit")
-    print("=" * 60)
-    print(f"  task     {task.splitlines()[0][:60]}")
-    print(f"  rules    {cfg.constitution} ({constitution.count(chr(10) + '### ')} rules)")
-    print(f"  writing  {', '.join(cfg.scope_dirs)}/")
-    if house:
-        print(f"  skills   {', '.join(s.name for s in house)}")
-    print(f"  rounds   up to {cfg.max_rounds}, then it goes to you")
+    def prepare() -> PreparedRun:
+        return PreparedRun(task=resolve_task(cfg, args.words))
 
-    def on_step(actor: str, text: str, detail: str) -> None:
-        if actor == "loop" and text.startswith("round "):
-            print(f"\n  ── {text} " + "─" * max(0, 44 - len(text)))
-            return
-        line = f"  {actor:10s} {text}"
-        print(line if not detail else f"{line}\n  {'':10s} {detail[:96]}")
+    def worker(prepared: PreparedRun, emit) -> int:
+        constitution = (cfg.root / cfg.constitution).read_text(encoding="utf-8")
+        house = skills_mod.load(cfg.root)
+        print("\nCrossAudit — building under audit")
+        print("=" * 60)
+        print(f"  task     {prepared.task.splitlines()[0][:60]}")
+        print(f"  rules    {cfg.constitution} "
+              f"({constitution.count(chr(10) + '### ')} rules)")
+        print(f"  writing  {', '.join(cfg.scope_dirs)}/")
+        if house:
+            print(f"  skills   {', '.join(s.name for s in house)}")
+        print(f"  rounds   up to {cfg.max_rounds}, then it goes to you")
 
-    code = run_loop(cfg, task, on_step=on_step)
+        def on_event(event: RunEvent) -> None:
+            emit(event)
+            if event.kind == "round_started":
+                label = f"round {event.round_no} of {event.round_limit}"
+                print(f"\n  ── {label} " + "─" * max(0, 44 - len(label)))
+                return
+            line = f"  {event.actor:10s} {event.text}"
+            print(line if not event.detail
+                  else f"{line}\n  {'':10s} {event.detail[:96]}")
+
+        return run_loop(cfg, prepared.task, on_event=on_event)
+
+    code = service.start(prepare, worker, background=False)
+    assert isinstance(code, int)
     if code == EXIT_OK:
         print("\n  Done. The work passed audit and the ledger has the whole exchange.")
         print("  Read it:  crossaudit watch   ·   Watch live:  crossaudit console")

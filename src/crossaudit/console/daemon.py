@@ -12,11 +12,12 @@ Three things this has to get right, and each is a small honesty problem:
   returned; the second invocation starts nothing.
 * **A stale run file is not a running daemon.** A crash leaves the file behind,
   so liveness is proven by asking the port, not by trusting the file.
-* **An interrupted build must say so.** The tracker is in memory and dies with
-  the process; the ledger keeps every committed round but cannot know a run was
-  cut off mid-round. A flag written when a build starts, and removed when it
-  ends, lets a restarted console say "this was interrupted" rather than quietly
-  presenting a half-finished loop as finished.
+* **An interrupted build must say so.** Git keeps every committed round but
+  cannot know that a provider call was cut off mid-round. The operational
+  SQLite journal records each typed run transition, so a restarted console can
+  recover a dead worker exactly once instead of presenting partial work as
+  finished. A legacy flag is read only to migrate projects created before the
+  journal existed.
 
 The run file holds a session token, so it is written 0600 and lives in the state
 directory, which is gitignored: a credential in the ledger would be a credential
@@ -25,24 +26,29 @@ published.
 from __future__ import annotations
 
 import json
-import hashlib
 import os
 import signal
 import subprocess
 import sys
-import tempfile
 import time
 import urllib.error
 import urllib.request
 from pathlib import Path
 
+from .. import _selfid
 from ..config import Config
-from ..errors import ConfigDenial
+from ..runtime import (
+    RunCommandService,
+    RunJournal,
+    journal_path,
+    pid_alive,
+    windows_pid_alive,
+    zombie,
+)
 
 RUN_FILE = "console.json"
-BUILD_FLAG = "build-in-flight.json"
-WORKSPACE_RUNTIME = ".crossaudit-workspace"
-DEFAULT_MAX_ACTIVE = 4
+# Read-only migration fallback for a build interrupted by CrossAudit <= 4.14.
+LEGACY_BUILD_FLAG = "build-in-flight.json"
 KILL_SIGNAL = getattr(signal, "SIGKILL", signal.SIGTERM)
 
 
@@ -50,157 +56,28 @@ def run_path(cfg: Config) -> Path:
     return cfg.root / cfg.state_dir / RUN_FILE
 
 
-def flag_path(cfg: Config) -> Path:
-    return cfg.root / cfg.state_dir / BUILD_FLAG
-
-
 def _pid_alive(pid: object) -> bool:
     if os.name == "nt":
         return _windows_pid_alive(pid)
-    try:
-        os.kill(int(pid), 0)
-        return True
-    except PermissionError:
-        return True
-    except (ProcessLookupError, OSError, ValueError, TypeError):
-        return False
+    return pid_alive(pid)
 
 
 def _windows_pid_alive(pid: object) -> bool:
-    """Query a Windows process without os.kill(pid, 0), which emits Ctrl+C."""
-    try:
-        import ctypes
-        from ctypes import wintypes
-
-        process_id = int(pid)
-        if process_id <= 0:
-            return False
-        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-        kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL,
-                                         wintypes.DWORD]
-        kernel32.OpenProcess.restype = wintypes.HANDLE
-        kernel32.GetExitCodeProcess.argtypes = [wintypes.HANDLE,
-                                                ctypes.POINTER(wintypes.DWORD)]
-        kernel32.GetExitCodeProcess.restype = wintypes.BOOL
-        kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
-        kernel32.CloseHandle.restype = wintypes.BOOL
-        handle = kernel32.OpenProcess(0x1000, False, process_id)
-        if not handle:
-            # Access denied proves that something owns the PID even though this
-            # process cannot inspect it; an invalid/nonexistent PID reports 87.
-            return ctypes.get_last_error() == 5
-        try:
-            status = wintypes.DWORD()
-            return bool(kernel32.GetExitCodeProcess(
-                handle, ctypes.byref(status))) and status.value == 259
-        finally:
-            kernel32.CloseHandle(handle)
-    except (ImportError, OSError, TypeError, ValueError):
-        return False
-
-
-def _runtime_dir(cfg: Config) -> Path:
-    owner = getattr(os, "getuid", lambda: os.getpid())()
-    home = Path(tempfile.gettempdir()) / f"{WORKSPACE_RUNTIME}-{owner}"
-    home.mkdir(mode=0o700, exist_ok=True)
-    try:
-        home.chmod(0o700)
-    except OSError:
-        pass
-    key = hashlib.sha256(str(cfg.root.parent.resolve()).encode()).hexdigest()[:20]
-    return home / key
-
-
-def _max_active() -> int:
-    try:
-        return max(1, min(32, int(os.environ.get(
-            "CROSSAUDIT_MAX_ACTIVE_PROJECTS", DEFAULT_MAX_ACTIVE))))
-    except ValueError:
-        return DEFAULT_MAX_ACTIVE
-
-
-def _with_workspace_lock(cfg: Config, operation):
-    base = _runtime_dir(cfg)
-    base.mkdir(mode=0o700, exist_ok=True)
-    lock = base / "manager.lock"
-    deadline = time.monotonic() + 2
-    while True:
-        try:
-            lock.mkdir()
-            break
-        except FileExistsError:
-            try:
-                if time.time() - lock.stat().st_mtime > 10:
-                    lock.rmdir()
-                    continue
-            except OSError:
-                pass
-            if time.monotonic() >= deadline:
-                raise ConfigDenial("workspace runtime manager is busy; retry shortly")
-            time.sleep(0.02)
-    try:
-        return operation(base)
-    finally:
-        try:
-            lock.rmdir()
-        except OSError:
-            pass
-
-
-def _slots(base: Path) -> list[dict]:
-    rows = []
-    for path in base.glob("slot-*.json"):
-        try:
-            row = json.loads(path.read_text(encoding="utf-8"))
-            if _pid_alive(row.get("pid")):
-                rows.append(row)
-            else:
-                path.unlink(missing_ok=True)
-        except (OSError, ValueError, TypeError):
-            path.unlink(missing_ok=True)
-    return rows
-
-
-def acquire_workspace_slot(cfg: Config) -> Path:
-    """Atomically reserve one cross-project build slot in this workspace."""
-    key = hashlib.sha256(str(cfg.root).encode()).hexdigest()[:20]
-    target = _runtime_dir(cfg) / f"slot-{key}.json"
-
-    def claim(base: Path) -> Path:
-        active = _slots(base)
-        if target.is_file():
-            raise ConfigDenial("this project already owns a workspace build slot")
-        limit = _max_active()
-        if len(active) >= limit:
-            names = ", ".join(Path(str(r.get("root", "?"))).name for r in active)
-            raise ConfigDenial(f"workspace build capacity is {limit}; wait for {names}")
-        target.write_text(json.dumps({"pid": os.getpid(), "root": str(cfg.root),
-                                      "started": int(time.time())}), encoding="utf-8")
-        return target
-
-    return _with_workspace_lock(cfg, claim)
-
-
-def release_workspace_slot(path: Path | None) -> None:
-    if path is not None:
-        path.unlink(missing_ok=True)
-
-
-def workspace_capacity(cfg: Config) -> dict:
-    def inspect(base: Path) -> dict:
-        active = _slots(base)
-        return {"active": len(active), "limit": _max_active(),
-                "projects": [Path(str(r.get("root", ""))).name for r in active]}
-    return _with_workspace_lock(cfg, inspect)
+    return windows_pid_alive(pid)
 
 
 # ------------------------------------------------------------------ run file
 def write_run(cfg: Config, *, pid: int, port: int, token: str) -> Path:
     p = run_path(cfg)
     p.parent.mkdir(parents=True, exist_ok=True)
+    identity = _selfid.identity(cfg.root)
     value = json.dumps({"pid": pid, "port": port, "token": token,
-                        "started": int(time.time()),
-                        "root": str(cfg.root)}, indent=1)
+                        "started": int(time.time()), "root": str(cfg.root),
+                        "runtime": {
+                            "version": identity["version"],
+                            "code_digest_sha256": identity["code_digest_sha256"],
+                            "install_mode": identity["install_mode"],
+                        }}, indent=1)
     # Set the restrictive mode at creation time; writing first and chmodding
     # afterwards briefly exposed the browser token on POSIX systems.
     fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
@@ -261,6 +138,35 @@ def live(cfg: Config) -> dict | None:
     return info
 
 
+def runtime_matches(info: dict, *, root: Path | None = None) -> bool:
+    """Whether a live worker serves the same code as this launcher."""
+    recorded = info.get("runtime")
+    if not isinstance(recorded, dict):
+        return False
+    current = _selfid.identity(root)
+    return (recorded.get("version") == current["version"]
+            and recorded.get("code_digest_sha256") == current["code_digest_sha256"]
+            and recorded.get("install_mode") == current["install_mode"])
+
+
+def reusable_for_launch(cfg: Config) -> dict | None:
+    """Return a compatible worker, or replace an idle worker from older code.
+
+    A software update must not interrupt a Generator/Auditor run in flight. An
+    idle older worker, however, must not keep serving cached UI and provider
+    behavior after the application bundle is replaced.
+    """
+    info = live(cfg)
+    if not info or runtime_matches(info, root=cfg.root):
+        return info
+    state = fetch_state(info)
+    progress = state.get("progress") if isinstance(state, dict) else None
+    if not isinstance(progress, dict) or not progress.get("finished", True):
+        return info
+    stopped = stop(cfg)
+    return info if "did not stop" in stopped else None
+
+
 def url_for(info: dict) -> str:
     return f"http://127.0.0.1:{info['port']}/?t={info['token']}"
 
@@ -292,7 +198,7 @@ def spawn(cfg: Config, port: int) -> dict:
     try:
         # The caller normally checked before entering spawn, but another click
         # or app process may have won the lock in between.
-        running = live(cfg)
+        running = reusable_for_launch(cfg)
         if running:
             return running
         env = dict(os.environ, CROSSAUDIT_CONSOLE_CHILD="1")
@@ -359,72 +265,10 @@ def _gone(pid: int, *, tries: int) -> bool:
 
 
 def _zombie(pid: int) -> bool:
-    """A reaped-later POSIX zombie is dead even though kill(pid, 0) succeeds."""
-    if os.name == "nt":
-        return False
-    proc_stat = Path(f"/proc/{pid}/stat")
-    try:
-        if proc_stat.is_file():
-            # Linux: pid (comm) state ...; comm may contain spaces/parentheses.
-            return proc_stat.read_text(encoding="utf-8").rsplit(")", 1)[1].strip().startswith("Z")
-        result = subprocess.run(["ps", "-o", "stat=", "-p", str(pid)],
-                                capture_output=True, text=True, timeout=0.5)
-        return result.returncode == 0 and result.stdout.strip().startswith("Z")
-    except (OSError, subprocess.SubprocessError, IndexError):
-        return False
+    return zombie(pid)
 
 
 # ------------------------------------------------------- interrupted builds
-def mark_build(cfg: Config, task: str, chat_id: str = "",
-               continuation_cycle: str = "") -> None:
-    p = flag_path(cfg)
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps({"task": task, "chat_id": chat_id,
-                             "continuation_cycle": continuation_cycle,
-                             "phase": "starting", "detail": "",
-                             "started": int(time.time()), "pid": os.getpid()}),
-                 encoding="utf-8")
-
-
-def update_build(cfg: Config, phase: str, detail: str = "") -> None:
-    """Checkpoint the visible phase; no prompt, response, or credential is stored."""
-    p = flag_path(cfg)
-    try:
-        row = json.loads(p.read_text(encoding="utf-8"))
-    except (OSError, ValueError, TypeError):
-        return
-    if not isinstance(row, dict) or row.get("pid") != os.getpid():
-        return
-    row.update(phase=str(phase)[:40], detail=str(detail)[:300],
-               updated=int(time.time()))
-    temp = p.with_suffix(".tmp")
-    try:
-        temp.write_text(json.dumps(row), encoding="utf-8")
-        temp.replace(p)
-    except OSError:
-        temp.unlink(missing_ok=True)
-
-
-def mark_failed(cfg: Config, phase: str, detail: str) -> None:
-    """Keep a durable, immediately recoverable marker for a caught worker crash."""
-    update_build(cfg, phase, detail)
-    p = flag_path(cfg)
-    try:
-        row = json.loads(p.read_text(encoding="utf-8"))
-        if isinstance(row, dict):
-            row.update(pid=0, failed=True, phase=phase, detail=detail[:300],
-                       updated=int(time.time()))
-            temp = p.with_suffix(".tmp")
-            temp.write_text(json.dumps(row), encoding="utf-8")
-            temp.replace(p)
-    except (OSError, ValueError, TypeError):
-        return
-
-
-def unmark_build(cfg: Config) -> None:
-    flag_path(cfg).unlink(missing_ok=True)
-
-
 def interrupted(cfg: Config) -> dict | None:
     """A build that was in flight when the process ended.
 
@@ -432,7 +276,34 @@ def interrupted(cfg: Config) -> dict | None:
     a round was cut off. This says so rather than letting a half-finished loop
     read as a finished one.
     """
-    p = flag_path(cfg)
+    runtime = journal_path(cfg)
+    if runtime.is_file():
+        service = RunCommandService(
+            cfg, journal=RunJournal(runtime), alive=_pid_alive)
+        journal = service.journal
+        row = journal.interruption()
+        if row:
+            steps = row.get("steps") or []
+            failed = row["state"] == "FAILED"
+            work_steps = [step for step in steps if step.get("kind") not in {
+                "run_finished", "run_interrupted", "interruption_dismissed"}]
+            latest = work_steps[-1] if work_steps else {}
+            return {
+                "run_id": row["run_id"],
+                "task": row["task"],
+                "chat_id": row.get("chat_id", ""),
+                "continuation_cycle": row.get("continuation_cycle", ""),
+                "phase": "failed" if failed else (
+                    latest.get("actor") or row["state"].lower()),
+                "detail": (row.get("error", "") if failed else
+                           latest.get("detail") or latest.get("text") or
+                           row.get("error", "")),
+                "started": int(row["started"]),
+                "updated": int(row["updated"]),
+                "pid": row.get("owner_pid", 0),
+                "failed": failed,
+            }
+    p = cfg.root / cfg.state_dir / LEGACY_BUILD_FLAG
     if not p.is_file():
         return None
     try:
@@ -446,3 +317,12 @@ def interrupted(cfg: Config) -> dict | None:
     elif pid == os.getpid():
         return None
     return info
+
+
+def dismiss_legacy_interruption(cfg: Config) -> bool:
+    """Consume only the read-only <=4.14 migration marker, if present."""
+    legacy = cfg.root / cfg.state_dir / LEGACY_BUILD_FLAG
+    if legacy.exists():
+        legacy.unlink(missing_ok=True)
+        return True
+    return False

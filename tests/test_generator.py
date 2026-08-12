@@ -82,7 +82,9 @@ second
 def test_generator_prompt_treats_one_requested_deliverable_as_one_file():
     assert "return exactly one primary file" in gen.GENERATOR_SYSTEM
     assert "Do not add metadata, source notes, specifications" in gen.GENERATOR_SYSTEM
-    assert "exact delivery choices" in gen.GENERATOR_SYSTEM
+    assert "Own reversible delivery decisions" in gen.GENERATOR_SYSTEM
+    assert "Do not ask the owner to choose ordinary presentation preferences" in gen.GENERATOR_SYSTEM
+    assert "Ask for human involvement only when correctness or safety" in gen.GENERATOR_SYSTEM
 
 
 def test_generator_can_request_one_policy_bounded_remote_calculation():

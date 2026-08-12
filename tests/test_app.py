@@ -9,6 +9,7 @@ from types import SimpleNamespace
 import pytest
 
 from crossaudit import _selfid, app, app_keys, workspace
+from crossaudit.auditor import run as auditor_run
 from crossaudit.config import load
 from crossaudit.console import projects
 from crossaudit.constitution import Draft, Rule
@@ -119,6 +120,7 @@ def test_packaged_runtime_self_test_is_isolated_and_exercises_documents(
     assert result["documents"]["pdf"]["bytes"] > 100
     assert result["documents"]["docx"]["bytes"] > 100
     assert result["tls"]["trusted_certificate_authorities"] > 0
+    assert len(result["dcl_source_sha256"]) == 64
     assert not support.exists()
 
 
@@ -183,6 +185,8 @@ def test_native_shell_exposes_only_the_local_workspace_picker_bridge():
               "CrossAuditApp.swift").read_text()
     assert "WKScriptMessageHandler" in source
     assert 'action == "chooseWorkspace"' in source
+    assert 'action == "revealInFinder"' in source
+    assert "activateFileViewerSelecting" in source
     assert '["127.0.0.1", "localhost"]' in source
     assert "message.frameInfo.isMainFrame" in source
     assert "canChooseDirectories = true" in source
@@ -313,6 +317,18 @@ def test_frozen_app_identity_uses_embedded_build_digest(tmp_path, monkeypatch):
     assert _selfid.install_mode() == "frozen-app"
     assert _selfid.code_digest() == digest
     assert "frozen-app" in _selfid.ADMISSIBLE_MODES
+
+
+def test_frozen_auditor_uses_embedded_deterministic_layer_digest(
+        tmp_path, monkeypatch):
+    digest = "b" * 64
+    (tmp_path / "crossaudit-build.json").write_text(json.dumps({
+        "code_digest_sha256": "a" * 64, "dcl_source_sha256": digest,
+        "version": "4.14.0"}))
+    monkeypatch.setattr(auditor_run.sys, "frozen", True, raising=False)
+    monkeypatch.setattr(auditor_run.sys, "_MEIPASS", str(tmp_path), raising=False)
+
+    assert auditor_run.dcl_source_digest() == digest
 
 
 def test_project_console_anchors_process_cwd_to_the_requested_project(

@@ -7,8 +7,8 @@ have to be tested as refusals, not described in a docstring.
 """
 from __future__ import annotations
 
-import json
 import base64
+import json
 import subprocess
 import tempfile
 import urllib.error
@@ -229,6 +229,7 @@ def test_console_health_is_tokened_and_constant_size(console):
 
 def test_console_bind_does_not_depend_on_reverse_dns(monkeypatch):
     import socket
+
     from crossaudit.console.server import _ConsoleHTTPServer
 
     def forbidden(*_args, **_kwargs):
@@ -367,11 +368,11 @@ def test_the_input_refuses_an_empty_or_oversized_sentence(console):
         req = urllib.request.Request(url, data=payload, method="POST",
                                      headers={"content-type": "application/json"})
         actual, _body, _headers = rejected(
-            lambda: urllib.request.urlopen(req, timeout=5))
+            lambda req=req: urllib.request.urlopen(req, timeout=5))
         assert actual == code
 
 
-def test_attachment_contents_need_a_second_explicit_consent(console):
+def test_attachment_contents_require_explicit_send_authorization_at_the_boundary(console):
     payload = {"text": "Use this input", "attachments": [
         attachment("input.csv", b"name,value\nalpha,3\n")],
         "attachment_consent": False}
@@ -404,11 +405,9 @@ def test_validated_attachments_reach_say_only_after_consent(console, monkeypatch
 
     seen = {}
 
-    def fake_say(_cfg, text, *, attachments, attachment_consent,
-                 delivery_choices=None, chat_id=""):
+    def fake_say(_cfg, text, *, attachments, attachment_consent, chat_id=""):
         seen.update(text=text, attachments=attachments,
-                    attachment_consent=attachment_consent,
-                    delivery_choices=delivery_choices, chat_id=chat_id)
+                    attachment_consent=attachment_consent, chat_id=chat_id)
         return {"asked": False, "lane": "generator", "confidence": 1.0,
                 "reasoning": "test", "executed": "building: smoke",
                 "attachments_accepted": True}
@@ -440,8 +439,7 @@ def test_chunked_http_batch_accepts_large_binary_and_reaches_say(
     assert status == 200 and uploaded["complete"] is True
     seen = {}
 
-    def fake_say(_cfg, text, *, attachments, attachment_consent,
-                 delivery_choices=None, chat_id=""):
+    def fake_say(_cfg, text, *, attachments, attachment_consent, chat_id=""):
         seen.update(text=text, attachments=attachments, chat_id=chat_id)
         return {"asked": False, "lane": "generator", "confidence": 1.0,
                 "reasoning": "test", "executed": "building: smoke",
@@ -457,41 +455,6 @@ def test_chunked_http_batch_accepts_large_binary_and_reaches_say(
     item = seen["attachments"][0]
     assert item.name == "evidence.bin" and item.size == len(data)
     assert item.text is None and item.source.read_bytes() == data
-
-
-def test_delivery_choices_are_validated_and_bound_to_one_generator_task():
-    from crossaudit.console.server import _guided_task
-
-    task = _guided_task("Write a review", {
-        "mode": "selected", "focus": "Everyday use and practical experience",
-        "format": "Markdown (.md)", "tone": "Editorial and readable"})
-
-    assert task.startswith("Write a review\n")
-    assert "Output format: Markdown (.md)" in task
-    assert "exactly one primary deliverable" in task
-
-
-def test_delivery_choices_refuse_an_unimplemented_binary_format():
-    from crossaudit.console.server import _guided_task
-    from crossaudit.errors import ConfigDenial
-
-    with pytest.raises(ConfigDenial, match="supported format"):
-        _guided_task("Write a review", {
-            "mode": "selected", "focus": "Balanced coverage", "format": "PDF",
-            "tone": "Editorial and readable"})
-
-
-@pytest.mark.parametrize("label,format_name", [
-    ("PDF (.pdf)", "pdf"), ("Word (.docx)", "docx"),
-])
-def test_delivery_choices_bind_supported_document_export(label, format_name):
-    from crossaudit.console.server import _guided_task
-
-    task = _guided_task("Write a review", {
-        "mode": "selected", "focus": "Balanced coverage", "format": label,
-        "tone": "Editorial and readable"})
-    assert f"[CROSSAUDIT-DOCUMENT-EXPORT format={format_name}" in task
-    assert "Return exactly one Markdown source file" in task
 
 
 def test_artifact_download_is_tokened_streamed_and_forces_a_download(
@@ -626,10 +589,15 @@ def test_admit_endpoint_is_tokened_and_returns_only_receipt_identity(
 
 
 def test_runtime_switch_is_refused_while_a_loop_is_running(console):
+    from crossaudit.config import load
     from crossaudit.console.progress import TRACKER
+    from crossaudit.runtime import RunJournal, journal_path
 
-    TRACKER.clear()
-    TRACKER.start("long audit")
+    _status, raw, _headers = fetch(console.replace("/?t=", "/api/state?t="))
+    cfg = load(Path(json.loads(raw)["root"]) / "crossaudit.yml")
+    journal = RunJournal(journal_path(cfg))
+    run_id = journal.start("long audit")
+    TRACKER.notify()
     try:
         code, raw_body, _headers = rejected(lambda: post_json_to(
             console, "/api/runtime", {
@@ -640,12 +608,37 @@ def test_runtime_switch_is_refused_while_a_loop_is_running(console):
             }))
         body = json.loads(raw_body)
     finally:
-        TRACKER.finish("cancelled")
-        TRACKER.clear()
+        journal.finish(run_id, "cancelled")
+        TRACKER.notify()
 
     assert code == 400
     assert body["issue"] == "runtime_busy"
     assert "wait for this task to finish" in body["reason"]
+
+
+def test_tokened_run_command_requests_durable_cancellation(console):
+    from crossaudit.config import load
+    from crossaudit.runtime import RunJournal, journal_path
+
+    _status, raw, _headers = fetch(console.replace("/?t=", "/api/state?t="))
+    cfg = load(Path(json.loads(raw)["root"]) / "crossaudit.yml")
+    journal = RunJournal(journal_path(cfg))
+    run_id = journal.start("stop through the UI")
+
+    status, result, _headers = post_json_to(console, "/api/run", {
+        "action": "cancel", "run_id": run_id})
+
+    assert status == 200 and result == {
+        "run_id": run_id, "state": "CANCELLING", "requested": True}
+    assert journal.latest()["steps"][-1]["kind"] == "cancel_requested"
+    journal.finish(run_id, "cancelled")
+
+
+def test_run_cancel_without_active_work_returns_a_structured_refusal(console):
+    code, raw, _headers = rejected(
+        lambda: post_json_to(console, "/api/run", {"action": "cancel"}))
+    body = json.loads(raw)
+    assert code == 400 and body["issue"] == "run_not_active"
 
 
 def test_a_human_can_resolve_an_escalation_through_the_tokened_ui(console):
@@ -665,8 +658,39 @@ def test_a_human_can_resolve_an_escalation_through_the_tokened_ui(console):
     assert store.cycle(cycle["cycle_id"])["status"] == "OPEN"
 
 
+def test_provider_failure_retry_restarts_the_original_task_without_fake_guidance(
+        console, monkeypatch):
+    from crossaudit.console import server as server_mod
+
+    state_url = console.replace("/?t=", "/api/state?t=")
+    _status, body, _headers = fetch(state_url)
+    state = json.loads(body)
+    store = StateStore(Path(state["root"]) / ".crossaudit" / "state.json")
+    stopped = store.record_build_escalation(
+        "t/p", "c" * 40,
+        "generator provider failure in round 1: subscription unavailable", 1,
+        "history", "Create one accurate review")
+    seen = {}
+
+    def start(_cfg, task, **kwargs):
+        seen.update(task=task, **kwargs)
+        return {"started": True, "task": task, "attachments": []}
+
+    monkeypatch.setattr(server_mod, "start_build", start)
+    status, result, _headers = post_json_to(console, "/api/escalation", {
+        "cycle_id": stopped["cycle_id"], "action": "retry_provider", "reason": ""})
+
+    assert status == 200 and result["retrying"] is True
+    assert seen["task"] == "Create one accurate review"
+    assert seen["chat_id"] == "history"
+    assert seen["continuation_cycle"] == stopped["cycle_id"]
+    cycle = store.cycle(stopped["cycle_id"])
+    assert cycle["status"] == "OPEN" and cycle["human_reopened"] is True
+
+
 def test_latest_pass_admission_reverifies_recorded_receipt(tmp_path, monkeypatch):
     from types import SimpleNamespace
+
     from crossaudit.console import server as server_mod
 
     sha, digest, cycle_id = "b" * 40, "a" * 64, "cycle-1"
@@ -702,6 +726,7 @@ def test_latest_pass_admission_reverifies_recorded_receipt(tmp_path, monkeypatch
 
 def test_admission_never_falls_back_to_an_older_pass(tmp_path, monkeypatch):
     from types import SimpleNamespace
+
     from crossaudit.console import server as server_mod
     from crossaudit.errors import ConfigDenial
 
@@ -733,24 +758,30 @@ def test_live_stream_pushes_progress_without_waiting_for_the_poll(console,
     delay what the browser sees."""
     import time
 
+    from crossaudit.config import load
     from crossaudit.console import server as server_mod
     from crossaudit.console.progress import TRACKER
+    from crossaudit.runtime import RunJournal, journal_path
 
-    TRACKER.clear()
     monkeypatch.setattr(server_mod, "STREAM_POLL_S", 5.0)
     stream_url = console.replace("/?t=", "/api/stream?t=")
+    state_url = console.replace("/?t=", "/api/state?t=")
+    _status, raw, _headers = fetch(state_url)
+    cfg = load(Path(json.loads(raw)["root"]) / "crossaudit.yml")
+    journal = RunJournal(journal_path(cfg))
     with urllib.request.urlopen(stream_url, timeout=5) as response:
         assert response.headers["content-type"].startswith("text/event-stream")
         assert response.readline().startswith(b"data: ")
         assert response.readline() == b"\n"
 
         started = time.monotonic()
-        TRACKER.start("show this immediately")
+        run_id = journal.start("show this immediately")
+        TRACKER.notify()
         pushed = response.readline()
         latency = time.monotonic() - started
 
-    TRACKER.finish("passed")
-    TRACKER.clear()
+    journal.finish(run_id, "passed")
+    TRACKER.notify()
     assert pushed.startswith(b"data: ")
     assert b"show this immediately" in pushed
     # A person should experience this as the same event, not as a refresh.
