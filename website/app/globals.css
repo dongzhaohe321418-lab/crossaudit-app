@@ -18,7 +18,7 @@
   --border-strong: rgba(255, 255, 255, 0.16);
   --text-primary: #f4f5f7;
   --text-secondary: #a8adb7;
-  --text-tertiary: #717783;
+  --text-tertiary: #7d8593;
   --generator: #5ea0ff;
   --auditor: #9a7cff;
   --pass: #4dd39a;
@@ -307,6 +307,10 @@ code {
   background: rgba(255, 255, 255, 0.06);
 }
 
+.text-control:active {
+  transform: scale(0.95);
+}
+
 .header-download {
   display: inline-flex;
   align-items: center;
@@ -460,7 +464,6 @@ code {
   color: var(--text-tertiary);
   font-family: var(--mono);
   font-size: 0.68rem;
-  opacity: 0.85;
 }
 
 @media (min-width: 72rem) {
@@ -960,6 +963,18 @@ code {
   padding-top: clamp(6.75rem, 13vh, 8.5rem);
 }
 
+/* narrative rhythm: sections continuing a theme sit closer to it;
+   the statement anchor gets the most air on the page */
+#main-content > section.prompt-section,
+#main-content > section.cap-section,
+#main-content > section.science-section {
+  padding-top: clamp(3.5rem, 6.5vh, 5rem);
+}
+
+#main-content > section.indep-section {
+  padding-block: clamp(6.5rem, 12vh, 9.5rem);
+}
+
 #main-content > section + section {
   border-top: 1px solid var(--border);
 }
@@ -1011,7 +1026,7 @@ code {
 }
 
 .track {
-  padding: 1.5rem 1.6rem;
+  padding: 1.5rem;
   border-radius: 16px;
   border: 1px solid var(--border);
 }
@@ -1222,6 +1237,10 @@ code {
   transform: translateY(-1px);
 }
 
+.fc-card:active {
+  transform: translateY(0) scale(0.995);
+}
+
 .fc-head {
   display: grid;
   gap: 0.1rem;
@@ -1373,6 +1392,10 @@ code {
   transform: translateY(-1px);
 }
 
+.fc-exit:active {
+  transform: translateY(0) scale(0.99);
+}
+
 .fc-exit strong {
   font-family: var(--mono);
   font-size: 0.62rem;
@@ -1480,7 +1503,7 @@ code {
   color: var(--text-tertiary);
   font-family: var(--mono);
   font-size: 0.64rem;
-  opacity: 0.55;
+  opacity: 0.68;
   transform: translateX(-3px);
   transition: opacity 300ms var(--ease-spring), color 300ms var(--ease-spring),
     transform 300ms var(--ease-spring);
@@ -1562,10 +1585,20 @@ code {
   background: transparent;
   color: var(--text-tertiary);
   text-align: left;
-  transition: border-color 260ms ease, color 260ms ease;
+  transition: border-color 200ms ease, color 200ms ease, transform 120ms var(--ease-spring);
 }
 
-.flow-chapters article.active button {
+.flow-chapters button:hover {
+  border-left-color: var(--border-strong);
+  color: var(--text-secondary);
+}
+
+.flow-chapters button:active {
+  transform: translateY(1px);
+}
+
+.flow-chapters article.active button,
+.flow-chapters article.active button:hover {
   border-left-color: var(--generator);
   color: var(--text-primary);
 }
@@ -1674,7 +1707,7 @@ code {
 
 .prompt-quote {
   margin: 0;
-  padding: 1.6rem 1.7rem;
+  padding: 1.5rem;
   border: 1px solid var(--border-strong);
   border-radius: 16px;
   background: var(--surface-strong);
@@ -1708,11 +1741,27 @@ code {
   gap: 0 2rem;
 }
 
+.prompt-steps {
+  counter-reset: prompt-step;
+}
+
 .prompt-steps li {
+  position: relative;
   display: grid;
   gap: 0.3rem;
-  padding: 1rem 0;
+  padding: 1rem 0 1rem 2.2rem;
   border-top: 1px solid var(--border);
+  counter-increment: prompt-step;
+}
+
+.prompt-steps li::before {
+  content: "0" counter(prompt-step);
+  position: absolute;
+  top: 1.25rem;
+  left: 0;
+  color: var(--text-tertiary);
+  font-family: var(--mono);
+  font-size: 0.62rem;
 }
 
 .prompt-steps strong {
@@ -1749,7 +1798,7 @@ code {
   position: relative;
   display: block;
   overflow: clip;
-  border-radius: 14px;
+  border-radius: 16px;
   border: 1px solid var(--border);
 }
 
@@ -1791,6 +1840,11 @@ code {
   color: var(--text-secondary);
   text-decoration: underline;
   text-underline-offset: 3px;
+  transition: color 160ms var(--ease);
+}
+
+.shot-frame figcaption a:hover {
+  color: var(--text-primary);
 }
 
 .shot-steps article {
@@ -1813,10 +1867,20 @@ code {
   background: none;
   color: var(--text-secondary);
   text-align: left;
-  transition: border-color 260ms ease;
+  transition: border-color 200ms ease, color 200ms ease, transform 120ms var(--ease-spring);
 }
 
-.shot-steps article.active button {
+.shot-steps button:hover {
+  border-left-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+.shot-steps button:active {
+  transform: translateY(1px);
+}
+
+.shot-steps article.active button,
+.shot-steps article.active button:hover {
   border-left-color: var(--generator);
 }
 
@@ -1903,6 +1967,10 @@ code {
   background: var(--surface-strong);
 }
 
+.indep-toggle:active {
+  transform: translateY(1px) scale(0.99);
+}
+
 .indep-toggle i {
   position: relative;
   width: 12px;
@@ -1946,7 +2014,7 @@ code {
 .indep-view li {
   display: grid;
   gap: 0.35rem;
-  padding: 1.1rem 1.2rem;
+  padding: 1rem 1.5rem;
   border: 1px solid var(--border);
   border-radius: 16px;
   background: var(--background-elevated);
@@ -1991,15 +2059,8 @@ code {
 .cap-group li {
   display: grid;
   gap: 0.15rem;
-  padding: 0.75rem 0.5rem;
-  margin-inline: -0.5rem;
-  border-radius: 8px;
+  padding: 0.75rem 0;
   border-top: 1px solid var(--border);
-  transition: background 120ms var(--ease);
-}
-
-.cap-group li:hover {
-  background: rgba(255, 255, 255, 0.03);
 }
 
 .cap-group strong {
@@ -2020,7 +2081,7 @@ code {
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
-  margin-top: var(--module-gap);
+  margin: var(--module-gap) 0 0 var(--indent);
 }
 
 .sci-pipeline span {
@@ -2105,6 +2166,7 @@ code {
   margin: 0;
   color: var(--text-primary);
   font-size: 0.92rem;
+  font-weight: 500;
 }
 
 /* -------------------------------------------------------------- download */
@@ -2160,7 +2222,7 @@ code {
 }
 
 .download-panel {
-  padding: 1.9rem 2rem;
+  padding: 2rem;
   border: 1px solid var(--border-strong);
   border-radius: 16px;
   background: var(--surface);
@@ -2180,7 +2242,7 @@ code {
 
 .release-line strong {
   font-family: var(--mono);
-  font-size: 1.7rem;
+  font-size: 2rem;
   font-weight: 600;
   letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums;
@@ -2272,7 +2334,7 @@ footer {
   gap: 1.2rem;
   width: min(76rem, calc(100% - 3rem));
   margin-inline: auto;
-  padding-block: 2.2rem 2.6rem;
+  padding-block: 3rem;
   border-top: 1px solid var(--border);
   color: var(--text-secondary);
   font-size: 0.86rem;
