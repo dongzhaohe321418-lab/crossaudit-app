@@ -10,7 +10,8 @@ prove model-source independence.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+import re
+from dataclasses import dataclass, replace
 
 
 @dataclass(frozen=True)
@@ -230,40 +231,222 @@ EFFORT_HINTS = {
 }
 
 
-def reasoning_efforts(vendor: str, model: str, provider: str = "") -> tuple[str, ...]:
-    """Conservative request-level effort controls for a concrete model.
+# ── Model capability cards ──────────────────────────────────────────────────
+#
+# One declaration per (vendor, model family) of what that model actually
+# accepts.  This is the single source the rest of the system reads instead of
+# keeping its own copy: adapters send only the parameters a model supports
+# (never "send it and see"), the usage ledger takes its list price from here,
+# and the model selector shows only the controls the model exposes.  Adding a
+# capability means editing one row below, not five call sites.
 
-    Provider model catalogues usually return IDs, not parameter capabilities.
-    This list therefore names only combinations documented by the first-party
-    provider. Unknown and custom models stay on provider defaults instead of
-    receiving an optimistic parameter that may turn a valid run into HTTP 400.
+PRICE_SNAPSHOT = "2026-08-03"
+
+_MAX_TOKENS = "max_tokens"
+_MAX_COMPLETION_TOKENS = "max_completion_tokens"
+_MODERN_OPENAI_PREFIXES = ("gpt-5", "o1", "o3", "o4")
+
+
+@dataclass(frozen=True)
+class Rates:
+    """USD per one million tokens, as published at ``PRICE_SNAPSHOT``."""
+
+    input: float
+    output: float
+    cache_write: float
+    cache_read: float
+
+
+@dataclass(frozen=True)
+class CapabilityCard:
+    """What a concrete (vendor, model) accepts, and how it is billed.
+
+    ``known`` is True only when a declared family matched.  An unrecognised
+    model, or any custom OpenAI-compatible endpoint, receives a conservative
+    card that advertises no optional control it cannot vouch for and keeps a
+    single compatibility retry (``compat_retry``) as its safety net.  A built-in
+    provider's recognised model sets ``compat_retry`` False: it sends exactly
+    the parameters this record names and never gambles a request that would come
+    back as an unsupported-parameter HTTP 400.
+
+    ``context_window``/``vision``/``structured_output`` are the model-selector
+    fields named in North Star §4.  They are populated only from authoritative
+    provider documentation; where a value has not yet been verified the card
+    stays conservative (``None``/``False``) rather than assert an unproven fact.
+    """
+
+    token_param: str = _MAX_TOKENS
+    temperature: bool = False
+    reasoning_efforts: tuple[str, ...] | None = None
+    context_window: int | None = None
+    vision: bool = False
+    structured_output: bool = False
+    price: Rates | None = None
+    price_snapshot: str = PRICE_SNAPSHOT
+    known: bool = False
+    compat_retry: bool = True
+
+
+_EFFORTS_566 = ("none", "low", "medium", "high", "xhigh", "max")
+_EFFORTS_55 = ("low", "medium", "high", "xhigh")
+_EFFORTS_5 = ("low", "medium", "high")
+_EFFORTS_GEN5 = ("low", "medium", "high", "xhigh", "max")
+_EFFORTS_GEN4 = ("low", "medium", "high", "max")
+_EFFORTS_GEMINI = ("minimal", "low", "medium", "high")
+
+_OPUS_RATES = Rates(5.0, 25.0, 6.25, 0.50)
+_SONNET_RATES = Rates(3.0, 15.0, 3.75, 0.30)
+_HAIKU_RATES = Rates(1.0, 5.0, 1.25, 0.10)
+_CREATIVE_RATES = Rates(10.0, 50.0, 12.50, 1.00)
+
+# Ordered most-specific prefix first: the first prefix the (case-folded) model id
+# starts with wins.  Prefixes may end mid-version (a dot follows) so the match is
+# a plain ``startswith``, exactly as the retired per-call tables matched.
+_CAPABILITIES: dict[str, tuple[tuple[str, CapabilityCard], ...]] = {
+    "openai": (
+        ("gpt-5.6-sol", CapabilityCard(
+            token_param=_MAX_COMPLETION_TOKENS, temperature=False,
+            reasoning_efforts=_EFFORTS_566, price=Rates(5.0, 30.0, 6.25, 0.50))),
+        ("gpt-5.6-terra", CapabilityCard(
+            token_param=_MAX_COMPLETION_TOKENS, temperature=False,
+            reasoning_efforts=_EFFORTS_566, price=Rates(2.5, 15.0, 3.125, 0.25))),
+        ("gpt-5.6-luna", CapabilityCard(
+            token_param=_MAX_COMPLETION_TOKENS, temperature=False,
+            reasoning_efforts=_EFFORTS_566, price=Rates(1.0, 6.0, 1.25, 0.10))),
+        ("gpt-5.6", CapabilityCard(
+            token_param=_MAX_COMPLETION_TOKENS, temperature=False,
+            reasoning_efforts=_EFFORTS_566)),
+        ("gpt-5.5", CapabilityCard(
+            token_param=_MAX_COMPLETION_TOKENS, temperature=False,
+            reasoning_efforts=_EFFORTS_55)),
+        ("gpt-5.4", CapabilityCard(
+            token_param=_MAX_COMPLETION_TOKENS, temperature=False,
+            reasoning_efforts=_EFFORTS_55)),
+        ("gpt-5.3-codex", CapabilityCard(
+            token_param=_MAX_COMPLETION_TOKENS, temperature=False,
+            reasoning_efforts=_EFFORTS_55)),
+        ("gpt-5.2-codex", CapabilityCard(
+            token_param=_MAX_COMPLETION_TOKENS, temperature=False,
+            reasoning_efforts=_EFFORTS_55)),
+        ("gpt-5", CapabilityCard(
+            token_param=_MAX_COMPLETION_TOKENS, temperature=False,
+            reasoning_efforts=_EFFORTS_5)),
+        ("o1", CapabilityCard(
+            token_param=_MAX_COMPLETION_TOKENS, temperature=False,
+            reasoning_efforts=_EFFORTS_5)),
+        ("o3", CapabilityCard(
+            token_param=_MAX_COMPLETION_TOKENS, temperature=False,
+            reasoning_efforts=_EFFORTS_5)),
+        ("o4", CapabilityCard(
+            token_param=_MAX_COMPLETION_TOKENS, temperature=False,
+            reasoning_efforts=_EFFORTS_5)),
+    ),
+    "anthropic": (
+        ("claude-fable-5", CapabilityCard(
+            temperature=False, reasoning_efforts=_EFFORTS_GEN5,
+            price=_CREATIVE_RATES)),
+        ("claude-mythos-preview", CapabilityCard(
+            temperature=True, reasoning_efforts=_EFFORTS_GEN4)),
+        ("claude-mythos-5", CapabilityCard(
+            temperature=False, reasoning_efforts=_EFFORTS_GEN5,
+            price=_CREATIVE_RATES)),
+        ("claude-opus-5", CapabilityCard(
+            temperature=False, reasoning_efforts=_EFFORTS_GEN5,
+            price=_OPUS_RATES)),
+        ("claude-sonnet-5", CapabilityCard(
+            temperature=False, reasoning_efforts=_EFFORTS_GEN5,
+            price=_SONNET_RATES)),
+        ("claude-opus-4-8", CapabilityCard(
+            temperature=False, reasoning_efforts=_EFFORTS_GEN5,
+            price=_OPUS_RATES)),
+        ("claude-opus-4-7", CapabilityCard(
+            temperature=True, reasoning_efforts=_EFFORTS_GEN5,
+            price=_OPUS_RATES)),
+        ("claude-opus-4-6", CapabilityCard(
+            temperature=True, reasoning_efforts=_EFFORTS_GEN4,
+            price=_OPUS_RATES)),
+        ("claude-opus-4-5", CapabilityCard(
+            temperature=True, reasoning_efforts=_EFFORTS_GEN4,
+            price=_OPUS_RATES)),
+        ("claude-sonnet-4-6", CapabilityCard(
+            temperature=True, reasoning_efforts=_EFFORTS_GEN4,
+            price=_SONNET_RATES)),
+        ("claude-sonnet-4-5", CapabilityCard(
+            temperature=True, price=_SONNET_RATES)),
+        ("claude-haiku-4-5", CapabilityCard(
+            temperature=True, price=_HAIKU_RATES)),
+    ),
+    "google": (
+        ("gemini-3", CapabilityCard(
+            temperature=True, reasoning_efforts=_EFFORTS_GEMINI)),
+        ("gemini-2.5", CapabilityCard(
+            temperature=True, reasoning_efforts=_EFFORTS_GEMINI)),
+    ),
+    "xai": (
+        ("grok-4.20-multi-agent", CapabilityCard(
+            temperature=True, reasoning_efforts=_EFFORTS_55)),
+        ("grok-4.5", CapabilityCard(
+            temperature=True, reasoning_efforts=_EFFORTS_5)),
+    ),
+}
+
+
+def _anthropic_default_temperature(lowered: str) -> bool:
+    """Whether an unrecognised Claude model is known to accept a temperature.
+
+    Opus 4.8 returns a 400 stating temperature is deprecated; generation 5 and
+    later drop it too, while 4.x still accepts it.  A generation-number check
+    alone is therefore not sufficient, so the 4.8 special case stays explicit.
+    """
+    if lowered.startswith("claude-opus-4-8"):
+        return False
+    match = re.match(r"^claude-[a-z0-9]+-(\d+)(?:-|$)", lowered)
+    return not match or int(match.group(1)) < 5
+
+
+def _default_card(vendor: str, lowered: str, *, official: bool) -> CapabilityCard:
+    """The conservative card for a model no declared family matched.
+
+    It sends no reasoning effort and keeps the compatibility retry.  The token
+    field and whether a temperature is sent are inferred the same way the
+    adapters used to infer them inline, so an unknown or custom-endpoint model
+    behaves exactly as before this catalogue existed."""
+    if vendor == "anthropic":
+        return CapabilityCard(token_param=_MAX_TOKENS,
+                              temperature=_anthropic_default_temperature(lowered),
+                              compat_retry=True)
+    modern = lowered.startswith(_MODERN_OPENAI_PREFIXES)
+    if vendor == "openai" and official:
+        token_param = _MAX_COMPLETION_TOKENS
+    else:
+        token_param = _MAX_COMPLETION_TOKENS if modern else _MAX_TOKENS
+    return CapabilityCard(token_param=token_param, temperature=not modern,
+                          compat_retry=True)
+
+
+def capability_card(vendor: str, model: str, provider: str = "", *,
+                    official: bool = True) -> CapabilityCard:
+    """The single capability record for one concrete (vendor, model).
+
+    ``official`` is True for a first-party built-in origin and False for a
+    custom OpenAI-compatible endpoint.  A recognised model on a built-in origin
+    is the only case that disables the compatibility retry: everything else
+    keeps it, so proxies and brand-new model ids remain fail-safe.
     """
     vendor = vendor.casefold().strip()
     lowered = model.casefold().strip()
-    if vendor == "openai":
-        if lowered.startswith("gpt-5.6"):
-            return ("none", "low", "medium", "high", "xhigh", "max")
-        if lowered.startswith(("gpt-5.5", "gpt-5.4", "gpt-5.3-codex",
-                               "gpt-5.2-codex")):
-            return ("low", "medium", "high", "xhigh")
-        if lowered.startswith(("gpt-5", "o1", "o3", "o4")):
-            return ("low", "medium", "high")
-        return ()
-    if vendor == "anthropic":
-        if any(name in lowered for name in
-               ("claude-opus-5", "claude-sonnet-5", "claude-fable-5",
-                "claude-mythos-5", "claude-opus-4-8", "claude-opus-4-7")):
-            return ("low", "medium", "high", "xhigh", "max")
-        if "claude-sonnet-4-6" in lowered or "claude-opus-4-6" in lowered:
-            return ("low", "medium", "high", "max")
-        if "claude-opus-4-5" in lowered or "claude-mythos-preview" in lowered:
-            return ("low", "medium", "high", "max")
-        return ()
-    if vendor == "google" and lowered.startswith(("gemini-3", "gemini-2.5")):
-        return ("minimal", "low", "medium", "high")
-    if vendor == "xai":
-        if lowered.startswith("grok-4.20-multi-agent"):
-            return ("low", "medium", "high", "xhigh")
-        if lowered.startswith("grok-4.5"):
-            return ("low", "medium", "high")
-    return ()
+    for prefix, card in _CAPABILITIES.get(vendor, ()):
+        if lowered.startswith(prefix):
+            return replace(card, known=True, compat_retry=not official)
+    return _default_card(vendor, lowered, official=official)
+
+
+def reasoning_efforts(vendor: str, model: str, provider: str = "") -> tuple[str, ...]:
+    """Request-level effort controls a concrete model documents, or none.
+
+    A thin read over :func:`capability_card`; the effort table now lives there
+    with the rest of the model's capabilities.  Unknown and custom models return
+    no efforts, so the selector hides the control and no optimistic parameter can
+    turn a valid run into an HTTP 400.
+    """
+    return capability_card(vendor, model, provider).reasoning_efforts or ()

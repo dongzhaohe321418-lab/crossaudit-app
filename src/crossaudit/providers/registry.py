@@ -21,6 +21,7 @@ for _vendor, _spec in SPECS.items():
             openai_compat.complete, _builtin_base=_spec.api_base,
             _official_bases=tuple(row[2] for row in endpoints(_vendor)),
             _temperature=(1.0 if _vendor == "minimax" else 0),
+            _vendor=_vendor,
             _extra_headers=({"x-goog-api-client": f"crossaudit/{__version__}"}
                             if _vendor == "google" else None))
 

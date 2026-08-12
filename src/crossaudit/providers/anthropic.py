@@ -1,25 +1,12 @@
 """Anthropic Messages API, over stdlib urllib."""
 from __future__ import annotations
 
-import re
-
 from ..errors import ProviderDenial
 from .base import Reply, egress_check, read_key, request_json, sha256_text
+from .specs import capability_card
 
 BUILTIN_ORIGIN = "https://api.anthropic.com"
 API_VERSION = "2023-06-01"
-
-
-def _supports_temperature(model: str) -> bool:
-    """Return whether the model is known to accept an explicit temperature."""
-    lowered = model.lower()
-    # Opus 4.8 returns a 400 stating that temperature is deprecated. Sonnet
-    # 4.6 and Haiku 4.5 still accept it, so generation-number checks alone are
-    # not sufficient.
-    if lowered.startswith("claude-opus-4-8"):
-        return False
-    match = re.match(r"^claude-[a-z0-9]+-(\d+)(?:-|$)", lowered)
-    return not match or int(match.group(1)) < 5
 
 
 def _denial_text(exc: ProviderDenial) -> str:
@@ -27,12 +14,16 @@ def _denial_text(exc: ProviderDenial) -> str:
     return f"{exc.reason}\n{detail.get('detail', '')}".lower()
 
 
-def _request(url: str, payload: dict, headers: dict, timeout: float):
-    """Retry once when Anthropic explicitly rejects an optional control.
+def _request(url: str, payload: dict, headers: dict, timeout: float, *,
+             repair: bool = True):
+    """POST once, repairing a rejected temperature only for unknown endpoints.
 
-    Model capabilities move faster than package releases. A precise HTTP 400
-    about ``temperature`` is safe to repair because the provider processed no
-    completion; all other errors remain fail-closed.
+    A built-in, recognised model never reaches here with a temperature it does
+    not accept — its capability card already decided that, so ``repair`` is
+    False and the request is not gambled.  Custom endpoints keep the single
+    retry: their capabilities are unknown, and a precise HTTP 400 about
+    ``temperature`` is safe to repair because the provider processed no
+    completion.  All other errors remain fail-closed.
     """
     try:
         return request_json(url, payload, headers, timeout=timeout)
@@ -43,7 +34,7 @@ def _request(url: str, payload: dict, headers: dict, timeout: float):
             and any(word in said for word in
                     ("deprecated", "unsupported", "not support", "only the default"))
         )
-        if "temperature" not in payload or not rejected_temperature:
+        if not repair or "temperature" not in payload or not rejected_temperature:
             raise
         retry = dict(payload)
         retry.pop("temperature", None)
@@ -62,18 +53,19 @@ def complete(*, model: str, system: str, prompt: str, key_env: str,
     # there by accident.
     egress_check(url, builtin_origin=BUILTIN_ORIGIN, allow_custom=allow_custom,
                  allow_insecure_localhost=True)
+    card = capability_card("anthropic", model, official=(origin == BUILTIN_ORIGIN))
     payload = {
         "model": model,
-        "max_tokens": max_tokens,
+        card.token_param: max_tokens,
         "system": system,
         "messages": [{"role": "user", "content": prompt}],
     }
-    if _supports_temperature(model):
+    if card.temperature:
         payload["temperature"] = 0
     if reasoning_effort:
         payload["output_config"] = {"effort": reasoning_effort}
     headers = {"x-api-key": read_key(key_env), "anthropic-version": API_VERSION}
-    data, rid = _request(url, payload, headers, timeout)
+    data, rid = _request(url, payload, headers, timeout, repair=card.compat_retry)
     try:
         text = "".join(b.get("text", "") for b in data["content"] if b.get("type") == "text")
     except (KeyError, TypeError) as exc:

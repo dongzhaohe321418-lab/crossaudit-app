@@ -12,6 +12,7 @@ from urllib.parse import urlparse
 
 from ..errors import ProviderDenial
 from .base import Reply, egress_check, read_key, request_json, sha256_text
+from .specs import capability_card
 
 BUILTIN_ORIGIN = "https://api.openai.com"
 BUILTIN_BASE = "https://api.openai.com/v1"
@@ -28,37 +29,27 @@ def _api_base(value: str) -> str:
     return value + "/v1" if not urlparse(value).path.rstrip("/") else value
 
 
-def _completion_token_parameter(model: str, *, builtin_openai: bool = False) -> str:
-    """Return the token-limit field accepted by this OpenAI model family.
-
-    OpenAI's Chat Completions API has replaced ``max_tokens`` with
-    ``max_completion_tokens``. Older OpenAI-compatible services generally
-    still expect the legacy field, so only apply the API-wide rule to the
-    built-in OpenAI origin and keep custom endpoints model-family based.
-    """
-    if builtin_openai:
-        return "max_completion_tokens"
-    lowered = model.lower()
-    modern_families = ("gpt-5", "o1", "o3", "o4")
-    return ("max_completion_tokens" if lowered.startswith(modern_families)
-            else "max_tokens")
-
-
-def _uses_modern_completion_controls(model: str) -> bool:
-    lowered = model.lower()
-    return lowered.startswith(("gpt-5", "o1", "o3", "o4"))
-
-
 def _denial_text(exc: ProviderDenial) -> str:
     detail = exc.detail if isinstance(exc.detail, dict) else {}
     return f"{exc.reason}\n{detail.get('detail', '')}".lower()
 
 
-def _request(url: str, payload: dict, headers: dict, timeout: float):
-    """Retry once when the endpoint names a request-control incompatibility."""
+def _request(url: str, payload: dict, headers: dict, timeout: float, *,
+             repair: bool = True):
+    """POST once, repairing a named request-control incompatibility.
+
+    ``repair`` is False for a built-in provider's recognised model: its
+    capability card already chose the token field and whether to send a
+    temperature, so there is nothing to guess and no unsupported-parameter 400
+    to recover from.  Custom endpoints keep the single send-reject-swap retry,
+    which is the only sound way to reconcile an origin whose capabilities are
+    not declared here.
+    """
     try:
         return request_json(url, payload, headers, timeout=timeout)
     except ProviderDenial as exc:
+        if not repair:
+            raise
         said = _denial_text(exc)
         retry = dict(payload)
         changed = False
@@ -88,34 +79,39 @@ def complete(*, model: str, system: str, prompt: str, key_env: str,
              _builtin_base: str = BUILTIN_BASE,
              _extra_headers: dict[str, str] | None = None,
              _official_bases: tuple[str, ...] = (),
-             _temperature: float | None = 0) -> Reply:
+             _temperature: float | None = 0,
+             _vendor: str = "openai") -> Reply:
     api_base = _api_base(base_url) if base_url else _builtin_base.rstrip("/")
     builtin_origin = _origin(_builtin_base)
     url = f"{api_base}/chat/completions"
     official = {_api_base(value) for value in (_official_bases or (_builtin_base,))}
-    trusted_origin = _origin(api_base) if api_base in official else builtin_origin
+    is_builtin = api_base in official
+    trusted_origin = _origin(api_base) if is_builtin else builtin_origin
     egress_check(url, builtin_origin=trusted_origin,
-                 allow_custom=allow_custom and api_base not in official,
+                 allow_custom=allow_custom and not is_builtin,
                  allow_insecure_localhost=True)
+    # One capability record decides the request shape. On a built-in origin a
+    # recognised model sends exactly what it supports; a custom endpoint has no
+    # card, so the family-based guess plus the send-reject-swap retry stand in.
+    card = capability_card(_vendor, model, official=is_builtin)
     payload = {
         "model": model,
         "messages": [{"role": "system", "content": system},
                      {"role": "user", "content": prompt}],
     }
-    # GPT-5 and o-series models only accept their default temperature. Omitting
-    # the field preserves that default; legacy chat models retain deterministic
-    # temperature=0 behaviour.
-    if not _uses_modern_completion_controls(model) and _temperature is not None:
+    # Modern reasoning models accept only their default temperature; the card
+    # withholds the field for them. Models that do take one keep deterministic
+    # temperature=0 (1.0 where a vendor mandates it).
+    if card.temperature and _temperature is not None:
         payload["temperature"] = _temperature
     if reasoning_effort:
         # The caller supplies this only after provider/model capability
         # validation. An explicit choice is never silently removed on HTTP 400.
         payload["reasoning_effort"] = reasoning_effort
-    payload[_completion_token_parameter(
-        model, builtin_openai=(api_base == BUILTIN_BASE))] = max_tokens
+    payload[card.token_param] = max_tokens
     headers = {"authorization": f"Bearer {read_key(key_env)}",
                **(_extra_headers or {})}
-    data, rid = _request(url, payload, headers, timeout)
+    data, rid = _request(url, payload, headers, timeout, repair=card.compat_retry)
     try:
         text = data["choices"][0]["message"]["content"] or ""
     except (KeyError, IndexError, TypeError) as exc:

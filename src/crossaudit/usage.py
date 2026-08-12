@@ -14,7 +14,6 @@ import threading
 import time
 import uuid
 from collections import defaultdict
-from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable
@@ -22,6 +21,7 @@ from urllib.parse import urlsplit
 
 from .errors import ProviderDenial
 from .providers.base import Reply
+from .providers.specs import PRICE_SNAPSHOT, Rates, capability_card
 
 try:  # Unix advisory locking.
     import fcntl as _fcntl
@@ -34,7 +34,6 @@ except ImportError:  # pragma: no cover - exercised by Unix CI
     _msvcrt = None
 
 LEDGER_NAME = "usage.jsonl"
-PRICE_SNAPSHOT = "2026-08-03"
 _WRITE_LOCK = threading.Lock()
 _CACHE_LOCK = threading.Lock()
 _SUMMARY_CACHE: dict[str, tuple[tuple, dict]] = {}
@@ -67,36 +66,6 @@ def subscribe(listener: Callable[[], None]) -> None:
         _LISTENERS.append(listener)
 
 
-@dataclass(frozen=True)
-class Rates:
-    """USD per one million tokens."""
-
-    input: float
-    output: float
-    cache_write: float
-    cache_read: float
-
-
-# Public list prices at PRICE_SNAPSHOT.  Matching is intentionally conservative:
-# unknown models retain exact token counts but never receive an invented price.
-_PRICES: tuple[tuple[str, Rates], ...] = (
-    ("gpt-5.6-sol", Rates(5.0, 30.0, 6.25, 0.50)),
-    ("gpt-5.6-terra", Rates(2.5, 15.0, 3.125, 0.25)),
-    ("gpt-5.6-luna", Rates(1.0, 6.0, 1.25, 0.10)),
-    ("claude-fable-5", Rates(10.0, 50.0, 12.50, 1.00)),
-    ("claude-mythos-5", Rates(10.0, 50.0, 12.50, 1.00)),
-    ("claude-opus-5", Rates(5.0, 25.0, 6.25, 0.50)),
-    ("claude-opus-4-8", Rates(5.0, 25.0, 6.25, 0.50)),
-    ("claude-opus-4-7", Rates(5.0, 25.0, 6.25, 0.50)),
-    ("claude-opus-4-6", Rates(5.0, 25.0, 6.25, 0.50)),
-    ("claude-opus-4-5", Rates(5.0, 25.0, 6.25, 0.50)),
-    ("claude-sonnet-5", Rates(3.0, 15.0, 3.75, 0.30)),
-    ("claude-sonnet-4-6", Rates(3.0, 15.0, 3.75, 0.30)),
-    ("claude-sonnet-4-5", Rates(3.0, 15.0, 3.75, 0.30)),
-    ("claude-haiku-4-5", Rates(1.0, 5.0, 1.25, 0.10)),
-)
-
-
 def _nonnegative(value: Any) -> int:
     try:
         return max(0, int(value or 0))
@@ -104,12 +73,14 @@ def _nonnegative(value: Any) -> int:
         return 0
 
 
-def _rates(model: str) -> Rates | None:
-    lowered = model.casefold()
-    for prefix, rates in _PRICES:
-        if lowered == prefix or lowered.startswith(prefix + "-"):
-            return rates
-    return None
+def _rates(vendor: str, model: str) -> Rates | None:
+    """The model's list price, taken from its capability card.
+
+    Price is part of a model's capability record, not a table kept in parallel
+    here: unknown models resolve to a card with no price and stay unpriced while
+    keeping their exact token counts.
+    """
+    return capability_card(vendor, model).price
 
 
 def normalise_usage(raw: dict, *, system: str = "", prompt: str = "",
@@ -200,7 +171,7 @@ def record_reply(*, root: Path, state_dir: str, role: str, phase: str,
     """Append a completion's metadata, returning the exact persisted event."""
     counts = normalise_usage(reply.raw, system=system, prompt=prompt,
                              response=reply.text)
-    rates = _rates(model) if _is_official(provider, base_url) else None
+    rates = _rates(vendor, model) if _is_official(provider, base_url) else None
     subscription = provider == "openai_codex"
     event = {
         "v": 1,
