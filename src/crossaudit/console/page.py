@@ -294,8 +294,6 @@ a:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--accent);outline
 .thread-title{min-width:0}
 .thread-title h1{font-size:var(--fs-title);line-height:1.35;margin:0;font-weight:600;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.01em}
-.thread-title p{margin:2px 0 0;color:var(--text-3);font-size:var(--fs-caption);
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .runtime-button{height:30px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--surface);
   color:var(--text-2);padding:0 10px;font-size:var(--fs-label);white-space:nowrap;flex:none}
 .runtime-button:hover{background:var(--hover);color:var(--text)}
@@ -372,11 +370,6 @@ a:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--accent);outline
   background:var(--accent-bg);color:var(--accent);font-weight:500}
 .route-note{margin-top:8px;padding:8px 10px;border-left:2px solid var(--line-strong);
   color:var(--text-2);font-size:var(--fs-label);white-space:pre-wrap;word-break:break-word}
-.participants{display:flex;align-items:center;margin-right:2px}
-.participant{width:22px;height:22px;margin-left:-5px;border:2px solid var(--surface);border-radius:50%;
-  display:grid;place-items:center;background:var(--surface-2);font-size:8.5px;font-weight:600;color:var(--text-2)}
-.participant:first-child{margin-left:0;background:var(--surface-3);color:var(--text)}
-.participant.auditor{background:var(--role-a-bg);color:var(--role-a)}
 
 /* Verdict badges: real ledger words, colored and always labelled. */
 .status{font-size:var(--fs-caption);line-height:1;padding:5px 8px;border-radius:var(--r-xs);
@@ -419,6 +412,11 @@ a:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--accent);outline
 .review-record-row span:first-child{color:var(--text-2);min-width:88px}
 .review-record-row code{font-family:var(--font-mono);font-size:var(--fs-caption);color:var(--text);
   overflow-wrap:anywhere}
+.review-actions{border-top:1px solid var(--line);padding:var(--sp-2) var(--sp-3);display:flex;
+  justify-content:flex-end}
+.review-action{border:0;background:transparent;color:var(--text-2);font-size:var(--fs-label);
+  padding:6px 8px;border-radius:var(--r-xs)}
+.review-action:hover{background:var(--hover);color:var(--text)}
 .finding{margin-top:9px;border:1px solid var(--line);border-radius:var(--r-md);padding:10px 12px;
   background:var(--surface)}
 .finding-head{display:flex;align-items:center;gap:7px;font-size:var(--fs-caption);color:var(--text-2)}
@@ -1525,10 +1523,9 @@ details.credential-card[open]>.credential-head:after{transform:rotate(180deg)}
 }
 @media(max-width:560px){
   .topbar{padding:0 8px;gap:4px}
-  .brand-button{padding-right:3px}
+  .brand-button{padding-right:3px;font-size:0;gap:0}
   .top-project,#current-project-pin,.live-pill,.version{display:none}
   .thread-head{min-height:52px}
-  .thread-title p{display:none}
   .thread-inner{padding-top:20px}
   .composer{border-radius:var(--r-xl)}
   .composer-meta #model-summary{display:none}
@@ -1598,10 +1595,6 @@ details.credential-card[open]>.credential-head:after{transform:rotate(180deg)}
   .hpc-host-wizard .wizard-head p{max-width:280px}
   .runtime-grid,.runtime-content .form-grid{grid-template-columns:1fr}
   .runtime-wizard>.wizard-head p{display:none}
-}
-@media(max-width:420px){
-  .brand-button{font-size:0;gap:0}
-  .thread-head .participants{display:none}
 }
 @media(max-width:380px){
   .composer-wrap{padding-left:8px;padding-right:8px}
@@ -2042,10 +2035,7 @@ details.credential-card[open]>.credential-head:after{transform:rotate(180deg)}
   </aside>
 
   <main class="workspace">
-    <div class="thread-head"><div class="participants" aria-label="Conversation participants">
-      <span class="participant" title="You">Y</span><span class="participant" title="Generator">G</span>
-      <span class="participant auditor" title="Auditor">A</span></div><div class="thread-title"><h1 id="thread-title">New task</h1>
-      <p id="thread-subtitle">Independent generation and audit</p></div><span class="spacer"></span>
+    <div class="thread-head"><div class="thread-title"><h1 id="thread-title">New task</h1></div><span class="spacer"></span>
       <span class="state-pill" id="thread-status"><span class="pill-glyph" aria-hidden="true"></span><span class="pill-label">ready</span><span class="pill-detail" hidden></span></span>
       <button type="button" class="runtime-button" id="runtime-open" title="Switch models, reasoning effort and audit loop settings">Project controls</button></div>
     <div class="thread" id="thread"><div class="thread-inner">
@@ -2246,7 +2236,7 @@ const ZH={
   "Tasks":"任务","New chat":"新对话","＋ New chat":"＋ 新对话","Workspace views":"工作区视图","Chat":"对话","Files":"文件","More":"更多",
   "Audit history":"审计记录","Usage":"用量","Remote compute":"远程计算","Tools & Skills":"工具与技能",
   "Back to projects":"返回项目列表","Pin project":"置顶项目","Settings":"设置","Switch theme":"切换主题","Toggle audit context":"切换审计上下文","Open navigation":"打开导航","Close open panel":"关闭面板",
-  "Conversation participants":"对话参与者","You":"你","Auditor":"审计者","New task":"新任务","Independent generation and audit":"独立生成与审计","Project controls":"项目控制",
+  "You":"你","Auditor":"审计者","New task":"新任务","Project controls":"项目控制",
   "Message recipient":"消息接收方","To":"发送给","Auto":"自动","@ Generator":"@ 生成者","@ Auditor":"@ 审计者","Add files":"添加文件","＋ Add files":"＋ 添加文件",
   "Message the group, or @ someone…":"给群组发送消息，或 @ 某一方…","Run task":"运行任务","Generator → Auditor":"生成者 → 审计者","Auto-planning":"自动规划","Generator infers focus, format, tone, and structure unless you specify them.":"除非你明确指定，否则生成者会自动判断重点、格式、语气和结构。","Enter to send · Shift+Enter for new line":"Enter 发送 · Shift+Enter 换行",
   "What should CrossAudit work on?":"希望 CrossAudit 完成什么？","Describe what you need or add files. CrossAudit will do the work and independently check the result before showing it here.":"描述你的需求或添加文件。CrossAudit 会完成工作，并在结果显示到这里之前进行独立检查。",
@@ -2390,9 +2380,7 @@ const ZH_PATTERNS=[
   ,[/^(.+) · server annotations are untrusted$/i,m=>m[1]+' · 服务器标注不可信']
   ,[/^(\d+) tasks? needs? your decision$/i,m=>m[1]+' 个任务需要你决定']
   ,[/^round (\d+)\/(\d+)$/i,m=>'第 '+m[1]+'/'+m[2]+' 轮']
-  ,[/^Round (\d+) · (\d+) findings?$/i,m=>'第 '+m[1]+' 轮 · '+m[2]+' 个问题']
-  ,[/^Round (\d+) · passed$/i,m=>'第 '+m[1]+' 轮 · 通过']
-  ,[/^Round (\d+) of (\d+) · (.+)$/i,m=>'第 '+m[1]+' / '+m[2]+' 轮 · '+zhValue(m[3])]
+  ,[/^(\d+) findings?$/i,m=>m[1]+' 项发现']
   ,[/^(\d+) deterministic checks? passed$/i,m=>m[1]+' 项确定性检查已通过']
   ,[/^(\d+) files$/i,m=>m[1]+' 个文件']
   ,[/^(\d+)([mhd])$/,m=>m[1]+({m:' 分钟前',h:' 小时前',d:' 天前'})[m[2]]]
@@ -3666,6 +3654,7 @@ function setStatePill(d){
   const s=newTaskMode?null:userState(d);
   const key=s?s.key:'';
   pill.className='state-pill'+(key?' pill-'+key:'')+(s&&s.live?' pill-live':'');
+  glyph.hidden=!key;
   label.textContent=s?s.label:'Ready';
   const p=chatProgress(d);
   const rounds=p&&p.steps?p.steps.filter(step=>step.kind==='round_started'):[];
@@ -3694,10 +3683,12 @@ function reviewCard(d){
   const passed=status==='passed'||status==='consumed';
   const open=expandedReviews.has(cycle.id);
   const checks=Object.keys(d.check_contracts||{});
-  const roundLines=rows.map(m=>{
+  const roundLines=(rows.length?rows.map(m=>{
     const count=(m.findings||[]).length;
-    return '<div class="review-round-row"><span class="round-n">round '+esc(m.round)+'</span><span>'
-      +(count?count+' finding'+(count===1?'':'s'):'passed')+'</span></div>';}).join('');
+    return '<div class="review-round-row"><span class="round-n">Round '+esc(m.round)+'/'+esc(d.max_rounds)
+      +'</span> · <span>'+(count?count+' finding'+(count===1?'':'s'):esc(m.verdict||'PASS'))
+      +'</span></div>';}):['<div class="review-round-row"><span class="round-n">Round '
+      +esc(cycle.round)+'/'+esc(d.max_rounds)+'</span></div>']).join('');
   const checkLines=passed
     ?'<ul class="review-checks"><li>Independent auditor approved the result</li>'
       +(checks.length?'<li>'+checks.length+' deterministic check'+(checks.length===1?'':'s')+' passed</li>':'<li>No blocking findings</li>')
@@ -3720,13 +3711,19 @@ function reviewCard(d){
     +'<div class="review-record-row"><span>Generator</span><code>'+esc(d.generator)+'</code></div>'
     +'<div class="review-record-row"><span>Auditor</span><code>'+esc(d.auditor)+'</code></div>'
     +'</div></div></div></div>';
+  const actionRow=status==='passed'
+    ?'<button type="button" class="review-action" data-admit data-admit-cycle="'+esc(cycle.id)+'">Admit result</button>'
+    :status==='escalated'
+    ?'<button type="button" class="review-action" data-open-decisions>Review issues & decide</button>'
+    :'<button type="button" class="review-action" data-open-audits>View audit details</button>';
   return '<section class="review-card'+(open?' open':'')+'" aria-label="Independent review">'
     +'<button type="button" class="review-summary" data-review-toggle="'+esc(cycle.id)+'" aria-expanded="'+(open?'true':'false')+'">'
     +'<div class="review-top"><span class="review-mark" aria-hidden="true"></span><b>Independent review</b>'
     +'<span class="status '+esc(cycle.status)+'">'+esc(cycle.status)+'</span><span class="review-chevron" aria-hidden="true"></span></div>'
     +checkLines
-    +'<div class="review-rounds">'+roundLines+'<b>round '+esc(cycle.round)+'/'+esc(d.max_rounds)+'</b></div>'
-    +'</button>'+detail+'</section>';
+    +'<div class="review-rounds">'+roundLines+'</div>'
+    +'</button>'+detail
+    +'<div class="review-actions">'+actionRow+'</div></section>';
 }
 function runCard(d){
   const p = chatProgress(d),cycles=chatCycles(d);
@@ -3989,8 +3986,13 @@ function renderConversation(d){
     const messages = allMessages(d);
     const p = chatProgress(d);
     const live = p && !p.finished ? runCard(d) : '';
-    html = (messages.length || live ? messages.map(m=>turn(m,d)).join('') : welcome())
-      + live + reviewCard(d) + deliveryStatus(d);
+    const review = reviewCard(d);
+    // One protagonist per screen: the welcome empty state renders only when
+    // the timeline holds nothing at all, and the delivery band only when no
+    // review card already states the outcome of the same cycle.
+    const body = messages.map(m=>turn(m,d)).join('') + live + review
+      + (review ? '' : deliveryStatus(d));
+    html = body || welcome();
   }
   document.getElementById('conversation').innerHTML = html;
   if(followLive && !newTaskMode) thread.scrollTop = thread.scrollHeight;
@@ -4103,8 +4105,6 @@ function render(d){
   document.getElementById('side-project').textContent = d.project;
   document.getElementById('tier-label').textContent = d.tier.tier + ' · local controller';
   document.getElementById('thread-title').textContent = newTaskMode ? 'New chat' : titleOf(d);
-  document.getElementById('thread-subtitle').textContent = newTaskMode
-    ? 'Independent generation and audit' : modelTag(d.generator) + ' → ' + modelTag(d.auditor);
   setStatePill(d);
   renderDecisionBanner(d);
   document.getElementById('model-summary').textContent = modelTag(d.generator) + ' → ' + modelTag(d.auditor);
