@@ -1,43 +1,25 @@
 import type { Metadata } from "next";
-import { DM_Sans, IBM_Plex_Mono, Space_Grotesk } from "next/font/google";
+import { GeistSans } from "geist/font/sans";
+import { GeistMono } from "geist/font/mono";
 import "./globals.css";
-
-const displayFont = Space_Grotesk({
-  variable: "--font-display-latin",
-  subsets: ["latin"],
-  display: "swap",
-});
-
-const bodyFont = DM_Sans({
-  variable: "--font-body-latin",
-  subsets: ["latin"],
-  display: "swap",
-});
-
-const monoFont = IBM_Plex_Mono({
-  variable: "--font-mono-latin",
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
-  display: "swap",
-});
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://crossaudit-v4.vercel.app"),
-  title: "CrossAudit | Build with an agent. Ship with evidence.",
+  title: "CrossAudit | Agentic work, independently audited.",
   description:
-    "A local-first AI work loop that pairs an autonomous generator with an independent auditor before you trust the result.",
+    "An agentic workspace with cross-vendor supervision: one model does the work, a model from a different provider inspects every committed result before delivery.",
   openGraph: {
-    title: "CrossAudit | Build with an agent. Ship with evidence.",
+    title: "CrossAudit | Agentic work, independently audited.",
     description:
-      "One request. Two independent responsibilities. A result you can inspect and trace.",
+      "One model does the work. A model from a different provider audits every committed result, and every delivery binds to verifiable evidence.",
     type: "website",
     images: [{ url: "/og.png", width: 1200, height: 630, alt: "CrossAudit independent AI audit loop" }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "CrossAudit | Build with an agent. Ship with evidence.",
+    title: "CrossAudit | Agentic work, independently audited.",
     description:
-      "A local-first AI work loop with independent audit and durable receipts.",
+      "A local-first agentic workspace with cross-vendor independent audit and tamper-evident receipts.",
     images: ["/og.png"],
   },
 };
@@ -48,10 +30,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      className={`${displayFont.variable} ${bodyFont.variable} ${monoFont.variable}`}
-    >
+    <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`}>
       <body>{children}</body>
     </html>
   );
