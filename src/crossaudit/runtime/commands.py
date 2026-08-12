@@ -20,7 +20,12 @@ from dataclasses import dataclass
 from ..errors import EXIT_ESCALATED, EXIT_OK, ConfigDenial, Denial
 from .events import RunEvent
 from .processes import pid_alive
-from .runs import RunJournal, RunState, journal_path
+from .runs import (
+    PROVIDER_WAIT_CATEGORIES,
+    RunJournal,
+    RunState,
+    journal_path,
+)
 from .workspaces import acquire_workspace_slot, release_workspace_slot
 
 
@@ -90,12 +95,51 @@ class RunCommandService:
         self.journal.finish(run_id, outcome, error)
         self._changed()
 
+    def _park_provider_unavailable(self, run_id: str, exc: Denial) -> bool:
+        """Record a routes-exhausted stop as an explicit provider wait.
+
+        A failed provider call must never be misrepresented as a content
+        refusal (NORTH_STAR §14, §31): the journal gets PROVIDER_UNAVAILABLE
+        with a machine-readable waiting reason instead of a generic
+        ``refused``. Fail-closed: if the current state has no edge to the
+        parked state (the loop never reached a provider phase), the caller
+        falls back to the human-wait terminal it always had.
+        """
+        detail = exc.detail if isinstance(exc.detail, dict) else {}
+        category = str(detail.get("category", ""))
+        if category not in PROVIDER_WAIT_CATEGORIES:
+            return False
+        try:
+            self.journal.append(run_id, RunEvent(
+                actor="loop", text="waiting for provider",
+                kind="provider_unavailable", detail=exc.reason[:2000],
+                state=RunState.PROVIDER_UNAVAILABLE,
+                waiting_reason={"kind": "provider", "category": category,
+                                "detail": exc.reason[:400]}))
+        except (KeyError, RuntimeError):
+            return False
+        self._changed()
+        return True
+
     def _drive(self, run_id: str, prepared: PreparedRun, worker: Worker,
                slot, *, propagate: bool) -> int:
+        def emit(event: RunEvent) -> None:
+            self._emit(run_id, event)
+
+        # The worker renews its lease at provider-call boundaries through this
+        # handle; the signature of Worker stays unchanged so existing callers
+        # and tests keep working.
+        emit.heartbeat = lambda: self.journal.heartbeat(run_id)
         try:
-            code = worker(prepared, lambda event: self._emit(run_id, event))
+            code = worker(prepared, emit)
             if self._cancelled(run_id):
                 raise _CancellationRequested
+            if self.journal.state(run_id) == RunState.PROVIDER_UNAVAILABLE:
+                # The loop parked the run itself (after recording the cycle
+                # escalation). Keep that state rather than narrating a
+                # generic escalation over the specific infrastructure wait.
+                self._finish(run_id, "provider_unavailable")
+                return code
             self._finish(run_id, {
                 EXIT_OK: "passed",
                 EXIT_ESCALATED: "escalated",
@@ -114,6 +158,8 @@ class RunCommandService:
         except Denial as exc:
             if self._cancelled(run_id):
                 self._finish(run_id, "cancelled", "cancelled by user")
+            elif self._park_provider_unavailable(run_id, exc):
+                self._finish(run_id, "provider_unavailable", exc.reason)
             else:
                 self._finish(run_id, "refused", exc.reason)
             if propagate:

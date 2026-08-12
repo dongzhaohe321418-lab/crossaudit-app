@@ -215,6 +215,7 @@ class _ConsoleHTTPServer(ThreadingHTTPServer):
     def __init__(self, *args, **kwargs) -> None:
         self.stop_event = threading.Event()
         self.idle_thread: threading.Thread | None = None
+        self.watchdog_thread: threading.Thread | None = None
         super().__init__(*args, **kwargs)
 
     def shutdown(self) -> None:
@@ -224,9 +225,9 @@ class _ConsoleHTTPServer(ThreadingHTTPServer):
     def server_close(self) -> None:
         self.stop_event.set()
         super().server_close()
-        watcher = self.idle_thread
-        if watcher and watcher is not threading.current_thread():
-            watcher.join(timeout=2)
+        for watcher in (self.idle_thread, self.watchdog_thread):
+            if watcher and watcher is not threading.current_thread():
+                watcher.join(timeout=2)
         # A production console owns one process and exits after close. Tests and
         # embedded lifecycle checks can host several short-lived consoles in one
         # interpreter; do not leave their deleted journal bound globally.
@@ -1262,8 +1263,26 @@ def serve(cfg: Config, port: int = 0, *,
                 httpd.shutdown()
                 return
 
+    def liveness_watch() -> None:
+        # A run that stops moving must become visible, not merely stay stuck
+        # (§14): the sweep recovers dead owners, notes silent leases and
+        # completes torn needs-a-human writes. One pass runs immediately so a
+        # console opened onto a stuck project repairs it without waiting an
+        # interval; a failing sweep is skipped, because a watchdog that dies
+        # of the failure it exists to report is worse than none.
+        while True:
+            try:
+                if daemon.watchdog_sweep(cfg).get("changed"):
+                    TRACKER.notify()
+            except Exception:      # noqa: BLE001 — see above; fail open to retry
+                pass
+            if httpd.stop_event.wait(daemon.WATCHDOG_INTERVAL_S):
+                return
+
     httpd.idle_thread = threading.Thread(target=idle_watch, daemon=True)
     httpd.idle_thread.start()
+    httpd.watchdog_thread = threading.Thread(target=liveness_watch, daemon=True)
+    httpd.watchdog_thread.start()
     port_in_use = httpd.server_address[1]
     if register:
         # So a later invocation can find this console rather than start a rival.

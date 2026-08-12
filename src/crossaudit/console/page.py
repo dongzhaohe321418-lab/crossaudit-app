@@ -482,7 +482,7 @@ a:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--accent);outline
 .delivery-status .delivery-dot{width:7px;height:7px;border-radius:50%;background:var(--state-work);flex:none}
 .delivery-status.passed .delivery-dot,.delivery-status.consumed .delivery-dot{background:var(--pass)}
 .delivery-status.blocked .delivery-dot{background:var(--blocked)}
-.delivery-status.escalated .delivery-dot{background:var(--state-decide)}
+.delivery-status.escalated .delivery-dot,.delivery-status.provider_unavailable .delivery-dot{background:var(--state-decide)}
 .delivery-status b{color:var(--text);font-weight:500}
 .delivery-status button{margin-left:auto;border:0;background:transparent;color:var(--text-2);
   font-size:var(--fs-label);flex:none}
@@ -2185,6 +2185,8 @@ const ZH={
   "Retry the same task now, review the model connection first, or stop this task.":"立即重试同一任务、先检查模型连接，或停止此任务。",
   "Retry provider":"重试供应商","Use the current connection and rerun the original task.":"使用当前连接重新运行原任务。",
   "Review provider connection":"检查供应商连接","Change model or fallback":"更改模型或备用路由","Retry provider now":"立即重试供应商","Provider retry started.":"供应商重试已开始。",
+  "Waiting for provider":"等待 provider","waiting for provider":"等待 provider","stalled":"已停滞",
+  "no heartbeat was ever recorded for this run":"此任务从未记录过心跳",
   "The original task is running again; live progress will appear here.":"原任务已重新运行；实时进度会显示在这里。",
   "Retry note (optional)":"重试备注（可选）","Optional note for the audit ledger.":"可选：为审计账本添加备注。",
   "Open folder":"打开文件夹","Dismiss":"移除此提示","Project creation stopped":"项目创建已暂停",
@@ -2383,6 +2385,9 @@ const ZH_PATTERNS=[
   ,[/^(\d+) findings?$/i,m=>m[1]+' 项发现']
   ,[/^(\d+) deterministic checks? passed$/i,m=>m[1]+' 项确定性检查已通过']
   ,[/^(\d+) files$/i,m=>m[1]+' 个文件']
+  ,[/^Waiting for provider · heartbeat (\d+)s ago$/i,m=>'等待 provider · 心跳 '+m[1]+' 秒前']
+  ,[/^last heartbeat (\d+)s ago$/i,m=>'最后心跳 '+m[1]+' 秒前']
+  ,[/^no heartbeat for (\d+)s$/i,m=>'已 '+m[1]+' 秒无心跳']
   ,[/^(\d+)([mhd])$/,m=>m[1]+({m:' 分钟前',h:' 小时前',d:' 天前'})[m[2]]]
 ];
 let currentLocale='en';
@@ -2436,7 +2441,8 @@ function ago(t){if(!t)return '';const s=Math.max(0,Date.now()/1000-Number(t));
   if(s<86400)return Math.floor(s/3600)+'h';return Math.floor(s/86400)+'d';}
 const USER_STATES={DRAFT:'understand',QUEUED:'understand',GENERATING:'work',
   WAITING_FOR_PROVIDER:'work',WAITING_FOR_CAPABILITY:'work',AUDITING:'check',
-  REVISING:'revise',PASSED:'done',WAITING_FOR_HUMAN:'decide'};
+  REVISING:'revise',PASSED:'done',WAITING_FOR_HUMAN:'decide',
+  PROVIDER_UNAVAILABLE:'decide'};
 const STATE_LABELS={understand:'Understanding',work:'Working',check:'Checking',
   revise:'Revising',done:'Completed',decide:'Needs your decision'};
 
@@ -3637,6 +3643,7 @@ function modelTag(value){const raw=String(value||'');if(!raw)return '';
   return (tail.split(' · ')[0]||'').trim()||raw;}
 function userState(d){
   const p=chatProgress(d);
+  if(p&&p.state==='PROVIDER_UNAVAILABLE')return {key:'decide',label:STATE_LABELS.decide,live:false};
   if(p&&!p.finished){
     if(p.state==='CANCELLING')return {key:'work',label:'Stopping',live:true};
     const key=USER_STATES[p.state]||'work';
@@ -3659,7 +3666,13 @@ function setStatePill(d){
   const p=chatProgress(d);
   const rounds=p&&p.steps?p.steps.filter(step=>step.kind==='round_started'):[];
   const roundEvent=rounds.length?rounds[rounds.length-1]:null;
-  if(roundEvent&&s&&s.live){detail.hidden=false;
+  const heartbeatAge=p&&p.heartbeat_at?Math.max(0,Math.floor(Date.now()/1000-p.heartbeat_at)):null;
+  const lastStep=p&&p.steps&&p.steps.length?p.steps[p.steps.length-1]:null;
+  if(p&&p.state==='PROVIDER_UNAVAILABLE'){detail.hidden=false;
+    detail.textContent='Waiting for provider'+(heartbeatAge===null?'':' · heartbeat '+heartbeatAge+'s ago');}
+  else if(lastStep&&lastStep.kind==='run_stalled'&&heartbeatAge!==null&&s&&s.live){
+    detail.hidden=false;detail.textContent='last heartbeat '+heartbeatAge+'s ago';}
+  else if(roundEvent&&s&&s.live){detail.hidden=false;
     detail.textContent='round '+roundEvent.round_no+'/'+roundEvent.round_limit;}
   else{detail.hidden=true;detail.textContent='';}
   if(key!==lastPillKey){
@@ -3732,7 +3745,8 @@ function runCard(d){
   const pipeline=ownsPipeline?d.pipeline:[];
   const show = p || pipeline.some(s => s.state !== 'pending');
   if(!show) return '';
-  const outcome = p ? (p.finished ? p.outcome : 'running') : statusOf(d);
+  const rawOutcome = p ? (p.finished ? p.outcome : 'running') : statusOf(d);
+  const outcome = rawOutcome==='provider_unavailable' ? 'escalated' : rawOutcome;
   const tone = String(outcome||'ready').toLowerCase();
   const handoff = (Date.now()-handoffAt<700&&handoffDirection)?' data-handoff="'+esc(handoffDirection)+'"':'';
   const reached = pipeline.filter(s => s.state !== 'pending').length;
@@ -3808,10 +3822,10 @@ function deliveryStatus(d){
     :status==='open'?['Ready for your correction','Send the approved guidance to start the human-authorized audited attempt.']
     :status==='escalated'&&escalation&&escalation.limit_reached?['Automatic audit limit reached',
       'CrossAudit paused after '+escalation.round+' of '+escalation.max_rounds+' rounds with '+(escalation.issues||[]).length+' issue'+((escalation.issues||[]).length===1?'':'s')+' remaining.']
-    :status==='escalated'?['Needs your input','CrossAudit needs a decision before it can continue.']
+    :status==='escalated'||status==='provider_unavailable'?['Needs your input','CrossAudit needs a decision before it can continue.']
     :['Stopped','The task did not complete.'];
   const action=status==='passed'?'<button type="button" data-admit data-admit-cycle="'+esc(cycle.id)+'">Admit result</button>'
-    :status==='escalated'?'<button type="button" data-open-decisions>Review issues & decide</button>'
+    :status==='escalated'||status==='provider_unavailable'?'<button type="button" data-open-decisions>Review issues & decide</button>'
     :status==='open'?''
     :'<button type="button" data-open-audits>View audit details</button>';
   return '<div class="delivery-status '+esc(status)+'"><span class="delivery-dot"></span><span><b>'

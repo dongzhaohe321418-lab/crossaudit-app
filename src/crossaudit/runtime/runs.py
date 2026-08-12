@@ -11,6 +11,7 @@ ways, but they may not invent another lifecycle.
 """
 from __future__ import annotations
 
+import json
 import os
 import sqlite3
 import time
@@ -20,6 +21,24 @@ from enum import Enum
 from pathlib import Path
 
 DATABASE_NAME = "runtime.sqlite3"
+
+#: Databases from earlier builds report 0; version 2 added the liveness
+#: columns (heartbeat_at, lease_expires_at, waiting_reason). The number only
+#: rises; opening an old file migrates additively and never rewrites rows.
+SCHEMA_VERSION = 2
+
+#: A worker renews its lease at every journal write and at every provider-call
+#: boundary. 120 s is several multiples of the normal gap between those
+#: writes, so an expired lease means a silent worker, not merely a busy one.
+#: The lease is display authority only: an expired lease with a living owner
+#: is narrated as staleness ("last heartbeat Ns ago"), never auto-killed, so a
+#: slow provider turn is at worst described as quiet rather than destroyed.
+LEASE_SECONDS = 120.0
+
+#: Resilience-layer failure categories that mean "no configured provider can
+#: take the next request". Only these park a run as PROVIDER_UNAVAILABLE;
+#: retryable failures inside one provider turn stay inside that turn.
+PROVIDER_WAIT_CATEGORIES = frozenset({"routes_exhausted", "circuit_open"})
 
 
 def journal_path(cfg) -> Path:
@@ -35,6 +54,7 @@ class RunState(str, Enum):
     REVISING = "REVISING"
     WAITING_FOR_PROVIDER = "WAITING_FOR_PROVIDER"
     WAITING_FOR_HUMAN = "WAITING_FOR_HUMAN"
+    PROVIDER_UNAVAILABLE = "PROVIDER_UNAVAILABLE"
     PASSED = "PASSED"
     CANCELLING = "CANCELLING"
     CANCELLED = "CANCELLED"
@@ -58,6 +78,10 @@ TERMINAL_STATES = frozenset({
     RunState.FAILED,
     RunState.INTERRUPTED,
 })
+#: Parked for a human remedy: no worker owns the run, so the projection
+#: reports it as finished, but the transition table still permits an explicit
+#: resume — unlike the truly terminal states, which absorb.
+PARKED_STATES = frozenset({RunState.PROVIDER_UNAVAILABLE})
 
 _TRANSITIONS: dict[RunState, frozenset[RunState]] = {
     RunState.QUEUED: frozenset({
@@ -70,6 +94,7 @@ _TRANSITIONS: dict[RunState, frozenset[RunState]] = {
         RunState.WAITING_FOR_CAPABILITY, RunState.AUDITING,
         RunState.PASSED,
         RunState.WAITING_FOR_PROVIDER, RunState.WAITING_FOR_HUMAN,
+        RunState.PROVIDER_UNAVAILABLE,
         RunState.CANCELLING, RunState.CANCELLED, RunState.FAILED,
         RunState.INTERRUPTED,
     }),
@@ -80,21 +105,35 @@ _TRANSITIONS: dict[RunState, frozenset[RunState]] = {
     }),
     RunState.AUDITING: frozenset({
         RunState.REVISING, RunState.PASSED, RunState.WAITING_FOR_PROVIDER,
-        RunState.WAITING_FOR_HUMAN, RunState.CANCELLING,
+        RunState.WAITING_FOR_HUMAN, RunState.PROVIDER_UNAVAILABLE,
+        RunState.CANCELLING,
         RunState.CANCELLED, RunState.FAILED, RunState.INTERRUPTED,
     }),
     RunState.REVISING: frozenset({
         RunState.GENERATING, RunState.WAITING_FOR_CAPABILITY, RunState.PASSED,
         RunState.WAITING_FOR_PROVIDER, RunState.WAITING_FOR_HUMAN,
+        RunState.PROVIDER_UNAVAILABLE,
         RunState.CANCELLING, RunState.CANCELLED, RunState.FAILED,
         RunState.INTERRUPTED,
     }),
     RunState.CANCELLING: frozenset({
         RunState.CANCELLED, RunState.FAILED, RunState.INTERRUPTED,
     }),
+    # A human remedy may resume the phase that was starved (retry), stop the
+    # run, or record a hard failure. It never silently self-heals: every out
+    # edge is taken by an explicit command, not a timer.
+    RunState.PROVIDER_UNAVAILABLE: frozenset({
+        RunState.GENERATING, RunState.AUDITING, RunState.REVISING,
+        RunState.CANCELLING, RunState.CANCELLED, RunState.FAILED,
+    }),
     RunState.WAITING_FOR_PROVIDER: frozenset({RunState.CANCELLED}),
     RunState.WAITING_FOR_HUMAN: frozenset({RunState.CANCELLED}),
-    RunState.INTERRUPTED: frozenset({RunState.CANCELLED}),
+    # WAITING_FOR_HUMAN is reachable from INTERRUPTED only by recovery
+    # re-narration: the worker died after the cycle store already recorded the
+    # escalation, so the truthful resting state is "needs a person".
+    RunState.INTERRUPTED: frozenset({
+        RunState.CANCELLED, RunState.WAITING_FOR_HUMAN,
+    }),
     RunState.PASSED: frozenset(),
     RunState.CANCELLED: frozenset(),
     RunState.FAILED: frozenset({RunState.CANCELLED}),
@@ -117,7 +156,12 @@ class RunJournal:
     boundary instead of relying on a process-local lock.
     """
 
-    def __init__(self, path: Path) -> None:
+    def __init__(self, path: Path, *,
+                 clock: Callable[[], float] = time.time) -> None:
+        # One injectable time source: liveness (heartbeats, leases) must be
+        # testable without waiting out real minutes, and must not disagree
+        # with the timestamps written next to it.
+        self._clock = clock
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as db:
@@ -136,7 +180,10 @@ class RunJournal:
                     owner_pid INTEGER NOT NULL,
                     started REAL NOT NULL,
                     updated REAL NOT NULL,
-                    finished REAL
+                    finished REAL,
+                    heartbeat_at REAL,
+                    lease_expires_at REAL,
+                    waiting_reason TEXT
                 );
                 CREATE INDEX IF NOT EXISTS runs_started ON runs(started DESC);
                 CREATE TABLE IF NOT EXISTS run_events (
@@ -167,6 +214,15 @@ class RunJournal:
                 db.execute(
                     "ALTER TABLE run_events ADD COLUMN round_limit INTEGER "
                     "NOT NULL DEFAULT 0")
+            run_columns = {row[1] for row in db.execute("PRAGMA table_info(runs)")}
+            for name, kind in (("heartbeat_at", "REAL"),
+                               ("lease_expires_at", "REAL"),
+                               ("waiting_reason", "TEXT")):
+                if name not in run_columns:
+                    # Nullable, defaulting to NULL: rows written by older
+                    # builds stay valid and simply carry no liveness claim.
+                    db.execute(f"ALTER TABLE runs ADD COLUMN {name} {kind}")
+            db.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
         try:
             self.path.chmod(0o600)
         except OSError:
@@ -194,7 +250,7 @@ class RunJournal:
 
     def start(self, task: str, *, chat_id: str = "",
               continuation_cycle: str = "", owner_pid: int | None = None) -> str:
-        now = time.time()
+        now = self._clock()
         run_id = uuid.uuid4().hex
         active = tuple(state.value for state in ACTIVE_STATES)
         placeholders = ",".join("?" for _ in active)
@@ -209,10 +265,12 @@ class RunJournal:
                 raise RuntimeError("a build is already running in this project")
             db.execute(
                 "INSERT INTO runs(run_id,task,chat_id,continuation_cycle,state,"
-                "outcome,error,owner_pid,started,updated,finished) "
-                "VALUES(?,?,?,?,?,?,?,?,?,?,NULL)",
+                "outcome,error,owner_pid,started,updated,finished,"
+                "heartbeat_at,lease_expires_at) "
+                "VALUES(?,?,?,?,?,?,?,?,?,?,NULL,?,?)",
                 (run_id, task[:12000], chat_id[:64], continuation_cycle[:64],
-                 RunState.QUEUED.value, "", "", owner_pid or os.getpid(), now, now),
+                 RunState.QUEUED.value, "", "", owner_pid or os.getpid(), now, now,
+                 now, now + LEASE_SECONDS),
             )
             self._insert_event(
                 db, run_id, kind="run_started", actor="controller", text="queued",
@@ -229,7 +287,7 @@ class RunJournal:
 
         if not isinstance(event, RunEvent):
             raise TypeError("RunJournal.append requires a RunEvent")
-        now = time.time()
+        now = self._clock()
         with self._connect() as db:
             db.execute("BEGIN IMMEDIATE")
             row = db.execute(
@@ -255,12 +313,91 @@ class RunJournal:
                 detail=event.detail, state=target, at=now,
                 round_no=event.round_no, round_limit=event.round_limit,
             )
+            # Every worker write is also a heartbeat and a lease renewal, so a
+            # run can only look stale when nothing has actually been recorded.
+            # The waiting reason follows the event: any transition that does
+            # not restate one clears the previous one.
             db.execute(
-                "UPDATE runs SET state=?, updated=? WHERE run_id=?",
-                (target.value, now, run_id),
+                "UPDATE runs SET state=?, updated=?, heartbeat_at=?, "
+                "lease_expires_at=?, waiting_reason=? WHERE run_id=?",
+                (target.value, now, now, now + LEASE_SECONDS,
+                 json.dumps(event.waiting_reason)
+                 if event.waiting_reason is not None else None, run_id),
             )
             db.commit()
             return sequence
+
+    def heartbeat(self, run_id: str) -> bool:
+        """Renew the worker lease without adding a narration event.
+
+        Called at provider-call boundaries, where minutes can pass with
+        nothing new to say. Without this, a long clean provider turn would be
+        indistinguishable from a hung worker.
+        """
+        now = self._clock()
+        with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute(
+                "SELECT state FROM runs WHERE run_id=?", (run_id,),
+            ).fetchone()
+            if row is None or _state(row["state"]) not in ACTIVE_STATES:
+                db.rollback()
+                return False
+            db.execute(
+                "UPDATE runs SET heartbeat_at=?, lease_expires_at=?, updated=? "
+                "WHERE run_id=?",
+                (now, now + LEASE_SECONDS, now, run_id),
+            )
+            db.commit()
+            return True
+
+    def mark_stalled_runs(self, *, alive: Callable[[int], bool],
+                          current_pid: int | None = None) -> list[str]:
+        """Append one display-only stall note per silent lease expiry.
+
+        The state deliberately does not change: an expired lease with a living
+        owner means a quiet worker, and re-narrating or killing it on a timer
+        would be the watchdog inventing failures. The note lets the UI say how
+        long the run has been silent; dead owners remain the business of
+        ``recover_abandoned``. Repeating the scan is a no-op until the worker
+        speaks again, so the sweep itself is idempotent.
+        """
+        noted: list[str] = []
+        now = self._clock()
+        active = tuple(state.value for state in ACTIVE_STATES)
+        placeholders = ",".join("?" for _ in active)
+        with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            rows = db.execute(
+                f"SELECT run_id,owner_pid,state,heartbeat_at,lease_expires_at "
+                f"FROM runs WHERE state IN ({placeholders})", active,
+            ).fetchall()
+            for row in rows:
+                lease = row["lease_expires_at"]
+                if lease is None or float(lease) > now:
+                    continue
+                owner = int(row["owner_pid"])
+                if owner != (current_pid or os.getpid()) and not alive(owner):
+                    continue          # a dead owner is recover_abandoned's case
+                run_id = str(row["run_id"])
+                last = db.execute(
+                    "SELECT kind FROM run_events WHERE run_id=? "
+                    "ORDER BY sequence DESC LIMIT 1", (run_id,),
+                ).fetchone()
+                if last is not None and str(last["kind"]) == "run_stalled":
+                    continue
+                beat = row["heartbeat_at"]
+                detail = (f"no heartbeat for {max(0, int(now - float(beat)))}s"
+                          if beat is not None else
+                          "no heartbeat was ever recorded for this run")
+                self._insert_event(
+                    db, run_id, kind="run_stalled", actor="watchdog",
+                    text="stalled", detail=detail, state=_state(row["state"]),
+                    at=now,
+                )
+                noted.append(run_id)
+            db.commit()
+        return noted
 
     def finish(self, run_id: str, outcome: str, error: str = "") -> None:
         targets = {
@@ -268,12 +405,15 @@ class RunJournal:
             "escalated": RunState.WAITING_FOR_HUMAN,
             "blocked": RunState.WAITING_FOR_HUMAN,
             "provider_wait": RunState.WAITING_FOR_PROVIDER,
+            # A parked run is already in PROVIDER_UNAVAILABLE; this records
+            # its outcome without narrating a second, different stop over it.
+            "provider_unavailable": RunState.PROVIDER_UNAVAILABLE,
             "refused": RunState.WAITING_FOR_HUMAN,
             "cancelled": RunState.CANCELLED,
             "failed": RunState.FAILED,
         }
         target = targets.get(outcome, RunState.FAILED)
-        now = time.time()
+        now = self._clock()
         with self._connect() as db:
             db.execute("BEGIN IMMEDIATE")
             row = db.execute(
@@ -294,9 +434,11 @@ class RunJournal:
                 db, run_id, kind="run_finished", actor="done", text=outcome,
                 detail=error, state=target, at=now,
             )
+            # A finished or parked run holds no lease: the watchdog must never
+            # read a resting state as a worker that went quiet.
             db.execute(
-                "UPDATE runs SET state=?, outcome=?, error=?, updated=?, finished=? "
-                "WHERE run_id=?",
+                "UPDATE runs SET state=?, outcome=?, error=?, updated=?, "
+                "finished=?, lease_expires_at=NULL WHERE run_id=?",
                 (target.value, outcome[:40], error[:2000], now, now, run_id),
             )
             db.commit()
@@ -312,7 +454,7 @@ class RunJournal:
 
     def request_cancel(self, run_id: str | None = None) -> dict:
         """Record one idempotent cancellation request for an active run."""
-        now = time.time()
+        now = self._clock()
         active = tuple(state.value for state in ACTIVE_STATES)
         placeholders = ",".join("?" for _ in active)
         with self._connect() as db:
@@ -362,7 +504,7 @@ class RunJournal:
         recovered: list[str] = []
         active = tuple(state.value for state in ACTIVE_STATES)
         placeholders = ",".join("?" for _ in active)
-        now = time.time()
+        now = self._clock()
         with self._connect() as db:
             db.execute("BEGIN IMMEDIATE")
             rows = db.execute(
@@ -397,7 +539,7 @@ class RunJournal:
         return recovered
 
     def dismiss_interruption(self, run_id: str | None = None) -> bool:
-        now = time.time()
+        now = self._clock()
         with self._connect() as db:
             db.execute("BEGIN IMMEDIATE")
             if run_id:
@@ -424,6 +566,44 @@ class RunJournal:
             db.commit()
             return True
 
+    def complete_human_wait(self, run_id: str, reason: str = "") -> bool:
+        """Re-narrate a recovered interruption whose escalation already exists.
+
+        The needs-a-human write is two stores wide: the cycle store records
+        the escalation first, the run journal second.  A death in between
+        leaves an ESCALATED cycle beside an INTERRUPTED run — a decision the
+        UI would present as a crash.  This completes the second half exactly
+        once; any other state is left alone.
+        """
+        now = self._clock()
+        with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute(
+                "SELECT state FROM runs WHERE run_id=?", (run_id,),
+            ).fetchone()
+            if row is None or _state(row["state"]) != RunState.INTERRUPTED:
+                db.rollback()
+                return False
+            if not _can_move(RunState.INTERRUPTED, RunState.WAITING_FOR_HUMAN):
+                db.rollback()
+                return False
+            self._insert_event(
+                db, run_id, kind="human_wait_reconciled", actor="controller",
+                text="escalated",
+                detail=reason or ("the escalation was recorded before the "
+                                  "worker ended; this run is waiting for a "
+                                  "person, not crashed"),
+                state=RunState.WAITING_FOR_HUMAN, at=now,
+            )
+            db.execute(
+                "UPDATE runs SET state=?, outcome=?, error=?, updated=?, "
+                "finished=? WHERE run_id=?",
+                (RunState.WAITING_FOR_HUMAN.value, "escalated",
+                 reason[:2000], now, now, run_id),
+            )
+            db.commit()
+            return True
+
     def latest(self) -> dict | None:
         with self._connect() as db:
             row = db.execute(
@@ -444,7 +624,12 @@ class RunJournal:
             for event in events if event["kind"] != "run_started"
         ]
         state = _state(row["state"])
-        end = float(row["finished"] or time.time())
+        end = float(row["finished"] or self._clock())
+        try:
+            waiting = (json.loads(row["waiting_reason"])
+                       if row["waiting_reason"] else None)
+        except (TypeError, ValueError):
+            waiting = None
         return {
             "run_id": row["run_id"],
             "task": row["task"],
@@ -455,11 +640,18 @@ class RunJournal:
             "updated": float(row["updated"]),
             "owner_pid": int(row["owner_pid"]),
             "steps": steps,
-            "finished": state in TERMINAL_STATES,
+            # A parked run is finished from the worker's point of view: no
+            # thread owns it, and only an explicit human command resumes it.
+            "finished": state in TERMINAL_STATES or state in PARKED_STATES,
             "outcome": row["outcome"],
             "error": row["error"],
             "elapsed": max(0, round(end - float(row["started"]))),
             "last_event_id": int(events[-1]["sequence"]) if events else 0,
+            "heartbeat_at": (float(row["heartbeat_at"])
+                             if row["heartbeat_at"] is not None else None),
+            "lease_expires_at": (float(row["lease_expires_at"])
+                                 if row["lease_expires_at"] is not None else None),
+            "waiting_reason": waiting if isinstance(waiting, dict) else None,
         }
 
     def interruption(self) -> dict | None:

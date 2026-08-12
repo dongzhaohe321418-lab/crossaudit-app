@@ -37,9 +37,13 @@ from pathlib import Path
 
 from .. import _selfid
 from ..config import Config
+from ..controller import BLOCKED, ESCALATED, OPEN, StateStore
+from ..errors import Denial
+from ..gitio import git, is_repo
 from ..runtime import (
     RunCommandService,
     RunJournal,
+    RunState,
     journal_path,
     pid_alive,
     windows_pid_alive,
@@ -47,6 +51,17 @@ from ..runtime import (
 )
 
 RUN_FILE = "console.json"
+#: How often the console's watchdog walks this project's runs table. 30 s is
+#: far below the 120 s lease, so a stall is reported within one lease window,
+#: while an idle project costs a few cheap SQLite reads per minute.
+WATCHDOG_INTERVAL_S = 30.0
+#: Cycle-store history events that prove the needs-a-human write reached the
+#: cycle side after a given run started.
+_ESCALATION_EVENTS = frozenset({
+    "escalate", "build_escalated_before_revision", "human_resolution"})
+#: Run states that mean "a person owns the next step".
+_HUMAN_WAIT_STATES = frozenset({
+    RunState.WAITING_FOR_HUMAN.value, RunState.PROVIDER_UNAVAILABLE.value})
 # Read-only migration fallback for a build interrupted by CrossAudit <= 4.14.
 LEGACY_BUILD_FLAG = "build-in-flight.json"
 KILL_SIGNAL = getattr(signal, "SIGKILL", signal.SIGTERM)
@@ -326,3 +341,121 @@ def dismiss_legacy_interruption(cfg: Config) -> bool:
         legacy.unlink(missing_ok=True)
         return True
     return False
+
+
+# ----------------------------------------------------------------- liveness
+def reconcile_human_wait(cfg: Config, journal: RunJournal | None = None) -> dict:
+    """Complete a torn needs-a-human write, in either direction, exactly once.
+
+    "A person owns the next step" is recorded in two stores: the cycle store
+    (state.json, status ESCALATED — the decision object) and the run journal
+    (WAITING_FOR_HUMAN / PROVIDER_UNAVAILABLE — what the UI narrates). The
+    writers' contract is cycle first, run second (build.run_loop tail,
+    cmd_run's record_verdict); a process death in between tears them:
+
+    * an ESCALATED cycle beside an INTERRUPTED run presents a human decision
+      as a crash — the run side is completed to WAITING_FOR_HUMAN;
+    * a human-wait run with no escalation recorded since it started offers
+      the person nothing to decide on — the cycle side is escalated with the
+      run's own stop reason.
+
+    Only the newest run is considered: older human-wait runs belong to cycles
+    that were already ruled on, and reviving them would invent decisions.
+    Both repairs are idempotent; a corrupt store aborts rather than guesses.
+    """
+    result: dict = {"run_completed": None, "cycle_recorded": None}
+    runtime = journal_path(cfg)
+    if journal is None:
+        if not runtime.is_file():
+            return result
+        journal = RunJournal(runtime)
+    row = journal.latest()
+    if row is None:
+        return result
+    store = StateStore(cfg.root / cfg.state_dir / "state.json")
+    try:
+        state = store.snapshot()
+    except Denial:
+        return result            # a corrupt store is its own incident; never guess
+    since = float(row["started"]) - 1
+    recent = [event for event in state.get("history", [])
+              if float(event.get("t", 0) or 0) >= since]
+    escalation_recorded = any(
+        event.get("event") in ("escalate", "build_escalated_before_revision")
+        or (event.get("event") == "verdict" and event.get("status") == ESCALATED)
+        for event in recent)
+    escalation_activity = escalation_recorded or any(
+        event.get("event") == "human_resolution" for event in recent)
+    cycles = state.get("cycles", {})
+    escalated_now = [dict(c, cycle_id=cid) for cid, c in cycles.items()
+                     if c.get("status") == ESCALATED]
+
+    if (row["state"] == RunState.INTERRUPTED.value and escalation_recorded
+            and escalated_now):
+        reason = str(escalated_now[-1].get("escalation_reason", ""))[:400]
+        if journal.complete_human_wait(str(row["run_id"]), reason):
+            result["run_completed"] = str(row["run_id"])
+        return result
+
+    if row["state"] in _HUMAN_WAIT_STATES and not escalation_activity:
+        if not is_repo(cfg.root):
+            return result
+        try:
+            anchor = git("rev-parse", "HEAD", cwd=cfg.root)
+        except Denial:
+            return result
+        waiting = row.get("waiting_reason") or {}
+        if row["state"] == RunState.PROVIDER_UNAVAILABLE.value:
+            # "provider failure" in the reason is what routes the escalation
+            # to the provider remedies (retry / review connection / change
+            # model) instead of content guidance.
+            reason = ("provider failure left this task waiting for a person: "
+                      + str(waiting.get("detail") or row.get("error")
+                            or "no provider route is available"))[:400]
+        else:
+            reason = (str(row.get("error") or "").strip()
+                      or "the run stopped for a person before its decision "
+                         "record was written")[:400]
+        rounds = [int(step.get("round_no", 0) or 0)
+                  for step in row.get("steps", [])]
+        target = next((cid for cid, c in cycles.items()
+                       if c.get("active_sha") == anchor
+                       and c.get("status") in (OPEN, BLOCKED, ESCALATED)), None)
+        try:
+            if target is not None:
+                cycle = store.escalate(target, reason,
+                                       task=str(row.get("task", "")))
+            else:
+                cycle = store.record_build_escalation(
+                    cfg.science_repo, anchor, reason, max([1, *rounds]),
+                    str(row.get("chat_id", "")), str(row.get("task", "")))
+        except Denial:
+            return result
+        result["cycle_recorded"] = cycle["cycle_id"]
+    return result
+
+
+def watchdog_sweep(cfg: Config) -> dict:
+    """One idempotent liveness pass over this project's runs table.
+
+    Three duties, each bounded: dead owners are recovered exactly once (a
+    durable cancellation still ends CANCELLED, other work INTERRUPTED — the
+    existing recover_abandoned semantics); an expired lease under a living
+    owner becomes a display-only stall note, never a state change; and a torn
+    needs-a-human write is completed on whichever side is missing. Running
+    the sweep twice changes nothing the first pass did not.
+    """
+    reconciled: dict = {"run_completed": None, "cycle_recorded": None}
+    runtime = journal_path(cfg)
+    if not runtime.is_file():
+        return {"changed": False, "recovered": [], "stalled": [],
+                "reconciled": reconciled}
+    journal = RunJournal(runtime)
+    recovered = journal.recover_abandoned(alive=_pid_alive)
+    stalled = journal.mark_stalled_runs(alive=_pid_alive)
+    reconciled = reconcile_human_wait(cfg, journal)
+    return {"changed": bool(recovered or stalled
+                            or reconciled["run_completed"]
+                            or reconciled["cycle_recorded"]),
+            "recovered": recovered, "stalled": stalled,
+            "reconciled": reconciled}

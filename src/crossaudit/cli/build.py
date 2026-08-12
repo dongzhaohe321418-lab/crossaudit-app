@@ -35,6 +35,7 @@ from ..errors import EXIT_ESCALATED, EXIT_OK, ConfigDenial, Denial, ProviderDeni
 from ..gitio import git, is_repo
 from ..providers import resilience as provider_resilience
 from ..runtime import (
+    PROVIDER_WAIT_CATEGORIES,
     PreparedRun,
     RunCommandService,
     RunEvent,
@@ -48,7 +49,8 @@ MAX_AGENT_JOBS_PER_BUILD = 20
 MAX_MCP_CALLS_PER_BUILD = 40
 
 
-def _generator_complete(cfg: Config, allow_custom: bool, on_event=None):
+def _generator_complete(cfg: Config, allow_custom: bool, on_event=None,
+                        heartbeat=None):
     """A `complete(system, prompt)` bound to the generator role.
 
     The generator role needs its own credential; falling back to the auditor's
@@ -58,9 +60,15 @@ def _generator_complete(cfg: Config, allow_custom: bool, on_event=None):
     primary = provider_resilience.generator_role(cfg)
 
     def complete(*, system: str, prompt: str):
+        # A provider turn can be silent for minutes; the lease renewal at its
+        # boundary is what distinguishes "slow model" from "hung worker".
+        if heartbeat is not None:
+            heartbeat()
         reply = provider_resilience.complete(
             cfg, "generator", primary, system=system, prompt=prompt,
             allow_custom=allow_custom, on_event=on_event)
+        if heartbeat is not None:
+            heartbeat()
         route = provider_resilience.route_from_reply(reply, primary)
         complete.last_route = route
         record_completion(root=cfg.root, state_dir=cfg.state_dir, role="generator",
@@ -141,16 +149,20 @@ def run_loop(cfg, task: str, *, on_event=None, attachments: str = "",
     """
     current_round = 0
     operational_state = RunState.QUEUED
+    # The run shell exposes lease renewal on the emit callable so the loop's
+    # provider boundaries can prove liveness without a second command channel.
+    heartbeat = getattr(on_event, "heartbeat", None)
 
     def emit(kind: str, actor: str, text: str, detail: str = "", *,
-             state: RunState | None = None) -> None:
+             state: RunState | None = None, waiting_reason: dict | None = None,
+             ) -> None:
         nonlocal operational_state
         operational_state = state or operational_state
         if on_event is not None:
             on_event(RunEvent(
                 kind=kind, actor=actor, text=text, detail=detail,
                 state=operational_state, round_no=current_round,
-                round_limit=cfg.max_rounds))
+                round_limit=cfg.max_rounds, waiting_reason=waiting_reason))
 
     def generator_provider_event(actor: str, text: str, detail: str = "") -> None:
         emit("provider_recovery", actor, text, detail,
@@ -159,7 +171,8 @@ def run_loop(cfg, task: str, *, on_event=None, attachments: str = "",
     if chat_id and not re.fullmatch(r"(?:history|[a-f0-9]{16})", chat_id):
         raise ConfigDenial("chat id is invalid")
     allow_custom = bool(os.environ.get(ALLOW_CUSTOM_ENV))
-    complete = _generator_complete(cfg, allow_custom, generator_provider_event)
+    complete = _generator_complete(cfg, allow_custom, generator_provider_event,
+                                   heartbeat)
     constitution = (cfg.root / cfg.constitution).read_text(encoding="utf-8")
     store = StateStore(cfg.root / cfg.state_dir / "state.json")
     house = skills_mod.load(cfg.root)
@@ -176,6 +189,7 @@ def run_loop(cfg, task: str, *, on_event=None, attachments: str = "",
     build_cycle_id: str | None = continuation_cycle or None
     termination_reason = f"build round budget spent ({cfg.max_rounds})"
     last_round = 0
+    provider_wait: ProviderDenial | None = None
 
     for round_no in range(1, cfg.max_rounds + 1):
         current_round = round_no
@@ -254,6 +268,17 @@ def run_loop(cfg, task: str, *, on_event=None, attachments: str = "",
                 emit("generation_resumed", "generator",
                      "resuming with compute result", state=RunState.GENERATING)
         except ProviderDenial as exc:
+            if str(exc.detail.get("category", "")) in PROVIDER_WAIT_CATEGORIES:
+                # Every configured route is exhausted or cooling down: no
+                # further request can differ from the last one, and burning
+                # the remaining rounds on it would present an infrastructure
+                # outage as spent content revisions (§14 red line). Stop and
+                # park the run for a human remedy.
+                provider_wait = exc
+                termination_reason = (
+                    f"generator provider failure in round {round_no}: "
+                    f"{exc.reason[:400]}")
+                break
             # An overreaching or malformed round is a refused round, not a
             # crashed loop: the generator is told what the guard refused and
             # gets its next attempt inside the same budget.
@@ -344,6 +369,8 @@ def run_loop(cfg, task: str, *, on_event=None, attachments: str = "",
         run_args.continue_cycle = build_cycle_id
         run_args.on_step = lambda actor, text, detail="": emit(
             "provider_recovery", actor, text, detail, state=RunState.AUDITING)
+        if heartbeat is not None:
+            heartbeat()          # auditor provider turn: same silence problem
         with contextlib.redirect_stdout(buffer):
             code = cmd_run(run_args)
         inner = buffer.getvalue()
@@ -372,10 +399,14 @@ def run_loop(cfg, task: str, *, on_event=None, attachments: str = "",
              state=RunState.REVISING)
 
     reason = termination_reason
+    # Write order is a recovery contract: the cycle store records the human
+    # decision first, the run journal moves to its waiting state second (via
+    # the emit below and the shell's finish). A death in between leaves an
+    # ESCALATED cycle beside an interrupted run, which
+    # console.daemon.reconcile_human_wait completes to WAITING_FOR_HUMAN.
     if build_cycle_id:
         store.escalate(build_cycle_id, reason, task=task)
-        emit("audit_escalated", "auditor", "ESCALATED",
-             f"cycle {build_cycle_id} is waiting for a human")
+        cycle_ref = build_cycle_id
     else:
         # A provider can refuse every generator attempt before there is a work
         # commit for cmd_run to open. Anchor that stop to the current durable
@@ -384,8 +415,23 @@ def run_loop(cfg, task: str, *, on_event=None, attachments: str = "",
         anchor = git("rev-parse", "HEAD", cwd=cfg.root)
         cycle = store.record_build_escalation(
             cfg.science_repo, anchor, reason, last_round, chat_id, task)
-        emit("audit_escalated", "auditor", "ESCALATED",
-             f"cycle {cycle['cycle_id']} is waiting for a human")
+        cycle_ref = cycle["cycle_id"]
+    if provider_wait is not None:
+        # The run parks as an explicit provider wait, never as "0 findings"
+        # or a generic refusal: the waiting reason is machine-readable so the
+        # UI can offer the provider remedies rather than content guidance.
+        # It is the last event on purpose — a later event would clear the
+        # persisted waiting reason.
+        emit("loop_stopped", "loop", reason)
+        emit("provider_unavailable", "loop", "waiting for provider", reason,
+             state=RunState.PROVIDER_UNAVAILABLE,
+             waiting_reason={
+                 "kind": "provider",
+                 "category": str(provider_wait.detail.get("category", "")),
+                 "detail": provider_wait.reason[:400]})
+        return EXIT_ESCALATED
+    emit("audit_escalated", "auditor", "ESCALATED",
+         f"cycle {cycle_ref} is waiting for a human")
     emit("loop_stopped", "loop", reason)
     return EXIT_ESCALATED
 
@@ -454,6 +500,9 @@ def cmd_build(args) -> int:
             print(line if not event.detail
                   else f"{line}\n  {'':10s} {event.detail[:96]}")
 
+        # The CLI narrator wraps the shell's emit; carry the lease-renewal
+        # handle across the wrapper so foreground builds heartbeat too.
+        on_event.heartbeat = getattr(emit, "heartbeat", None)
         return run_loop(cfg, prepared.task, on_event=on_event)
 
     code = service.start(prepare, worker, background=False)
