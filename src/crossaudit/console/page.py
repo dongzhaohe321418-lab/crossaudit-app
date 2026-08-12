@@ -2189,6 +2189,12 @@ const ZH={
   "no heartbeat was ever recorded for this run":"此任务从未记录过心跳",
   "The original task is running again; live progress will appear here.":"原任务已重新运行；实时进度会显示在这里。",
   "Retry note (optional)":"重试备注（可选）","Optional note for the audit ledger.":"可选：为审计账本添加备注。",
+  "Usage limit reached":"已达用量上限","The task paused at a usage limit":"任务因达到用量上限而暂停",
+  "Adjust usage limits":"调整用量上限","Continue later":"稍后继续","Raise the limit & retry":"提高上限并重试",
+  "CrossAudit stopped before spending past your usage limit. No result was admitted and the original task is ready once you raise or clear the limit.":"CrossAudit 在超出用量上限前已停止。没有结果被准入；提高或清除上限后即可重新运行原任务。",
+  "No audit findings were created because the task paused at a usage limit before producing a reviewable result.":"任务在产出可审查结果前因达到用量上限而暂停，因此没有生成审计问题。",
+  "Raise or clear the usage limit and rerun the original task, or stop this task.":"提高或清除用量上限并重新运行原任务，或停止此任务。",
+  "Adjust the usage limit in Project controls, then rerun the original task.":"在项目控制中调整用量上限，然后重新运行原任务。",
   "Open folder":"打开文件夹","Dismiss":"移除此提示","Project creation stopped":"项目创建已暂停",
   "Review local changes before setup":"设置前请检查本地改动","Checking the project again":"正在重新检查项目",
   "CrossAudit settings":"CrossAudit 设置","Check this Mac, repair setup issues, and connect model providers without using Terminal.":"检查此 Mac、修复设置问题并连接模型供应商，全程无需终端。",
@@ -2862,13 +2868,18 @@ function resolutionChoice(action){
   document.getElementById('resolution-action').value=action||'';
   resolutionForm.querySelectorAll('input[name="resolution-choice"]').forEach(input=>input.checked=input.value===action);
   const label=document.getElementById('resolution-reason-label'),reason=document.getElementById('resolution-reason');
-  const submit=document.getElementById('submit-resolution'),provider=Boolean(activeResolution&&activeResolution.kind==='provider');
-  const guidance=reason.closest('label');guidance.hidden=provider&&action==='reopen';
-  reason.required=!(provider&&action==='reopen');
-  if(action==='reopen'&&provider){
+  const submit=document.getElementById('submit-resolution');
+  const budget=Boolean(activeResolution&&activeResolution.kind==='budget');
+  const provider=Boolean(activeResolution&&activeResolution.kind==='provider');
+  // A provider outage and a budget pause both reopen by retrying the original
+  // task, so the reason is an optional note, not required content guidance.
+  const stopped=provider||budget;
+  const guidance=reason.closest('label');guidance.hidden=stopped&&action==='reopen';
+  reason.required=!(stopped&&action==='reopen');
+  if(action==='reopen'&&stopped){
     label.textContent='Retry note (optional)';
     reason.placeholder='Optional note for the audit ledger.';
-    submit.textContent='Retry provider now';
+    submit.textContent=budget?'Raise the limit & retry':'Retry provider now';
   }else if(action==='reopen'){
     label.textContent='Correction guidance for the next round';
     reason.placeholder='Describe exactly what should change before the next audit.';
@@ -2892,6 +2903,8 @@ const REMEDIATION={
   retry:{label:'Retry provider now'},
   validate_credential:{label:'Review provider connection',panel:'settings'},
   select_model:{label:'Change model or fallback',panel:'runtime'},
+  open_billing:{label:'Adjust usage limits',panel:'runtime'},
+  continue_later:{label:'Continue later'},
   stop:{label:'Stop this task'},
   revise:{label:'Revise and continue'}};
 function hasRemediation(row,action){return ((row&&row.remediations)||[]).indexOf(action)>=0;}
@@ -2905,15 +2918,21 @@ function openResolution(value,action='',sha=''){
   document.getElementById('resolution-cycle').value=row.cycle_id||'';
   document.getElementById('resolution-reason').value='';
   const used=Number(row.round||0),maximum=Number(row.max_rounds||(lastState&&lastState.max_rounds)||0);
+  // A budget (usage-guardrail) pause is a provider-family stop — no audit ran,
+  // nothing was admitted — but its remedy is to raise or clear the local limit,
+  // never to review a connection, so it carries its own copy throughout.
+  const budget=row.kind==='budget';
   const provider=row.kind==='provider';
-  document.getElementById('resolution-flag').textContent=provider?'Generator connection stopped':row.limit_reached?'Automatic audit limit reached':'Automatic loop paused';
-  document.getElementById('resolution-title').textContent=provider?'The task is waiting for a working Generator connection':'The audit needs your decision';
-  document.getElementById('resolution-summary').textContent=provider
+  document.getElementById('resolution-flag').textContent=budget?'Usage limit reached':provider?'Generator connection stopped':row.limit_reached?'Automatic audit limit reached':'Automatic loop paused';
+  document.getElementById('resolution-title').textContent=budget?'The task paused at a usage limit':provider?'The task is waiting for a working Generator connection':'The audit needs your decision';
+  document.getElementById('resolution-summary').textContent=budget
+    ?'CrossAudit stopped before spending past your usage limit. No result was admitted and the original task is ready once you raise or clear the limit.'
+    :provider
     ?'CrossAudit stopped before an audit began. No result was admitted and the original task is ready to retry.'
     :row.limit_reached
     ?'CrossAudit used all '+used+' of '+maximum+' automatic rounds without a passing result. Nothing will continue or be admitted until you decide.'
     :'CrossAudit stopped safely. Nothing will continue or be admitted until you decide.';
-  document.getElementById('resolution-limit-title').textContent=provider?'Generator connection stopped':row.limit_reached
+  document.getElementById('resolution-limit-title').textContent=budget?'Usage limit reached':provider?'Generator connection stopped':row.limit_reached
     ?'Automatic rounds used: '+used+' / '+maximum:'The automatic loop could not continue safely';
   document.getElementById('resolution-limit-copy').textContent=String(row.stop_reason||row.why||'The audit controller paused this task.');
   const attemptRows=row.attempts||[];
@@ -2929,17 +2948,27 @@ function openResolution(value,action='',sha=''){
     '<article class="decision-issue"><div class="decision-issue-head"><span>'+esc(issue.severity||'BLOCKER')+'</span><b>'
     +esc(issue.rule||'Issue '+(index+1))+'</b></div><p>'+esc(issue.observation||'No explanation was recorded.')+'</p>'
     +(issue.artifact?'<small>Affects '+esc(issue.artifact)+'</small>':'')+'</article>').join('')
-    :'<div class="decision-empty">'+(provider
+    :'<div class="decision-empty">'+(budget
+      ?'No audit findings were created because the task paused at a usage limit before producing a reviewable result.'
+      :provider
       ?'No audit findings were created because the Generator stopped before producing a reviewable result.'
       :'No structured findings were recorded. Review the stop reason above before continuing.')+'</div>';
-  document.getElementById('resolution-request').textContent=provider
+  document.getElementById('resolution-request').textContent=budget
+    ?'Raise or clear the usage limit and rerun the original task, or stop this task.'
+    :provider
     ?'Retry the same task now, review the model connection first, or stop this task.'
     :(row.requested||'Choose whether to revise and continue, or stop this task.');
-  document.getElementById('resolution-reopen-title').textContent=provider?'Retry provider':'Revise and continue';
-  document.getElementById('resolution-reopen-copy').textContent=provider
+  document.getElementById('resolution-reopen-title').textContent=budget?'Raise the limit & retry':provider?'Retry provider':'Revise and continue';
+  document.getElementById('resolution-reopen-copy').textContent=budget
+    ?'Adjust the usage limit in Project controls, then rerun the original task.'
+    :provider
     ?'Use the current connection and rerun the original task.'
     :'Give the generator specific correction guidance and unlock one additional audited round.';
-  document.getElementById('resolution-open-runtime').hidden=!hasRemediation(row,'select_model');
+  // The runtime affordance carries the budget person to the same Project
+  // controls that hold the usage limits; relabel it so it names that, not a
+  // model change, when the stop is a guardrail pause.
+  document.getElementById('resolution-open-runtime').textContent=budget?'Adjust usage limits':'Change model or fallback';
+  document.getElementById('resolution-open-runtime').hidden=!(hasRemediation(row,'select_model')||hasRemediation(row,'open_billing'));
   document.getElementById('resolution-open-settings').hidden=!hasRemediation(row,'validate_credential');
   resolutionChoice(action||'reopen');
   document.getElementById('resolution-error').className='wizard-error';

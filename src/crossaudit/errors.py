@@ -151,6 +151,14 @@ _DEFAULT_PROVIDER_REMEDIATIONS = (_A.RETRY, _A.USE_FALLBACK, _A.STOP)
 # parked run's ``waiting_reason``: "provider" here is that same "provider".
 ESCALATION_REMEDIATIONS: dict[str, tuple[RemediationAction, ...]] = {
     "provider": (_A.RETRY, _A.VALIDATE_CREDENTIAL, _A.SELECT_MODEL, _A.STOP),
+    # A budget (usage-guardrail) pause is not a connection fault: its remedy is
+    # to raise or clear the local limit — or stop — never to retry the same
+    # blocked call or review the model connection. Kept identical to
+    # PROVIDER_REMEDIATIONS["budget"] so a parked run's own denial and the
+    # cycle-side escalation for the SAME stop offer a person one set of billing
+    # remedies, not two disagreeing ones (this is the cross-slice contract the
+    # 'budget' kind exists to keep).
+    "budget":   (_A.OPEN_BILLING, _A.CONTINUE_LATER, _A.STOP),
     "audit":    (_A.REVISE, _A.STOP),
 }
 del _A
@@ -168,13 +176,42 @@ def escalation_remediations(kind: str) -> list[str]:
         ESCALATION_REMEDIATIONS.get(kind, ESCALATION_REMEDIATIONS["audit"]))
 
 
+def park_escalation_kind(waiting_kind: str | None) -> str:
+    """The cycle escalation kind for a parked run, from its run-side kind.
+
+    A parked run is a provider wait, and its cycle decision object must name
+    the SAME kind the run itself parked with so both surfaces route a person
+    to one set of remedies. The run side already made that call once —
+    ``runs.waiting_kind`` is the single source: 'budget' for a usage-guardrail
+    pause, 'provider' for every other provider wait — and this mirrors it on
+    the cycle side. A missing or unrecognised value (a legacy record, a torn
+    read) falls back to 'provider', never to the content 'audit' remedies,
+    which never fit a provider wait. Non-park content stops are 'audit' and do
+    not pass through here.
+    """
+    return "budget" if (waiting_kind or "").strip() == "budget" else "provider"
+
+
+#: The prose marker the sole budget producer (usage.enforce_budget) stamps on
+#: every guardrail denial. It rides through the reasons the cycle write points
+#: mint, so the legacy shim below can still separate a budget pause from a
+#: connection failure for records written before ``escalation_kind`` existed.
+_BUDGET_REASON_MARKER = "usage guardrail"
+
+
 def classify_escalation_kind(reason: str) -> str:
     """Infer an escalation's kind from its prose reason — the legacy shim.
 
     Every provider producer mints its reason with the "provider failure"
     marker, so a record written before ``escalation_kind`` was stored can
-    still be routed to the provider remedies. New code sets the structured
-    kind explicitly; this is the one surviving place the marker is read, and
-    only for records that predate the field.
+    still be routed to the provider remedies. A budget pause carries the
+    "provider failure" marker too (it stops a provider call), so its own
+    guardrail marker is checked first — otherwise a spending cap would fall
+    through to the connection remedies. New code sets the structured kind
+    explicitly; this is the one surviving place the markers are read, and only
+    for records that predate the field.
     """
-    return "provider" if "provider failure" in (reason or "").lower() else "audit"
+    text = (reason or "").lower()
+    if _BUDGET_REASON_MARKER in text:
+        return "budget"
+    return "provider" if "provider failure" in text else "audit"

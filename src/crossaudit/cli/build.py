@@ -31,7 +31,8 @@ from .. import skills as skills_mod
 from ..config import Config, heterogeneity, load
 from ..controller import StateStore
 from ..dcl import describe as describe_checks
-from ..errors import EXIT_ESCALATED, EXIT_OK, ConfigDenial, Denial, ProviderDenial
+from ..errors import (EXIT_ESCALATED, EXIT_OK, ConfigDenial, Denial,
+                      ProviderDenial, park_escalation_kind)
 from ..gitio import git, is_repo
 from ..providers import resilience as provider_resilience
 from ..runtime import (
@@ -444,8 +445,16 @@ def run_loop(cfg, task: str, *, on_event=None, attachments: str = "",
         """
         # A provider outage and a content stop share this recorder but route
         # to different remedies; name the kind structurally so the Console
-        # never has to re-read the reason to tell them apart.
-        kind = "provider" if provider_wait is not None else "audit"
+        # never has to re-read the reason to tell them apart. A budget
+        # (usage-guardrail) park is a provider wait whose remedy is billing,
+        # not a connection review — derive the kind from the run-side park
+        # category (runs.waiting_kind, the single source) so the cycle side
+        # names the SAME kind the run parked with, never a blanket 'provider'.
+        if provider_wait is not None:
+            kind = park_escalation_kind(
+                waiting_kind(str(provider_wait.detail.get("category", ""))))
+        else:
+            kind = "audit"
         try:
             if build_cycle_id:
                 store.escalate(build_cycle_id, reason, task=task,

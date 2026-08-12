@@ -38,7 +38,7 @@ from pathlib import Path
 from .. import _selfid
 from ..config import Config
 from ..controller import CONSUMED, ESCALATED, PASSED, StateStore
-from ..errors import Denial
+from ..errors import Denial, park_escalation_kind
 from ..gitio import git, is_repo
 from ..runtime import (
     RunCommandService,
@@ -480,11 +480,14 @@ def reconcile_human_wait(cfg: Config, journal: RunJournal | None = None) -> dict
             return result        # a person already ruled: do not reopen it
     waiting = row.get("waiting_reason") or {}
     if row["state"] == RunState.PROVIDER_UNAVAILABLE.value:
-        # A parked provider run: the structured kind (below) routes it to the
-        # provider remedies (retry / review connection / change model); the
-        # "provider failure" marker stays in the reason for the human sentence
-        # and for records read by an older reader.
-        kind = "provider"
+        # A parked provider run: the structured kind routes it to the matching
+        # remedies. It names the SAME kind the run parked with — read from the
+        # persisted waiting_reason (runs.waiting_kind is the single source) —
+        # so a budget guardrail pause reaches its billing remedies rather than
+        # a blanket 'provider' that would ask a person to review a connection.
+        # The "provider failure" marker stays in the reason for the human
+        # sentence and for records read by an older reader.
+        kind = park_escalation_kind(waiting.get("kind"))
         reason = ("provider failure left this task waiting for a person: "
                   + str(waiting.get("detail") or row.get("error")
                         or "no provider route is available"))[:400]

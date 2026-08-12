@@ -92,6 +92,28 @@ def park_via_service(cfg, task: str) -> RunJournal:
     return service.journal
 
 
+def park_budget_via_service(cfg, task: str) -> RunJournal:
+    """The genuine _drive park path for a usage-guardrail (budget) pause.
+
+    A budget denial parks a run exactly like any provider wait (it is in
+    PROVIDER_WAIT_CATEGORIES), but its remedy is billing, not a connection
+    review — so the cycle side must record kind 'budget', not 'provider'.
+    """
+    def worker(_prepared, emit):
+        emit(event("generator", "writing", RunState.GENERATING))
+        raise ProviderDenial(
+            "Local usage guardrail paused provider calls. Daily cost limit "
+            "reached. Open Project controls to raise or clear the limit, "
+            "then retry.",
+            category="budget", retryable=False, budget={"state": "blocked"})
+
+    service = RunCommandService(cfg)
+    with pytest.raises(ProviderDenial):
+        service.start(lambda: PreparedRun(task=task, chat_id="history"),
+                      worker, background=False)
+    return service.journal
+
+
 # ------------------------------------------------- verdicts outrank watchdogs
 def test_record_build_escalation_refuses_to_overwrite_a_recorded_pass(tmp_path):
     store = StateStore(tmp_path / "state.json")
@@ -219,9 +241,17 @@ def test_run_audit_still_synthesizes_for_non_wait_provider_failures(
     assert outcome.verdict != "PASS"
 
 
-@pytest.mark.parametrize("category", ["routes_exhausted", "circuit_open"])
+@pytest.mark.parametrize("category,expected_kind", [
+    ("routes_exhausted", "provider"),
+    ("circuit_open", "provider"),
+    # A budget (usage-guardrail) pause parks through the SAME build.run_loop
+    # tail, but its cycle kind must be 'budget', not the blanket 'provider' —
+    # the build.py write point derives it from the park category, so run and
+    # cycle name one stop one way.
+    ("budget", "budget"),
+])
 def test_auditor_route_exhaustion_parks_the_real_build_loop(
-        science, cfg, monkeypatch, category):
+        science, cfg, monkeypatch, category, expected_kind):
     """The full run_loop stack: generator succeeds, every auditor route is
     down. The run must park with a typed waiting reason, the cycle must carry
     an auditor-provider-failure decision object written before the park, and
@@ -251,10 +281,13 @@ def test_auditor_route_exhaustion_parks_the_real_build_loop(
     monkeypatch.setattr(build_mod.gen_mod, "generate", lambda **_k: work)
 
     def exhausted(*_a, **_k):
-        raise ProviderDenial(
-            "all configured auditor provider routes failed. "
-            "anthropic:claude — provider returned HTTP 503",
-            category=category, retryable=False, status=503)
+        reason = ("Local usage guardrail paused provider calls. Daily cost "
+                  "limit reached. Open Project controls to raise or clear the "
+                  "limit, then retry." if category == "budget"
+                  else "all configured auditor provider routes failed. "
+                       "anthropic:claude — provider returned HTTP 503")
+        raise ProviderDenial(reason, category=category, retryable=False,
+                             status=503)
 
     monkeypatch.setattr(resilience, "complete", exhausted)
     monkeypatch.chdir(science)
@@ -270,7 +303,8 @@ def test_auditor_route_exhaustion_parks_the_real_build_loop(
     row = service.journal.latest()
     assert row["state"] == "PROVIDER_UNAVAILABLE"
     assert row["outcome"] == "provider_unavailable"
-    assert row["waiting_reason"]["kind"] == "provider"
+    # Run side (slice one) and cycle side (slice three) name one park one way.
+    assert row["waiting_reason"]["kind"] == expected_kind
     assert row["waiting_reason"]["category"] == category
 
     # The cycle decision object was written by the loop tail (cycle first,
@@ -280,13 +314,14 @@ def test_auditor_route_exhaustion_parks_the_real_build_loop(
                  if c["status"] == "ESCALATED"]
     assert escalated
     assert "auditor provider failure" in escalated[-1]["escalation_reason"]
+    assert escalated[-1]["escalation_kind"] == expected_kind
 
     # No synthesized report: writing one with "invalid Auditor reply"
     # findings was the misrepresentation this test exists to forbid.
     assert not sorted((scoped.root / "cycles").glob("*/report.md"))
 
     rows = overview.escalations(scoped)
-    assert rows and rows[-1]["kind"] == "provider"
+    assert rows and rows[-1]["kind"] == expected_kind
     assert rows[-1]["issues"] == []
 
 
@@ -484,6 +519,61 @@ def test_park_writes_the_cycle_decision_object_first(science, cfg):
     # The backstop has nothing left to do.
     assert daemon.reconcile_human_wait(cfg) == {
         "run_completed": None, "cycle_recorded": None}
+
+
+def test_budget_park_names_one_kind_on_both_slices(science, cfg):
+    """The cross-slice contract this fix restores. A budget (usage-guardrail)
+    pause parks the run with waiting_reason.kind == 'budget' (slice one), and
+    the cycle decision object for the SAME stop carries escalation_kind ==
+    'budget' too (slice three) — not the blanket 'provider' that would offer a
+    person connection remedies for a spending cap. The escalation surface then
+    routes to the billing remedies, never the audit fallback."""
+    from crossaudit.console import overview
+    from crossaudit.errors import escalation_remediations
+
+    journal = park_budget_via_service(cfg, "spendy task")
+    row = journal.latest()
+    assert row["state"] == "PROVIDER_UNAVAILABLE"
+    assert row["waiting_reason"]["kind"] == "budget"          # slice one
+    assert row["waiting_reason"]["category"] == "budget"
+
+    store = StateStore(cfg.root / cfg.state_dir / "state.json")
+    escalated = [c for c in store.snapshot()["cycles"].values()
+                 if c["status"] == "ESCALATED"]
+    assert len(escalated) == 1
+    assert escalated[0]["escalation_kind"] == "budget"        # slice three agrees
+
+    rows = overview.escalations(cfg)
+    assert rows and rows[-1]["kind"] == "budget"
+    # Billing remedies reach the escalation surface — the whole point of the
+    # 'budget' kind. The old bug fell back to the content ("audit") set.
+    assert rows[-1]["remediations"] == ["open_billing", "continue_later", "stop"]
+    assert (escalation_remediations("budget")
+            != escalation_remediations("audit"))
+
+
+def test_reconcile_records_a_torn_budget_park_as_budget_kind(science, cfg):
+    """Direction-B backstop stays kind-consistent: a budget park whose cycle
+    write was torn (worker died before the source-first write landed) is
+    reconciled with escalation_kind == 'budget', read from the run's own
+    waiting kind — not re-flattened to 'provider'."""
+    from crossaudit.console import overview
+
+    journal = RunJournal(journal_path(cfg))
+    run_id = journal.start("spendy task", chat_id="history")
+    journal.append(run_id, event("generator", "writing", RunState.GENERATING))
+    journal.append(run_id, event(
+        "loop", "waiting for provider", RunState.PROVIDER_UNAVAILABLE,
+        kind="provider_unavailable",
+        detail="Local usage guardrail paused provider calls.",
+        waiting_reason={"kind": "budget", "category": "budget",
+                        "detail": "Local usage guardrail paused provider calls."}))
+
+    result = daemon.reconcile_human_wait(cfg, journal)
+    assert result["cycle_recorded"]
+    rows = overview.escalations(cfg)
+    assert rows and rows[-1]["kind"] == "budget"
+    assert rows[-1]["remediations"] == ["open_billing", "continue_later", "stop"]
 
 
 def test_retry_after_resolution_reescalates_the_next_outage(science, cfg):

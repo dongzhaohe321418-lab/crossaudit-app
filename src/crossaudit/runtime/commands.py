@@ -18,7 +18,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from ..errors import EXIT_ESCALATED, EXIT_OK, ConfigDenial, Denial
+from ..errors import (EXIT_ESCALATED, EXIT_OK, ConfigDenial, Denial,
+                      park_escalation_kind)
 from .events import RunEvent
 from .processes import pid_alive
 from .runs import (
@@ -165,6 +166,12 @@ class RunCommandService:
             return
         reason = ("provider failure left this task waiting for a person: "
                   + exc.reason[:400])[:400]
+        # The decision object names the SAME kind the run parked with — read
+        # from the persisted waiting_reason (runs.waiting_kind is the single
+        # source) — so a budget guardrail pause routes to billing remedies and
+        # a route/circuit outage to the connection ones, never a blanket
+        # 'provider' that would mispresent a spending cap as a broken link.
+        kind = park_escalation_kind((row.get("waiting_reason") or {}).get("kind"))
         rounds = [int(step.get("round_no", 0) or 0)
                   for step in row.get("steps", [])]
         store = StateStore(root / self.cfg.state_dir / "state.json")
@@ -182,12 +189,12 @@ class RunCommandService:
                 # against verdict rewriting); the Denial lands below.
                 store.escalate(candidate, reason,
                                task=str(row.get("task", "")), run_id=run_id,
-                               kind="provider")
+                               kind=kind)
             else:
                 store.record_build_escalation(
                     self.cfg.science_repo, anchor, reason, max([1, *rounds]),
                     str(row.get("chat_id", "")), str(row.get("task", "")),
-                    run_id=run_id, kind="provider")
+                    run_id=run_id, kind=kind)
         except Denial:
             return
 
