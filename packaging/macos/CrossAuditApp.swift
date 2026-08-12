@@ -17,6 +17,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
     private var isTerminating = false
     private var logURL: URL?
 
+    // UI_DESIGN_SPEC.md §1.1 dark `--bg` (#0C0F14). Shared by the native
+    // window, the WebView underlay and the inline loading/failure screens so
+    // the shell and the page read as one continuous dark surface.
+    private static let backdrop = NSColor(
+        srgbRed: 0x0C / 255.0, green: 0x0F / 255.0, blue: 0x14 / 255.0, alpha: 1)
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         installTerminationHandlers()
         buildMenus()
@@ -64,8 +70,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
             contentRect: NSRect(x: 0, y: 0, width: 1240, height: 800),
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered, defer: false)
+        // The page draws its own identity in the top bar, so the native title
+        // would duplicate it. window.title stays set for Mission Control, the
+        // Window menu and accessibility; only the drawn text is hidden. With
+        // .fullSizeContentView and a transparent titlebar the dark page runs
+        // edge to edge behind the traffic lights.
         window.title = "CrossAudit"
-        window.titlebarAppearsTransparent = false
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
+        window.tabbingMode = .disallowed
+        // Paint the backdrop natively so no white frame flashes before the
+        // WebView commits its first (loading-screen) paint, and overscroll
+        // rubber-banding reveals the same dark base as the page.
+        window.backgroundColor = Self.backdrop
+        webView.underPageBackgroundColor = Self.backdrop
         window.minSize = NSSize(width: 760, height: 560)
         window.contentView = webView
         window.delegate = self
@@ -101,6 +119,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
         appMenu.addItem(settings)
         appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Hide CrossAudit", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
+        let hideOthers = NSMenuItem(title: "Hide Others",
+                                    action: #selector(NSApplication.hideOtherApplications(_:)), keyEquivalent: "h")
+        hideOthers.keyEquivalentModifierMask = [.command, .option]
+        appMenu.addItem(hideOthers)
+        appMenu.addItem(withTitle: "Show All", action: #selector(NSApplication.unhideAllApplications(_:)), keyEquivalent: "")
+        appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Quit CrossAudit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
 
         let fileItem = NSMenuItem()
@@ -145,7 +169,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
         let reload = NSMenuItem(title: "Reload", action: #selector(reload(_:)), keyEquivalent: "r")
         reload.target = self
         viewMenu.addItem(reload)
-        viewMenu.addItem(withTitle: "Enter Full Screen", action: #selector(NSWindow.toggleFullScreen(_:)), keyEquivalent: "f")
+        // Control-Command-F is the system-wide full screen shortcut; a bare
+        // Command-F here would shadow the page's find affordance.
+        let fullScreen = NSMenuItem(title: "Enter Full Screen",
+                                    action: #selector(NSWindow.toggleFullScreen(_:)), keyEquivalent: "f")
+        fullScreen.keyEquivalentModifierMask = [.command, .control]
+        viewMenu.addItem(fullScreen)
+
+        let windowItem = NSMenuItem()
+        main.addItem(windowItem)
+        let windowMenu = NSMenu(title: "Window")
+        windowItem.submenu = windowMenu
+        windowMenu.addItem(withTitle: "Minimize", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
+        windowMenu.addItem(withTitle: "Zoom", action: #selector(NSWindow.performZoom(_:)), keyEquivalent: "")
+        windowMenu.addItem(.separator())
+        windowMenu.addItem(withTitle: "Bring All to Front", action: #selector(NSApplication.arrangeInFront(_:)), keyEquivalent: "")
+        NSApp.windowsMenu = windowMenu
     }
 
     private func buildStatusMenu() {
@@ -270,24 +309,48 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate,
         }
     }
 
+    // The inline screens mirror UI_DESIGN_SPEC.md §1 dark tokens (--bg
+    // #0C0F14, --surface #161B23, --text #EDF0F5, --text-2 #A6AEBB, --accent
+    // #6CA8F8, hairlines at rgba(228,237,248,.09/.18)) so the shell's own
+    // pages are indistinguishable from the console they precede.
     private func showLoading(_ message: String) {
         webView.loadHTMLString("""
         <!doctype html><meta name=viewport content="width=device-width,initial-scale=1">
-        <style>html,body{height:100%;margin:0;background:#191a18;color:#f4f4f1;font:14px -apple-system;display:grid;place-items:center}
-        main{text-align:center}.mark{width:42px;height:42px;border-radius:13px;background:#f4f4f1;color:#191a18;display:grid;place-items:center;margin:0 auto 16px;font-size:22px}
-        p{color:#999b95}</style><main><div class=mark>◇</div><b>CrossAudit</b><p>\(htmlEscape(message))</p></main>
+        <style>html,body{height:100%;margin:0;background:#0C0F14;color:#EDF0F5;-webkit-font-smoothing:antialiased;
+        font:13px/1.55 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI","PingFang SC",sans-serif;display:grid;place-items:center}
+        main{text-align:center;padding:40px}
+        .mark{width:44px;height:44px;border-radius:12px;margin:0 auto 20px;display:grid;place-items:center;
+        font-size:20px;background:#161B23;border:1px solid rgba(228,237,248,.18)}
+        h1{margin:0 0 6px;font-size:15px;font-weight:600;letter-spacing:-.01em}
+        p{margin:0;color:#A6AEBB}
+        .pulse{width:96px;height:2px;margin:24px auto 0;border-radius:999px;background:rgba(228,237,248,.09);overflow:hidden}
+        .pulse::after{content:"";display:block;width:40%;height:100%;border-radius:999px;background:#6CA8F8;animation:sweep 1.4s ease-in-out infinite alternate}
+        @keyframes sweep{from{transform:translateX(-40%)}to{transform:translateX(190%)}}
+        @media(prefers-reduced-motion:reduce){.pulse::after{animation:none;width:100%;background:rgba(228,237,248,.18)}}</style>
+        <main><div class=mark>◇</div><h1>CrossAudit</h1><p>\(htmlEscape(message))</p>
+        <div class=pulse role=progressbar aria-label="Starting"></div></main>
         """, baseURL: nil)
     }
 
     private func showFailure(_ message: String) {
         webView.loadHTMLString("""
         <!doctype html><meta name=viewport content="width=device-width,initial-scale=1">
-        <style>html,body{height:100%;margin:0;background:#191a18;color:#f4f4f1;font:14px -apple-system;display:grid;place-items:center}
-        main{max-width:620px;padding:40px;text-align:center}h1{font-size:20px}p{color:#b6b7b2;line-height:1.6}
-        nav{display:flex;gap:10px;justify-content:center;margin-top:22px}button{border:1px solid #555751;border-radius:10px;padding:9px 14px;background:#f4f4f1;color:#191a18;font:inherit;font-weight:600;cursor:pointer}button+button{background:transparent;color:#f4f4f1}</style>
+        <style>html,body{height:100%;margin:0;background:#0C0F14;color:#EDF0F5;-webkit-font-smoothing:antialiased;
+        font:13px/1.55 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI","PingFang SC",sans-serif;display:grid;place-items:center}
+        main{max-width:560px;padding:40px 32px;text-align:center}
+        h1{margin:0 0 10px;font-size:18px;font-weight:600;letter-spacing:-.015em}
+        p{margin:0;font-size:14px;line-height:1.6;color:#A6AEBB}
+        nav{display:flex;gap:10px;justify-content:center;margin-top:28px}
+        button{font:inherit;font-weight:500;padding:8px 16px;border-radius:8px;cursor:pointer;border:1px solid transparent}
+        button:active{transform:scale(.98)}
+        button:focus-visible{outline:2px solid #6CA8F8;outline-offset:2px}
+        .primary{background:#6CA8F8;color:#0C0F14}.primary:hover{background:#82B6F9}
+        .quiet{background:transparent;color:#EDF0F5;border-color:rgba(228,237,248,.18)}
+        .quiet:hover{background:rgba(148,178,224,.10)}
+        @media(prefers-reduced-motion:reduce){button:active{transform:none}}</style>
         <main><h1>CrossAudit needs attention</h1><p>\(htmlEscape(message))</p><nav>
-        <button onclick="send('restartCore')">Retry startup</button>
-        <button onclick="send('openDiagnosticLog')">Open diagnostic log</button>
+        <button class=primary onclick="send('restartCore')">Retry startup</button>
+        <button class=quiet onclick="send('openDiagnosticLog')">Open diagnostic log</button>
         </nav></main><script>function send(action){window.webkit?.messageHandlers?.crossaudit?.postMessage({action})}</script>
         """, baseURL: nil)
     }
