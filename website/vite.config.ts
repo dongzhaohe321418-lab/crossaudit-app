@@ -1,7 +1,9 @@
 import vinext from "vinext";
 import { defineConfig } from "vite";
 import hostingConfig from "./.openai/hosting.json";
-import { sites } from "./build/sites-vite-plugin";
+// The plugin sits in `lib/` because the root .gitignore swallows `build/`;
+// importing from there made clean clones unbuildable.
+import { sites } from "./lib/sites-vite-plugin";
 
 const SITE_CREATOR_PLACEHOLDER_DATABASE_ID =
   "00000000-0000-4000-8000-000000000000";

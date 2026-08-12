@@ -17,6 +17,19 @@ npm ci
 npm run dev
 ```
 
+## Building
+
+Two independent build paths exist; both must work from a clean clone:
+
+- `npm run build` — vinext + Cloudflare Worker runtime (what `npm test`
+  serves). It loads `vite.config.ts`, which needs the Sites packaging plugin
+  in `lib/sites-vite-plugin.ts`. The plugin lives in `lib/` and not the
+  starter's original `build/` directory because the repository root
+  `.gitignore` ignores `build/` — the original location was never committed,
+  which broke every fresh checkout.
+- `npm run build:vercel` — plain `next build` for the Vercel runtime. It
+  never loads `vite.config.ts`, so it does not need the plugin.
+
 ## Validation
 
 ```bash
