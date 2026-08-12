@@ -28,7 +28,7 @@ import subprocess
 from pathlib import Path
 
 from ..config import load
-from ..errors import EXIT_CONFIG, EXIT_OK, ConfigDenial
+from ..errors import EXIT_CONFIG, EXIT_OK, ConfigDenial, RemediationAction as RA
 
 TIERS = {
     "local": "one history, yours to rewrite: self-review, not accountability",
@@ -52,7 +52,7 @@ def _timed_out(tool: str, seconds: int) -> ConfigDenial:
     return ConfigDenial(
         f"{tool} did not respond within {seconds} seconds. Check the network or "
         "close any hidden sign-in prompt, then retry.",
-        issue="command_timeout", action="retry",
+        issue="command_timeout", action="retry", remediations=[RA.RETRY],
         url="https://www.githubstatus.com" if tool == "GitHub" else "")
 
 
@@ -65,6 +65,7 @@ def gh() -> str:
             "and run `gh auth login`. CrossAudit deliberately does not implement "
             "its own OAuth flow or handle your token",
             issue="github_cli", action="install_github_cli",
+            remediations=[RA.INSTALL_GITHUB_CLI, RA.CONNECT_GITHUB],
             url="https://cli.github.com")
     try:
         proc = subprocess.run([path, "auth", "status"], capture_output=True,
@@ -75,6 +76,7 @@ def gh() -> str:
         raise ConfigDenial(
             "GitHub is not connected. Connect the account in CrossAudit and retry.",
             issue="github_auth", action="connect_github",
+            remediations=[RA.CONNECT_GITHUB],
             url="https://github.com/login/device")
     return path
 
@@ -94,21 +96,26 @@ def _gh(*args: str, check: bool = True,
             hint = " Authorize GitHub CLI for the organisation's SSO, then retry."
             issue, action, url = ("github_sso", "open_github",
                                   "https://github.com/settings/applications")
+            remedies = [RA.OPEN_GITHUB, RA.RETRY]
         elif "rate limit" in low:
             hint = " GitHub rate-limited this account; wait for the reset, then retry."
             issue, action, url = ("github_rate_limit", "retry",
                                   "https://www.githubstatus.com")
+            remedies = [RA.RETRY]
         elif "resource not accessible" in low or "forbidden" in low or "403" in low:
             hint = " The connected account lacks repository or organisation permission."
             issue, action, url = ("github_permission", "open_github",
                                   "https://github.com/settings/repositories")
+            remedies = [RA.OPEN_GITHUB]
         elif "already exists" in low:
             hint = " The name exists but may not be visible to this account; verify ownership."
             issue, action, url = ("repo_exists", "edit_repositories", "")
+            remedies = [RA.EDIT_REPOSITORIES]
         else:
             issue, action, url = ("github_error", "retry", "")
+            remedies = [RA.RETRY]
         raise ConfigDenial(f"gh {' '.join(args[:2])} failed: {said}.{hint}".rstrip(),
-                           issue=issue, action=action, url=url)
+                           issue=issue, action=action, url=url, remediations=remedies)
     return proc.stdout.strip()
 
 
@@ -128,6 +135,7 @@ def github_scopes() -> set[str]:
             "GitHub could not verify authorization scopes: "
             f"{(proc.stderr or proc.stdout).strip()[:240]}",
             issue="github_auth", action="connect_github",
+            remediations=[RA.CONNECT_GITHUB],
             url="https://github.com/login/device")
     match = re.search(r"(?im)^x-oauth-scopes:\s*(.*)$", proc.stdout)
     return ({scope.strip() for scope in match.group(1).split(",") if scope.strip()}
@@ -148,7 +156,7 @@ def _exists(repo: str) -> bool:
         return False
     raise ConfigDenial(
         f"GitHub could not check {repo}: {(proc.stderr or proc.stdout).strip()[:240]}",
-        issue="github_check", action="retry")
+        issue="github_check", action="retry", remediations=[RA.RETRY])
 
 
 def _git(root: Path, *args: str, check: bool = True) -> str:
@@ -206,7 +214,7 @@ def _sync_existing_main(root: Path) -> None:
         raise ConfigDenial(
             "could not inspect the existing working repository main branch: "
             f"{(remote.stderr or remote.stdout).strip()[:240]}",
-            issue="github_check", action="retry")
+            issue="github_check", action="retry", remediations=[RA.RETRY])
     local_state = (".crossaudit/", ".crossaudit-home/", ".crossaudit-trash/")
     dirty = []
     for line in _git(root, "status", "--porcelain", check=False).splitlines():
@@ -219,7 +227,7 @@ def _sync_existing_main(root: Path) -> None:
         raise ConfigDenial(
             "the local working repository has uncommitted changes; commit or stash "
             "them before adopting its remote history",
-            issue="remote_history", action="retry")
+            issue="remote_history", action="retry", remediations=[RA.RETRY])
     _git(root, "fetch", "-q", "origin", "main")
     head = subprocess.run(
         ["git", "rev-parse", "--verify", "HEAD"], cwd=str(root),
@@ -246,7 +254,7 @@ def _sync_existing_main(root: Path) -> None:
         "the local and remote working repository histories conflict; the merge was "
         "aborted without changing either history. Resolve the local files or choose "
         "a clean matching clone, then retry",
-        issue="remote_history", action="retry")
+        issue="remote_history", action="retry", remediations=[RA.RETRY])
 
 
 def _write_pair_config(cfg, science: str, audit: str) -> None:
@@ -290,7 +298,7 @@ def apply_pair(cfg, science: str, audit: str, *, private: bool,
     if current and _normalise_remote(current) != _normalise_remote(expected):
         raise ConfigDenial(
             f"local origin is {current}, not {expected}; refusing to replace it",
-            issue="origin_conflict", action="edit_repositories")
+            issue="origin_conflict", action="edit_repositories", remediations=[RA.EDIT_REPOSITORIES])
     config_rel = cfg.path.relative_to(cfg.root).as_posix()
     for staged in (False, True):
         args = ["git", "diff"]
@@ -318,7 +326,7 @@ def apply_pair(cfg, science: str, audit: str, *, private: bool,
                     f"repository {repo} already exists; edit the name or explicitly "
                     "allow CrossAudit to use repositories you can access",
                     issue="repo_exists", action="edit_repositories",
-                    repositories=[repo])
+                    remediations=[RA.EDIT_REPOSITORIES], repositories=[repo])
             adopted.add(repo)
             tell("github", f"Adopting existing {repo}")
         else:
@@ -399,7 +407,7 @@ def apply_pair(cfg, science: str, audit: str, *, private: bool,
             raise ConfigDenial(f"could not upload {cfg.auditor.key_env}: "
                                f"{proc.stderr.strip()[:240]}",
                                issue="github_secret_permission",
-                               action="open_github",
+                               action="open_github", remediations=[RA.OPEN_GITHUB],
                                url=f"https://github.com/{audit}/settings/secrets/actions")
         secret_uploaded = True
         tell("secret", f"Uploaded {cfg.auditor.key_env} to the audit repository")

@@ -343,18 +343,29 @@ def cmd_check(args: argparse.Namespace) -> int:
 
 
 def _provider_stop_reason(outcome) -> str:
-    """An escalation reason for rounds whose model audit could not run.
+    """The human sentence for an escalation whose model audit could not run.
 
-    Carrying "provider failure" routes an escalated cycle to the provider
-    remedies (retry / review connection / change model) instead of asking a
-    human for content guidance about an outage. Rounds that failed on
-    content keep their default reasons.
+    Routing to the provider remedies is the structured ``escalation_kind``'s
+    job now (see _provider_stop_kind); this reason is the sentence a person
+    reads, and it keeps the "provider failure" marker so a record written
+    before the field existed still classifies. Content rounds keep their
+    default reasons.
     """
     if outcome.integrity != "PROVIDER_FAILURE":
         return ""
     detail = str(outcome.exchange.get("error", "")).strip()
     return ("provider failure: the model audit could not run"
             + (f" — {detail[:300]}" if detail else ""))
+
+
+def _provider_stop_kind(outcome) -> str:
+    """The structured escalation kind for a round's stop.
+
+    The classification the controller stores, so the Console routes on a
+    field instead of re-reading the reason. "" lets the store infer a content
+    ("audit") stop; a provider outage is named outright.
+    """
+    return "provider" if outcome.integrity == "PROVIDER_FAILURE" else ""
 
 
 # ------------------------------------------------------------------ audit
@@ -463,7 +474,8 @@ def cmd_audit(args: argparse.Namespace) -> int:
 
     status = store.record_verdict(cycle["cycle_id"], sha, outcome.verdict,
                                   receipt_digest(receipt), cfg.max_rounds,
-                                  escalation_reason=_provider_stop_reason(outcome))
+                                  escalation_reason=_provider_stop_reason(outcome),
+                                  escalation_kind=_provider_stop_kind(outcome))
     result = {"verdict": outcome.verdict, "cycle_status": status,
               "cycle_id": cycle["cycle_id"], "round": cycle["round"],
               "integrity": outcome.integrity, "receipt": str(ledger / "receipt.json"),
@@ -1013,7 +1025,8 @@ def cmd_run(args: argparse.Namespace) -> int:
         f"audit receipt {sha[:12]} r{cycle['round']} ({outcome.verdict})", cwd=cfg.root)
     status = store.record_verdict(cycle["cycle_id"], sha, outcome.verdict,
                                   receipt_digest(receipt), cfg.max_rounds,
-                                  escalation_reason=_provider_stop_reason(outcome))
+                                  escalation_reason=_provider_stop_reason(outcome),
+                                  escalation_kind=_provider_stop_kind(outcome))
     _done("report + receipt committed")
 
     print()

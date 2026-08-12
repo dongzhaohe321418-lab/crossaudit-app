@@ -442,10 +442,14 @@ def run_loop(cfg, task: str, *, on_event=None, attachments: str = "",
         stop as a content refusal — the run side still records the honest
         stop, and the run-side signal carries the human surface.
         """
+        # A provider outage and a content stop share this recorder but route
+        # to different remedies; name the kind structurally so the Console
+        # never has to re-read the reason to tell them apart.
+        kind = "provider" if provider_wait is not None else "audit"
         try:
             if build_cycle_id:
                 store.escalate(build_cycle_id, reason, task=task,
-                               run_id=run_id)
+                               run_id=run_id, kind=kind)
                 return build_cycle_id
             # A provider can refuse every generator attempt before there is
             # a work commit for cmd_run to open. Anchor that stop to the
@@ -455,7 +459,7 @@ def run_loop(cfg, task: str, *, on_event=None, attachments: str = "",
             anchor = git("rev-parse", "HEAD", cwd=cfg.root)
             cycle = store.record_build_escalation(
                 cfg.science_repo, anchor, reason, last_round, chat_id, task,
-                run_id=run_id)
+                run_id=run_id, kind=kind)
             return cycle["cycle_id"]
         except Denial:
             return ""

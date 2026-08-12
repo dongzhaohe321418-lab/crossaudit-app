@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from ..config import Config
 from ..controller import StateStore
 from ..dispute import DISPUTES_LOG, parse_findings
+from ..errors import classify_escalation_kind, escalation_remediations
 
 VERDICT_RE = re.compile(r"\|\s*verdict\s*\|\s*\*\*(\w+)\*\*")
 ROUND_RE = re.compile(r"\|\s*round\s*\|\s*(\d+)")
@@ -201,7 +202,12 @@ def escalations(cfg: Config) -> list[dict]:
         if s["status"] != "ESCALATED":
             continue
         stop_reason = s.get("escalation_reason") or "the automatic audit loop stopped"
-        provider_failure = "provider failure" in stop_reason.lower()
+        # The kind is a stored, structured field (controller.escalate et al.).
+        # Records written before it existed are classified once from the
+        # reason here — the one surviving read of the "provider failure"
+        # marker, and only for legacy state.
+        kind = s.get("escalation_kind") or classify_escalation_kind(stop_reason)
+        provider_failure = kind == "provider"
         shas = {str(s.get("root_sha", "")), str(s.get("active_sha", ""))}
         shas.update(str(row.get("sha", "")) for row in history
                     if row.get("cycle") == cid and row.get("sha"))
@@ -234,7 +240,8 @@ def escalations(cfg: Config) -> list[dict]:
                     "limit_reached": s["round"] >= cfg.max_rounds,
                     "chat_id": s.get("chat_id", ""), "why": why,
                     "stop_reason": stop_reason, "issues": issues,
-                    "kind": "provider" if provider_failure else "audit",
+                    "kind": kind,
+                    "remediations": escalation_remediations(kind),
                     "task": str(s.get("task", ""))[:12000],
                     "attempts": [{"round": c.round, "verdict": c.verdict,
                                   "findings": len(c.findings)} for c in related],

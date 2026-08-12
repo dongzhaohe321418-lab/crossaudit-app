@@ -26,7 +26,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
-from ..errors import ConfigDenial, IntegrityDenial
+from ..errors import ConfigDenial, IntegrityDenial, classify_escalation_kind
 
 STATE_FILENAME = "state.json"
 LOCK_TIMEOUT_S = 30.0
@@ -213,13 +213,18 @@ class StateStore:
             return dict(c, cycle_id=cycle_id)
 
     def escalate(self, cycle_id: str, reason: str, *, task: str = "",
-                 run_id: str = "") -> dict:
+                 run_id: str = "", kind: str = "") -> dict:
         """Persist a build-level stop so status and Console expose it.
 
         ``run_id`` links this decision object to the exact journal run whose
         stop it records. Reconciliation heals only the referenced run: an
         escalation is evidence about one stop, never a license to re-narrate
         unrelated interrupted runs as "waiting for a person".
+
+        ``kind`` records, structurally, whether this stop is a provider
+        failure or a content ("audit") one, so a surface routes to the right
+        remedies without parsing ``reason``. A caller that knows passes it;
+        otherwise it is inferred once, here, from the reason it just minted.
         """
         with self._locked() as state:
             c = state["cycles"].get(cycle_id)
@@ -235,6 +240,7 @@ class StateStore:
             c["status"] = ESCALATED
             c["awaiting_verdict"] = False
             c["escalation_reason"] = reason
+            c["escalation_kind"] = kind or classify_escalation_kind(reason)
             if run_id:
                 c["escalation_run_id"] = run_id[:64]
             if task.strip():
@@ -245,7 +251,8 @@ class StateStore:
 
     def record_build_escalation(self, repo: str, sha: str, reason: str,
                                 round_: int, chat_id: str = "",
-                                task: str = "", run_id: str = "") -> dict:
+                                task: str = "", run_id: str = "",
+                                kind: str = "") -> dict:
         """Persist a build that stopped before any auditable revision existed.
 
         Provider refusals can consume the whole generator budget before there is
@@ -279,7 +286,8 @@ class StateStore:
                 "parent_receipt": "", "consumed": [],
             }
             c.update(round=round_, status=ESCALATED, awaiting_verdict=False,
-                     escalation_reason=reason)
+                     escalation_reason=reason,
+                     escalation_kind=kind or classify_escalation_kind(reason))
             if run_id:
                 # The run this decision object records; reconciliation heals
                 # only referenced runs (see escalate()).
@@ -296,13 +304,15 @@ class StateStore:
 
     def record_verdict(self, cycle_id: str, sha: str, verdict: str,
                        receipt_hash: str, max_rounds: int,
-                       escalation_reason: str = "") -> str:
+                       escalation_reason: str = "", escalation_kind: str = "") -> str:
         """Record one round's verdict; ``escalation_reason`` names the stop.
 
         When the round's failure was infrastructural (the model audit could
-        not run at all), the caller passes a reason carrying "provider
-        failure" so an escalated cycle routes to the provider remedies
-        instead of asking a human for content guidance about an outage.
+        not run at all), the caller passes ``escalation_kind="provider"`` (and
+        a reason that still carries the "provider failure" marker for the
+        human sentence and legacy records) so an escalated cycle routes to the
+        provider remedies instead of asking a human for content guidance about
+        an outage. A content stop leaves the kind to be inferred as "audit".
         """
         with self._locked() as state:
             c = state["cycles"].get(cycle_id)
@@ -322,8 +332,15 @@ class StateStore:
                 c["status"] = ESCALATED
             else:
                 c["status"] = ESCALATED if c["round"] >= max_rounds else BLOCKED
-            if c["status"] == ESCALATED and escalation_reason.strip():
-                c["escalation_reason"] = escalation_reason.strip()[:400]
+            if c["status"] == ESCALATED:
+                if escalation_reason.strip():
+                    c["escalation_reason"] = escalation_reason.strip()[:400]
+                # A round-limit stop with no provider reason is a content
+                # ("audit") escalation; classify_escalation_kind sees that in
+                # the (possibly empty) reason and routes it to content remedies.
+                c["escalation_kind"] = (
+                    escalation_kind
+                    or classify_escalation_kind(c.get("escalation_reason", "")))
             c["parent_receipt"] = receipt_hash
             c["awaiting_verdict"] = False
             self._log(state, "verdict", cycle=cycle_id, sha=sha, verdict=verdict,

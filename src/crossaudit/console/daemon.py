@@ -480,13 +480,16 @@ def reconcile_human_wait(cfg: Config, journal: RunJournal | None = None) -> dict
             return result        # a person already ruled: do not reopen it
     waiting = row.get("waiting_reason") or {}
     if row["state"] == RunState.PROVIDER_UNAVAILABLE.value:
-        # "provider failure" in the reason is what routes the escalation
-        # to the provider remedies (retry / review connection / change
-        # model) instead of content guidance.
+        # A parked provider run: the structured kind (below) routes it to the
+        # provider remedies (retry / review connection / change model); the
+        # "provider failure" marker stays in the reason for the human sentence
+        # and for records read by an older reader.
+        kind = "provider"
         reason = ("provider failure left this task waiting for a person: "
                   + str(waiting.get("detail") or row.get("error")
                         or "no provider route is available"))[:400]
     else:
+        kind = "audit"
         reason = (str(row.get("error") or "").strip()
                   or "the run stopped for a person before its decision "
                      "record was written")[:400]
@@ -496,12 +499,12 @@ def reconcile_human_wait(cfg: Config, journal: RunJournal | None = None) -> dict
         if candidate is not None:
             cycle = store.escalate(candidate["cycle_id"], reason,
                                    task=str(row.get("task", "")),
-                                   run_id=str(row.get("run_id", "")))
+                                   run_id=str(row.get("run_id", "")), kind=kind)
         else:
             cycle = store.record_build_escalation(
                 cfg.science_repo, anchor, reason, max([1, *rounds]),
                 str(row.get("chat_id", "")), str(row.get("task", "")),
-                run_id=str(row.get("run_id", "")))
+                run_id=str(row.get("run_id", "")), kind=kind)
     except Denial:
         return result
     result["cycle_recorded"] = cycle["cycle_id"]

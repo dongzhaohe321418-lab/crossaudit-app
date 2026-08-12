@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Callable
 
 from ..config import Config, Role
-from ..errors import ConfigDenial, ProviderDenial
+from ..errors import ConfigDenial, ProviderDenial, provider_remediations
 from ..usage import enforce_budget
 from .registry import NEEDS_KEY, get_provider
 
@@ -169,7 +169,7 @@ def complete(cfg: Config, role_name: str, primary: Role, *, system: str,
         raise ProviderDenial(
             f"all configured {role_name} provider routes are cooling down; retry in {wait}s",
             category="circuit_open", retryable=True, retry_after_seconds=wait,
-            status=503)
+            status=503, remediations=provider_remediations("circuit_open"))
 
     for index, role in available:
         route_id = _id(role_name, role)
@@ -239,4 +239,5 @@ def complete(cfg: Config, role_name: str, primary: Role, *, system: str,
         category="routes_exhausted", retryable=False,
         status=last_status if last_status is not None else 0,
         attempts=failures,
+        remediations=provider_remediations("routes_exhausted"),
         recovery={"action": "open_project_controls", "role": role_name})

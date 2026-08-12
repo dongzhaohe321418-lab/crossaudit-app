@@ -181,12 +181,13 @@ class RunCommandService:
                 # escalate() itself refuses PASSED/CONSUMED (fail-closed
                 # against verdict rewriting); the Denial lands below.
                 store.escalate(candidate, reason,
-                               task=str(row.get("task", "")), run_id=run_id)
+                               task=str(row.get("task", "")), run_id=run_id,
+                               kind="provider")
             else:
                 store.record_build_escalation(
                     self.cfg.science_repo, anchor, reason, max([1, *rounds]),
                     str(row.get("chat_id", "")), str(row.get("task", "")),
-                    run_id=run_id)
+                    run_id=run_id, kind="provider")
         except Denial:
             return
 

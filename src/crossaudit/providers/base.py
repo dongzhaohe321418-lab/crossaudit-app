@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from email.utils import parsedate_to_datetime
 from datetime import datetime, timezone
 
-from ..errors import ConfigDenial, ProviderDenial
+from ..errors import ConfigDenial, ProviderDenial, provider_remediations
 
 CONNECT_TIMEOUT_S = 30.0
 MAX_RESPONSE_BYTES = 4 * 1024 * 1024
@@ -259,7 +259,8 @@ def _http_denial(status: int, body: str, url: str,
     return ProviderDenial("\n".join(lines), status=status, detail=said,
                           endpoint=url, category=category,
                           retryable=status == 429 or status >= 500,
-                          retry_after_seconds=_retry_after(headers))
+                          retry_after_seconds=_retry_after(headers),
+                          remediations=provider_remediations(category))
 
 
 def _looks_like_a_model_problem(said: str) -> bool:
@@ -294,10 +295,12 @@ def _reraise_transport(exc: BaseException) -> "ProviderDenial":
     """
     if isinstance(getattr(exc, "reason", None), ssl.SSLCertVerificationError):
         raise ProviderDenial(f"{tls_advice()}\n\n  underlying: {exc.reason}",
-                             tls=True, category="tls", retryable=False) from exc
+                             tls=True, category="tls", retryable=False,
+                             remediations=provider_remediations("tls")) from exc
     category = "timeout" if isinstance(exc, (socket.timeout, TimeoutError)) else "transport"
     raise ProviderDenial(f"provider unreachable: {exc}", category=category,
-                         retryable=True) from exc
+                         retryable=True,
+                         remediations=provider_remediations(category)) from exc
 
 
 def read_key(env_name: str) -> str:

@@ -2883,6 +2883,18 @@ function resolutionChoice(action){
     submit.textContent='Record human decision';
   }
 }
+// A stalled cycle (like a hard denial) names its remedies as typed
+// RemediationAction values — errors.py, the same vocabulary slice one gave a
+// parked run via waiting_reason. The modal decides which remediation
+// affordance to show by reading that list, not by re-deriving it from the
+// kind; these labels are the A40 contract strings, kept in one place.
+const REMEDIATION={
+  retry:{label:'Retry provider now'},
+  validate_credential:{label:'Review provider connection',panel:'settings'},
+  select_model:{label:'Change model or fallback',panel:'runtime'},
+  stop:{label:'Stop this task'},
+  revise:{label:'Revise and continue'}};
+function hasRemediation(row,action){return ((row&&row.remediations)||[]).indexOf(action)>=0;}
 function openResolution(value,action='',sha=''){
   let row=typeof value==='object'&&value?value:null;
   if(!row&&lastState)row=(lastState.escalations||[]).find(item=>item.cycle_id===value);
@@ -2927,8 +2939,8 @@ function openResolution(value,action='',sha=''){
   document.getElementById('resolution-reopen-copy').textContent=provider
     ?'Use the current connection and rerun the original task.'
     :'Give the generator specific correction guidance and unlock one additional audited round.';
-  document.getElementById('resolution-open-runtime').hidden=!provider;
-  document.getElementById('resolution-open-settings').hidden=!provider;
+  document.getElementById('resolution-open-runtime').hidden=!hasRemediation(row,'select_model');
+  document.getElementById('resolution-open-settings').hidden=!hasRemediation(row,'validate_credential');
   resolutionChoice(action||'reopen');
   document.getElementById('resolution-error').className='wizard-error';
   resolutionModal.classList.add('on');document.body.classList.add('deciding');

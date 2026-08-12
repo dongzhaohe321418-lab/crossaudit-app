@@ -53,7 +53,7 @@ from .. import app_doctor, app_keys, connections, hpc, mcp, usage
 from ..autonomy import prepare_task
 from ..config import Config, load
 from ..controller import StateStore
-from ..errors import ConfigDenial, Denial
+from ..errors import ConfigDenial, Denial, classify_escalation_kind
 from ..gitio import is_ancestor
 from ..providers import resilience as provider_resilience
 from ..receipt.verify import admit as admit_receipt
@@ -1111,9 +1111,12 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                     retrying_provider = action == "retry_provider"
                     if retrying_provider:
                         prior = store.cycle(cycle_id)
+                        prior_kind = (str(prior.get("escalation_kind") or "")
+                                      or classify_escalation_kind(
+                                          str(prior.get("escalation_reason", "")))
+                                      if prior else "")
                         if (not prior or prior.get("status") != "ESCALATED" or
-                                "provider failure" not in str(
-                                    prior.get("escalation_reason", "")).lower()):
+                                prior_kind != "provider"):
                             raise ConfigDenial(
                                 "only a provider-failure escalation can be retried directly")
                         task = str(prior.get("task", "")).strip()
@@ -1134,7 +1137,7 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                                 cycle_id,
                                 f"generator provider failure retry could not start: "
                                 f"{exc.reason}",
-                                task=task)
+                                task=task, kind="provider")
                             raise
                     else:
                         result = store.resolve_escalation(
