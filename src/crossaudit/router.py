@@ -26,7 +26,12 @@ from pathlib import Path
 from .constitution import parse_json_reply
 from .errors import ProviderDenial
 
-LANES = ("project", "generator", "amendment", "dispute", "resolve", "query")
+# "auditor" is the seventh lane: a direct read-only auditor reply, produced by
+# an explicit @Auditor mention in route_addressed. A mention selects a
+# recipient, not a privilege — mutations still require a certain
+# amendment/dispute/resolve classification.
+LANES = ("project", "generator", "amendment", "dispute", "resolve", "query",
+         "auditor")
 CONFIDENCE_FLOOR = 0.75
 
 ROUTER_SYSTEM = """You sort one sentence from a project owner into exactly one \

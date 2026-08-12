@@ -9,15 +9,27 @@ not earned.
 Opening a port inside a tool that holds API keys is a real attack surface, and
 the defences are structural rather than promised:
 
-* **loopback only**, bound to 127.0.0.1.
-* **a per-session token on every request, and no cookies at all.** CSRF needs a
-  credential the browser attaches for you; there is none to ride.
+* **loopback only**, bound to 127.0.0.1, and **every request — read or write —
+  passes the same token-and-Host gate.** The per-session token travels in the
+  URL, never in a cookie.
+* **no cookie is ever a credential.** The only cookie in the system is a
+  SameSite=Strict locale preference the page stores for itself; the server
+  never reads it. CSRF is defeated by the token-in-query design — a forged
+  cross-site request arrives without the token and is refused — not by
+  pretending cookies do not exist.
 * **Host pinned to localhost**, which is what turns away DNS rebinding.
 * **a strict inline-only CSP**, so nothing on the page can fetch or exfiltrate.
-* **one write path, and it is narrow.** `/api/say` accepts an instruction and
-  treats the same explicit Send action as attachment-transfer authorization. Large
-  files reach the local inbox through bounded `/api/upload` transport chunks;
-  both paths feed the same build loop the CLI uses.
+* **the write surface is an explicit POST allowlist**, not one narrow path.
+  What began as `/api/say` alone has grown to two dozen actions, and several
+  are consequential: they commit to git, delete projects and their
+  directories, write Keychain items, launch remote compute. The honest claim
+  is therefore not "there is nothing to reach" but "nothing is reachable by
+  accident": a POST to any path outside the allowlist in `do_POST` is refused,
+  every listed action sits behind the same token-and-Host gate, and none of
+  them can cause anything the CLI could not already do. `/api/say` still
+  treats the explicit Send action as attachment-transfer authorization, with
+  large files arriving through bounded `/api/upload` transport chunks; both
+  feed the same build loop the CLI uses.
 * **keys are reported present or absent, never rendered.**
 * **idle shutdown**, so a forgotten port closes itself.
 """
@@ -347,8 +359,10 @@ def snapshot(cfg: Config) -> dict:
         "routing": routing_history(cfg.root / cfg.ledger_dir / "routing.jsonl", 40),
         "generator_stream": gen_stream,
         "auditor_stream": aud_stream,
-        # In-flight work, if any. Ephemeral by construction: the ledger is still
-        # the record, and this vanishes with the process.
+        # In-flight work, if any: a read-only projection of the durable run
+        # journal (.crossaudit/runtime.sqlite3), not process memory — the
+        # "interrupted" report below depends on it surviving the process.
+        # The ledger remains the evidence record; this is operational state.
         "progress": progress,
         # A build that was in flight when a previous process ended. The ledger
         # holds the rounds that were committed; only this can say one was cut off.

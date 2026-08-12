@@ -77,6 +77,23 @@ def entries(repo: Path, sha: str, prefix: str = "") -> list[tuple[str, str, str]
     return out
 
 
+def blob_limit(path: str) -> int | None:
+    """Read bound for one path — the single policy for audit AND verification.
+
+    PDF/DOCX content is audited through bounded semantic extraction, but the
+    container itself must remain complete for validation and receipt hashing:
+    truncating the ZIP/PDF first would make every larger document look corrupt.
+    No product quota is imposed on documents; physical memory/disk remain the
+    real machine limits.
+
+    The receipt manifest hashes whatever this policy reads, and verification
+    re-reads under it. Both sides must call this one function: if the two read
+    policies ever drift, every document past the generic bound verifies as
+    "manifest mismatch" forever, denying receipts that are in fact intact.
+    """
+    return None if Path(path).suffix.lower() in {".pdf", ".docx"} else MAX_BLOB_BYTES
+
+
 def read_blob(repo: Path, blob: str, *,
               limit: int | None = MAX_BLOB_BYTES) -> tuple[bytes, bool]:
     """Blob bytes and whether they were truncated at `limit`."""
@@ -106,13 +123,7 @@ def materialise(repo: Path, sha: str, prefix: str = "",
             raise IntegrityDenial(f"increment contains a symlink: {path}", sha=sha)
         if mode == "160000":
             raise IntegrityDenial(f"increment contains a submodule: {path}", sha=sha)
-        # PDF/DOCX content is audited through bounded semantic extraction, but
-        # the container itself must remain complete for validation and receipt
-        # hashing. Truncating the ZIP/PDF first would make every larger document
-        # look corrupt. No product quota is imposed here; physical memory/disk
-        # remain the real machine limits.
-        limit = None if Path(path).suffix.lower() in {".pdf", ".docx"} else MAX_BLOB_BYTES
-        data, truncated = read_blob(repo, blob, limit=limit)
+        data, truncated = read_blob(repo, blob, limit=blob_limit(path))
         if truncated:
             notes.append(f"truncated: {path}")
         files[path] = data

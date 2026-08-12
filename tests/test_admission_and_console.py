@@ -343,9 +343,11 @@ def test_a_foreign_host_header_is_refused_even_with_the_token(console):
     assert code == 403
 
 
-def test_the_only_write_path_is_the_one_input(console):
-    """The console gained exactly one write path — the sentence box — and it is
-    narrow on purpose: everything it can cause, the CLI could already do."""
+def test_post_outside_the_allowlist_is_unrouted(console):
+    """Writes go through an explicit POST allowlist (see server.py's do_POST);
+    anything off that list — like POST to "/" — simply has no route.  The
+    surface is bounded on purpose: everything it can cause, the CLI could
+    already do."""
     req = urllib.request.Request(console, data=b"{}", method="POST")
     code, _body, _headers = rejected(
         lambda: urllib.request.urlopen(req, timeout=5))

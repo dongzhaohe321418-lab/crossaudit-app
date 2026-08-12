@@ -98,6 +98,52 @@ def test_unknown_or_custom_models_keep_counts_but_are_unpriced(cfg):
     assert event["billing_kind"] == "unpriced"
 
 
+def test_official_base_urls_with_paths_still_receive_list_pricing(cfg):
+    # Configured endpoints read "https://api.openai.com/v1", not the bare
+    # origin. A path or trailing slash must not demote an official call to
+    # "unpriced".
+    for provider, vendor, model, base_url, raw, value in (
+        ("openai_compat", "openai", "gpt-5.6-luna", "https://api.openai.com/v1",
+         {"usage": {"prompt_tokens": 10, "completion_tokens": 5}}, 4e-05),
+        ("anthropic", "anthropic", "claude-sonnet-4-6",
+         "https://api.anthropic.com/v1/",
+         {"usage": {"input_tokens": 100, "output_tokens": 30}}, 0.00075),
+    ):
+        event = usage.record_reply(
+            root=cfg.root, state_dir=cfg.state_dir, role="generator",
+            phase="generation", vendor=vendor, provider=provider, model=model,
+            base_url=base_url, reply=_reply(raw), system="s", prompt="p")
+
+        assert event["billing_kind"] == "api_value"
+        assert event["api_value_usd"] == pytest.approx(value)
+
+
+def test_proxy_base_url_is_never_billed_at_official_list_prices(cfg):
+    # A relay can charge whatever it likes; even a recognised model name
+    # routed through one must stay unpriced rather than inherit list prices.
+    event = usage.record_reply(
+        root=cfg.root, state_dir=cfg.state_dir, role="generator",
+        phase="generation", vendor="openai", provider="openai_compat",
+        model="gpt-5.6-luna", base_url="https://proxy.example.com/v1",
+        reply=_reply({"usage": {"prompt_tokens": 10, "completion_tokens": 5}}),
+        system="s", prompt="p")
+
+    assert event["api_value_usd"] is None
+    assert event["billing_kind"] == "unpriced"
+
+
+def test_absent_base_url_still_prices_direct_provider_calls(cfg):
+    event = usage.record_reply(
+        root=cfg.root, state_dir=cfg.state_dir, role="generator",
+        phase="generation", vendor="openai", provider="openai_compat",
+        model="gpt-5.6-luna",
+        reply=_reply({"usage": {"prompt_tokens": 10, "completion_tokens": 5}}),
+        system="s", prompt="p")
+
+    assert event["billing_kind"] == "api_value"
+    assert event["api_value_usd"] == pytest.approx(4e-05)
+
+
 def test_summary_groups_roles_models_days_and_recent_calls(cfg):
     for role, provider, vendor, model, raw in (
         ("generator", "openai_compat", "openai", "gpt-5.6-luna",

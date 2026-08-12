@@ -5,13 +5,18 @@ than it claims, so most of these tests are refusals.
 """
 from __future__ import annotations
 
+import hashlib
+import importlib.util
 import json
+import types
 from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
 
 from crossaudit import dispute as dis
+from crossaudit.auditor.run import dcl_source_digest
+from crossaudit.dcl import plugins as plugins_mod
 from crossaudit.dcl import run_checks
 from crossaudit.dcl.plugins import DCL_API_VERSION, load_allowed
 from crossaudit.errors import ConfigDenial, ProviderDenial
@@ -228,3 +233,64 @@ def test_a_pack_without_register_checks_is_refused(monkeypatch):
     monkeypatch.setattr("importlib.metadata.entry_points", lambda **k: [EP()])
     with pytest.raises(ConfigDenial, match="no register_checks"):
         load_allowed(["domain"])
+
+
+# ------------------------------------------- plugin code is bound into digest
+def _pack_on_disk(tmp_path: Path) -> tuple[object, Path]:
+    """A pack with a real source file, the shape an installed one has."""
+    path = tmp_path / "domain_pack.py"
+    path.write_text(f"DCL_API_VERSION = {DCL_API_VERSION}\n\n"
+                    "def register_checks():\n    pass\n", encoding="utf-8")
+    spec = importlib.util.spec_from_file_location("domain_pack", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module, path
+
+
+def test_loading_a_pack_changes_the_dcl_source_digest(tmp_path, monkeypatch):
+    """Two byte-identical receipts must not be able to hide different plugin
+    code, so a loaded pack's implementation has to move the digest."""
+    monkeypatch.setattr(plugins_mod, "_LOADED", {})
+    before = dcl_source_digest()
+    assert before == dcl_source_digest()      # stable while nothing is loaded
+
+    module, path = _pack_on_disk(tmp_path)
+
+    class EP:
+        name = "domain"
+
+        def load(self):
+            return module
+
+    monkeypatch.setattr("importlib.metadata.entry_points", lambda **k: [EP()])
+    assert load_allowed(["domain"]) == ["domain"]
+    after = dcl_source_digest()
+    assert after != before
+    assert after == dcl_source_digest()       # and deterministic once loaded
+    # The implementation bytes are pinned, not merely the pack's name.
+    path.write_text(path.read_text(encoding="utf-8") + "\n# changed\n",
+                    encoding="utf-8")
+    assert dcl_source_digest() not in (before, after)
+
+
+def test_the_no_plugin_digest_is_the_pre_plugin_digest(monkeypatch):
+    """Receipts minted without plugins must keep hashing what 0.4 hashed —
+    byte-identical digest input — or old ledgers stop verifying."""
+    monkeypatch.setattr(plugins_mod, "_LOADED", {})
+    import crossaudit.dcl as pkg
+    from crossaudit import document_export
+    root = Path(pkg.__file__).parent
+    h = hashlib.sha256()
+    for p in sorted(root.rglob("*.py")):
+        h.update(p.relative_to(root).as_posix().encode())
+        h.update(p.read_bytes())
+    h.update(b"document_export.py")
+    h.update(Path(document_export.__file__).read_bytes())
+    assert dcl_source_digest() == h.hexdigest()
+
+
+def test_a_pack_whose_source_cannot_be_read_refuses_to_mint(monkeypatch):
+    ghost = types.ModuleType("ghost_pack")    # no __file__: namespace/frozen shape
+    monkeypatch.setattr(plugins_mod, "_LOADED", {"ghost": ghost})
+    with pytest.raises(ConfigDenial, match="cannot pin the check code"):
+        dcl_source_digest()

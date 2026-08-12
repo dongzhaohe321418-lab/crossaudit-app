@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable
+from urllib.parse import urlsplit
 
 from .errors import ProviderDenial
 from .providers.base import Reply
@@ -183,7 +184,12 @@ def _is_official(provider: str, base_url: str | None) -> bool:
     if provider == "openai_codex":
         return True
     if base_url:
-        origin = base_url.rstrip("/").casefold()
+        # Configured base URLs carry paths ("https://api.openai.com/v1"), so a
+        # whole-string comparison would treat even the official endpoint as a
+        # third-party proxy and silently drop it to "unpriced". Only the
+        # origin decides who bills the call; anything else stays unpriced.
+        parts = urlsplit(base_url)
+        origin = f"{parts.scheme}://{parts.netloc}".casefold()
         return origin in {"https://api.openai.com", "https://api.anthropic.com"}
     return provider in {"openai_compat", "anthropic"}
 

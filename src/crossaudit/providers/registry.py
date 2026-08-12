@@ -37,6 +37,15 @@ def list_providers() -> list[str]:
     return sorted(_PROVIDERS)
 
 
+def known() -> frozenset[str]:
+    """Registered provider names, for callers that gate on them.
+
+    Gatekeepers (doctor's preflight) must ask the registry rather than keep a
+    private allowlist: a copy goes stale the release after a vendor registers,
+    and then fails configurations that init created and build runs."""
+    return frozenset(_PROVIDERS)
+
+
 def get_provider(name: str) -> Callable[..., object]:
     try:
         return _PROVIDERS[name]

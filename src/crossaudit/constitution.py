@@ -243,12 +243,21 @@ def apply_amendment(constitution: str, change_set: dict) -> str:
         block = (f"### {rid}\n**{c.get('severity', 'BLOCKER')}.** {c.get('title', '').strip()}\n\n"
                  f"{c.get('now', '').strip()}\n")
         pattern = re.compile(rf"^### {re.escape(rid)}\n.*?(?=^### |\Z)", re.M | re.S)
-        if action == "add" and not pattern.search(text):
-            marker = "\n---\n\n<!-- Amend by talking"
-            text = (text.replace(marker, "\n" + block + marker)
-                    if marker in text else text + "\n" + block)
+        exists = pattern.search(text) is not None
+        # The add/modify distinction is the drafting model's guess about state,
+        # not ground truth: "modify" of a missing rule appends, so symmetrically
+        # "add" of an existing rule replaces. The one intolerable outcome is a
+        # change that edits nothing while the Amendments log below records it as
+        # applied — a ledger claiming history that never happened.
+        if action == "add":
+            if exists:
+                text = pattern.sub(block + "\n", text)
+            else:
+                marker = "\n---\n\n<!-- Amend by talking"
+                text = (text.replace(marker, "\n" + block + marker)
+                        if marker in text else text + "\n" + block)
         elif action == "modify":
-            text = pattern.sub(block + "\n", text) if pattern.search(text) else text + "\n" + block
+            text = pattern.sub(block + "\n", text) if exists else text + "\n" + block
         elif action == "remove":
             text = pattern.sub("", text)
     log = ["\n\n## Amendments\n"] if "## Amendments" not in text else []

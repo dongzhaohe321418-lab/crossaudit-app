@@ -174,7 +174,11 @@ def lane_generator(cfg: Config, routing) -> str:
     print(f"\n  That is a change to the work: {routing.restated}")
 
     class _Args:
-        words = task.split()
+        # One element, so build.resolve_task's single-space join is the
+        # identity. Splitting into words here would flatten every newline —
+        # including the export-instructions block prepare_task appends — and
+        # TASK.md would commit a task the user never said.
+        words = [task]
 
     try:
         code = cmd_build(_Args())

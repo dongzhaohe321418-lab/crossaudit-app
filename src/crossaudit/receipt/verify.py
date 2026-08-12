@@ -20,7 +20,7 @@ from .. import _selfid
 from ..config import Config
 from ..controller import StateStore
 from ..errors import IntegrityDenial
-from ..gitio import commit_exists, entries, is_ancestor, read_blob, resolve
+from ..gitio import blob_limit, commit_exists, entries, is_ancestor, read_blob, resolve
 from . import schema
 
 
@@ -65,7 +65,9 @@ def verify(receipt: dict, *, science_root: Path, audit_root: Path,
             continue
         if rel not in blobs:
             raise IntegrityDenial(f"manifest lists {rel}, absent from the tree")
-        data, truncated = read_blob(science_root, blobs[rel])
+        # Re-read under the same per-path bound the audit hashed with; a limit
+        # that differs from audit-time would deny intact large documents forever.
+        data, truncated = read_blob(science_root, blobs[rel], limit=blob_limit(rel))
         if truncated or _sha256(data) != declared:
             raise IntegrityDenial(f"manifest mismatch for {rel}")
 

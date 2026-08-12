@@ -43,13 +43,27 @@ class AuditOutcome:
 
 def dcl_source_digest() -> str:
     """Hash of the check layer's own source, so a receipt pins what ran."""
+    # Allowlisted check packs contribute findings with the same authority as
+    # the builtin layer; leave their code out of the digest and two
+    # byte-identical receipts could hide different plugin implementations.
+    from ..dcl.plugins import loaded_sources
+    plugin_sources = loaded_sources()
+
     if getattr(sys, "frozen", False):
         identity_file = Path(getattr(sys, "_MEIPASS", "")) / "crossaudit-build.json"
         try:
             value = json.loads(identity_file.read_text(encoding="utf-8"))
             digest = str(value["dcl_source_sha256"])
             if len(digest) == 64 and all(ch in "0123456789abcdef" for ch in digest):
-                return digest
+                if not plugin_sources:
+                    return digest
+                # The baked identity pins only the bundled layer; packs loaded
+                # at runtime are check code it never saw, so fold them in.
+                h = hashlib.sha256(digest.encode())
+                for tag, data in plugin_sources:
+                    h.update(tag.encode() + b"\x00")
+                    h.update(data)
+                return h.hexdigest()
         except (OSError, ValueError, KeyError, TypeError):
             pass
         raise ConfigDenial(
@@ -67,6 +81,11 @@ def dcl_source_digest() -> str:
     from crossaudit import document_export
     h.update(b"document_export.py")
     h.update(Path(document_export.__file__).read_bytes())
+    # With no packs loaded this adds nothing: a receipt minted without plugins
+    # hashes exactly as it did before packs could join the digest.
+    for tag, data in plugin_sources:
+        h.update(tag.encode() + b"\x00")
+        h.update(data)
     return h.hexdigest()
 
 

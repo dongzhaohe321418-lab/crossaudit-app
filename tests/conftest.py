@@ -70,7 +70,6 @@ def git(*args: str, cwd: Path) -> str:
 def science(tmp_path: Path) -> Path:
     repo = tmp_path / "science"
     (repo / "experiments" / "demo").mkdir(parents=True)
-    git("init", "-q", "-b", "main", cwd=repo.parent) if False else None
     subprocess.run(["git", "init", "-q", "-b", "main"], cwd=repo, check=True)
     git("config", "user.email", "lab@example.invalid", cwd=repo)
     git("config", "user.name", "Lab", cwd=repo)

@@ -184,7 +184,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     add("heterogeneity (I1)", het_ok, why,
         "declare generator.vendor, and make it differ from auditor.vendor")
 
-    from ..providers.registry import NEEDS_KEY
+    from ..providers.registry import NEEDS_KEY, known
     key_needed = NEEDS_KEY.get(cfg.auditor.provider, True)
     key_present = (not key_needed or
                    bool(os.environ.get(cfg.auditor.key_env, "").strip()))
@@ -214,9 +214,11 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             "run the auditor in a separate credential boundary, or deliberately lower "
             "isolation.minimum.permissive between cycles")
 
-    add("provider", cfg.auditor.provider in (
-        "anthropic", "openai_compat", "openai_codex", "replay"),
-        f"{cfg.auditor.provider}:{cfg.auditor.model}", "check auditor.provider")
+    # Asked of the registry, not restated here: a local allowlist failed valid
+    # Gemini/Qwen setups the release after those vendors were registered.
+    add("provider", cfg.auditor.provider in known(),
+        f"{cfg.auditor.provider}:{cfg.auditor.model}",
+        "set auditor.provider to one of: " + ", ".join(sorted(known())))
 
     # A trust store this interpreter cannot read fails every call to every
     # vendor, and does it at the moment someone types their first sentence.
@@ -281,7 +283,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
                        "fix": ""})
 
     _emit({"ok": ok, "checks": checks, "verifier": ident,
-           "admission": verdict.as_dict() if args.online or True else {}}, args.json,
+           "admission": verdict.as_dict()}, args.json,
           _render_doctor(checks, ok))
     return EXIT_OK if ok else EXIT_CONFIG
 
@@ -1004,8 +1006,9 @@ def build_parser() -> argparse.ArgumentParser:
                    help="auditor vendor; useful when stdin is not a terminal")
     i.add_argument("--auditor-model",
                    help="exact auditor model id; accepts models newer than this release")
-    i.add_argument("--generator-vendor",
-                   choices=("anthropic", "openai", "google", "deepseek", "human"),
+    # Same catalogue the wizard offers, plus "human": a shorter list here would
+    # make a vendor scriptable interactively but not from CI.
+    i.add_argument("--generator-vendor", choices=(*wizard.VENDORS, "human"),
                    help="generator vendor; must differ from the auditor")
     i.add_argument("--generator-model",
                    help="exact generator model id; accepts models newer than this release")
@@ -1041,7 +1044,6 @@ def build_parser() -> argparse.ArgumentParser:
     a.add_argument("--retention", choices=("sealed", "redacted", "no-raw"),
                    default="sealed")
     a.add_argument("--mode", choices=("local", "github-pair"), default="local")
-    a.add_argument("--force", action="store_true", help="reuse an existing cycle directory")
     a.set_defaults(func=cmd_audit)
 
     v = sub.add_parser("verify", help="re-derive every binding; --admit to consume")

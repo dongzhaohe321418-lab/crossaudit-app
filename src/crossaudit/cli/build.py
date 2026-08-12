@@ -41,7 +41,7 @@ from ..runtime import (
     RunState,
 )
 from ..usage import record_completion
-from .main import cmd_run
+from .main import ALLOW_CUSTOM_ENV, cmd_run
 
 TASK_FILE = "TASK.md"
 MAX_AGENT_JOBS_PER_BUILD = 20
@@ -121,7 +121,14 @@ class _Args:
     json = False
     sha = None
     yes = True
-    allow_custom_endpoint = True
+
+    def __init__(self) -> None:
+        # Sending a key to a non-builtin origin is opt-in — flag or environment
+        # — and the loop may not be a quieter path than the verb. A hardcoded
+        # True here waived, for every auditor call the build loop makes, the
+        # very consent `crossaudit run` demands; the loop has no flags, so the
+        # environment gate the generator already uses is the whole opt-in.
+        self.allow_custom_endpoint = bool(os.environ.get(ALLOW_CUSTOM_ENV))
 
 
 def run_loop(cfg, task: str, *, on_event=None, attachments: str = "",
@@ -151,7 +158,7 @@ def run_loop(cfg, task: str, *, on_event=None, attachments: str = "",
 
     if chat_id and not re.fullmatch(r"(?:history|[a-f0-9]{16})", chat_id):
         raise ConfigDenial("chat id is invalid")
-    allow_custom = bool(os.environ.get("CROSSAUDIT_ALLOW_CUSTOM_ENDPOINT"))
+    allow_custom = bool(os.environ.get(ALLOW_CUSTOM_ENV))
     complete = _generator_complete(cfg, allow_custom, generator_provider_event)
     constitution = (cfg.root / cfg.constitution).read_text(encoding="utf-8")
     store = StateStore(cfg.root / cfg.state_dir / "state.json")

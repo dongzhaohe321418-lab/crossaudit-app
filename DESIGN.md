@@ -456,3 +456,44 @@ nothing for the box**: the box cannot do what the CLI could not.
 registered ablation, and six rounds of audit history — that is the research
 record and it does not chase the product. v2 is the product line. The
 protocol's authoritative text remains v1's paper.
+
+---
+
+## Amendments · 修订记录
+
+### 2026-08-12
+
+**一 · 第七条车道:`auditor`**
+
+**中文** — 在六条车道之外新增 `auditor`:用户以 `@审计端` 显式点名时,得到
+一次**直接的、零披露的审计端回复**——只传这一句话本身,不附项目上下文、规则
+ID 或控制器状态。@点名是**选择收件人,不是提升权限**:只有当审计端路由器对
+amendment / dispute / resolve 的判定达到置信阈值,点名消息才能触发变更;其余
+一律落为只读回复。§4.1 的车道表应连同本条一起阅读。
+
+**EN** — A seventh lane, `auditor`, joins the six in §4.1: an explicit
+`@Auditor` mention yields a **direct, disclosure-free auditor reply** — only
+the addressed sentence itself is transmitted, with no project context, rule
+ids, or controller state attached. The @-mention is **recipient selection, not
+privilege escalation**: an addressed message can trigger a mutation only when
+the auditor-side router classifies it as an amendment, dispute or resolution
+with certainty; everything else becomes a read-only reply.
+
+**二 · 控制台写入面:显式 POST allowlist**
+
+**中文** — §6.3 所称"写入路径只有一条,而且很窄"已被本条**取代**。控制台的
+写入面如今是 `do_POST` 中的**显式 allowlist**:`/api/say` 之外还有项目、会话、
+运行时、远程计算等二十余个动作,其中若干会提交 git、删除目录、写入 Keychain、
+启动远程作业。不变的是原则本身:allowlist 之外的 POST 一律 404;每个动作都过
+同一道 token + Host 关卡;**控制台能引发的一切,CLI 本来就能做**。诚实的主张
+不再是"没有东西可碰",而是"没有东西能被碰巧碰到"。
+
+**EN** — §6.3's claim that "there is exactly one write path, and it is
+narrow" is **superseded**. The console's write surface is now an **explicit
+POST allowlist** in `do_POST`: beyond `/api/say` sit two dozen actions —
+projects, chats, runtime, remote compute — several of which commit to git,
+delete directories, write Keychain items, or launch remote jobs. What has not
+changed is the principle: a POST outside the allowlist is a 404; every listed
+action passes the same token-and-Host gate; **everything the console can
+cause, the CLI could already do**. The honest claim is no longer "there is
+nothing to reach" but "nothing is reachable by accident".

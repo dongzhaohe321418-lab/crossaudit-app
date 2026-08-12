@@ -13,10 +13,13 @@ they were written against, and a mismatch is refused rather than guessed at.
 """
 from __future__ import annotations
 
+import inspect
+from pathlib import Path
+
 from ..errors import ConfigDenial
 
 DCL_API_VERSION = 1
-_LOADED: set[str] = set()
+_LOADED: dict[str, object] = {}
 
 
 def load_allowed(allowed: list[str] | None) -> list[str]:
@@ -45,6 +48,37 @@ def load_allowed(allowed: list[str] | None) -> list[str]:
         if not callable(register):
             raise ConfigDenial(f"check pack {name!r} exposes no register_checks()")
         register()
-        _LOADED.add(name)
+        _LOADED[name] = pack
         loaded.append(name)
     return loaded
+
+
+def loaded_sources() -> list[tuple[str, bytes]]:
+    """Source bytes of every loaded pack, tagged by pack name, sorted.
+
+    A pack's checks shape the verdict exactly as the builtin layer's do, so the
+    receipt's deterministic-layer digest must cover its implementation — two
+    byte-identical receipts must not be able to hide different plugin code. A
+    pack whose source cannot be read back (a namespace package, a frozen
+    import, code defined at a prompt) cannot be pinned, and a receipt that
+    cannot pin the check code that ran must not be minted.
+    """
+    sources = []
+    for name in sorted(_LOADED):
+        pack = _LOADED[name]
+        module = pack if inspect.ismodule(pack) else inspect.getmodule(pack)
+        origin = getattr(module, "__file__", None)
+        if not origin:
+            raise ConfigDenial(
+                f"check pack {name!r} has no source file to hash (namespace or "
+                f"frozen import); refusing to mint a receipt that cannot pin "
+                f"the check code that ran")
+        try:
+            data = Path(origin).read_bytes()
+        except OSError as exc:
+            raise ConfigDenial(
+                f"check pack {name!r} source at {origin} is unreadable ({exc}); "
+                f"refusing to mint a receipt that cannot pin the check code "
+                f"that ran") from exc
+        sources.append((f"plugin:{name}:{Path(origin).name}", data))
+    return sources

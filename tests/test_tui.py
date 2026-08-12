@@ -402,6 +402,25 @@ def test_the_readme_covers_the_complete_user_journey():
         assert heading in readme, f"missing user documentation section: {heading}"
 
 
+def test_init_vendor_flags_match_the_wizard_catalogue():
+    """The non-interactive flags must offer exactly what the wizard offers.
+    A vendor someone can pick interactively but not script means the same
+    setup silently stops working the day it moves to CI."""
+    import argparse
+
+    import crossaudit.cli.main as main_mod
+
+    parser = main_mod.build_parser()
+    sub = next(a for a in parser._actions
+               if isinstance(a, argparse._SubParsersAction))
+    flags = {opt: action.choices for action in sub.choices["init"]._actions
+             for opt in action.option_strings}
+    assert set(flags["--auditor-vendor"]) == set(wizard.VENDORS)
+    # The wizard's generator step accepts every catalogue vendor plus "human"
+    # (no-model workflows); the flag must accept the same set, nothing less.
+    assert set(flags["--generator-vendor"]) == {*wizard.VENDORS, "human"}
+
+
 # --------------------------------------------- setup ends at the console
 def test_setup_opens_the_console_when_it_finishes(tmp_path, monkeypatch):
     """Setup ends exactly where the work begins; making someone find the next
