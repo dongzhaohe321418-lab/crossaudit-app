@@ -483,7 +483,7 @@ code {
 
   .hero > .demo-shell {
     width: min(58%, 54rem);
-    margin: -17rem 0 0 auto;
+    margin: -13rem 0 0 auto;
     position: relative;
     z-index: 1;
   }
