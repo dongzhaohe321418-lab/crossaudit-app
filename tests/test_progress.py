@@ -352,6 +352,9 @@ def test_console_has_one_primary_command_composer():
     assert PAGE.count('id="say"') == 1
     assert PAGE.count('id="send"') == 1
     assert '<textarea id="say"' in PAGE
+    # The Swift menu clicks these two ids directly (New Task, Show Projects).
+    assert PAGE.count('id="new-task"') == 1
+    assert PAGE.count('id="projects-home"') == 1
     assert "New task" in PAGE
     assert "Run task" in PAGE
     assert "Shift+Enter for new line" in PAGE
@@ -368,7 +371,7 @@ def test_console_has_one_primary_command_composer():
     assert "Auto-planning" in PAGE
     assert "Generator infers focus, format, tone, and structure" in PAGE
     assert 'id="project-type"' in PAGE
-    assert "General work — documents, reviews, code" in PAGE
+    assert "General work - documents, reviews, code" in PAGE
     assert "Scientific / data workflow" in PAGE
     assert "No CrossAudit file-count or file-size quota" in PAGE
     assert 'id="drop-overlay"' in PAGE and 'id="file-input" type="file" multiple' in PAGE
@@ -393,7 +396,7 @@ def test_console_has_one_primary_command_composer():
     assert "data-provider-key" in PAGE and "data-provider-remove" in PAGE
     assert "Get key ↗" in PAGE and "API docs ↗" in PAGE
     assert 'data-theme="dark"' in PAGE and "crossaudit-theme" in PAGE
-    assert 'data-view="tasks"' in PAGE
+    assert 'data-view="models"' in PAGE
     assert 'data-audience="auto"' in PAGE
     assert 'data-audience="generator"' in PAGE
     assert 'data-audience="auditor"' in PAGE

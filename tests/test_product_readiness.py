@@ -116,7 +116,7 @@ def test_spatial_ui_keeps_glass_contextual_and_accessible():
         assert contract in PAGE
 
     # Audit evidence and deliverables are opaque content, not decorative glass.
-    assert ".run-card{border-color:var(--line);border-radius:16px;background:var(--surface)" in PAGE
+    assert ".run-card{border-color:var(--line);border-radius:var(--r-lg);background:var(--surface)" in PAGE
     assert ".finding,.output-file,.usage-card" in PAGE
 
 
