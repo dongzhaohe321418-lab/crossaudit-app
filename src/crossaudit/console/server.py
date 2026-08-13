@@ -263,8 +263,8 @@ def _ordered_cycles(state: dict, commit_chats: dict[str, str] | None = None) -> 
     chat_map = commit_chats or {}
     return [{"id": cid, "status": cycle["status"], "round": cycle["round"],
              "sha": cycle["active_sha"], "updated": updated.get(cid, 0),
-             "chat_id": (cycle.get("chat_id") or
-                         chat_map.get(cycle["active_sha"], chats.LEGACY_CHAT_ID))}
+             "chat_id": chats.canonical_id(
+                 cycle.get("chat_id") or chat_map.get(cycle["active_sha"]))}
             for cid, cycle in ordered]
 
 
@@ -304,8 +304,8 @@ def snapshot(cfg: Config) -> dict:
         # Older controller records predate the durable chat_id field.  The
         # commit trailer mapping used by the rest of this snapshot still lets
         # the decision prompt appear in the correct conversation.
-        row["chat_id"] = row.get("chat_id") or cycle_chats.get(
-            row["cycle_id"], chats.LEGACY_CHAT_ID)
+        row["chat_id"] = chats.canonical_id(
+            row.get("chat_id") or cycle_chats.get(row["cycle_id"]))
     try:
         house = [s.name for s in skills_mod.load(cfg.root)]
     except Denial:

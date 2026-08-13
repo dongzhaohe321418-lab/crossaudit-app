@@ -239,5 +239,4 @@ def complete(cfg: Config, role_name: str, primary: Role, *, system: str,
         category="routes_exhausted", retryable=False,
         status=last_status if last_status is not None else 0,
         attempts=failures,
-        remediations=provider_remediations("routes_exhausted"),
-        recovery={"action": "open_project_controls", "role": role_name})
+        remediations=provider_remediations("routes_exhausted"))

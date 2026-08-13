@@ -12,6 +12,7 @@ from pathlib import Path
 import yaml
 
 from .errors import ConfigDenial
+from .providers.specs import EFFORT_HINTS
 
 CONFIG_NAME = "crossaudit.yml"
 
@@ -24,8 +25,14 @@ _ALLOWED_TOP = {"version", "science_repo", "audit_repo", "constitution", "max_ro
                 "checks", "plugins", "resilience", "budgets"}
 _ALLOWED_ROLE = {"provider", "model", "base_url", "key_env", "vendor",
                  "reasoning_effort", "fallbacks"}
-_EFFORT_VALUES = {"none", "minimal", "low", "medium", "high", "xhigh", "max",
-                  "ultra"}
+#: Valid ``reasoning_effort`` strings for YAML validation, derived from the one
+#: provider effort catalogue so this schema and the model cards cannot drift.
+#: ``EFFORT_HINTS`` is the single vocabulary of effort levels the system knows:
+#: it is a superset of every CapabilityCard's efforts and additionally documents
+#: reserved levels (e.g. "ultra") no shipping card emits yet, so validation stays
+#: deliberately as wide as the catalogue. Adding a level in specs.EFFORT_HINTS
+#: makes it both describable in the UI and acceptable here, in one edit.
+_EFFORT_VALUES = frozenset(EFFORT_HINTS)
 
 
 @dataclass(frozen=True)

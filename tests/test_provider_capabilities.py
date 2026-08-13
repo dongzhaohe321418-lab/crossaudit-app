@@ -126,6 +126,26 @@ def test_effort_menu_is_the_card_efforts(vendor, model):
     assert reasoning_efforts(vendor, model) == (card.reasoning_efforts or ())
 
 
+def test_config_effort_whitelist_derives_from_the_one_effort_catalogue():
+    # The YAML effort whitelist is no longer a second hand-maintained copy: it
+    # derives from specs.EFFORT_HINTS, the single vocabulary of effort levels.
+    # This pins that convergence and guards the drift the derivation prevents —
+    # every effort a shipping CapabilityCard emits must be an accepted value,
+    # and the catalogue may stay wider (e.g. the reserved "ultra") on purpose.
+    from crossaudit.config import _EFFORT_VALUES
+    from crossaudit.providers.specs import EFFORT_HINTS, _CAPABILITIES
+
+    assert _EFFORT_VALUES == frozenset(EFFORT_HINTS)
+    card_efforts = {effort
+                    for cards in _CAPABILITIES.values()
+                    for _prefix, card in cards
+                    for effort in (card.reasoning_efforts or ())}
+    assert card_efforts <= _EFFORT_VALUES
+    # The catalogue documents at least one reserved level no card emits yet, so
+    # validation is deliberately a superset, never narrower than the cards.
+    assert "ultra" in _EFFORT_VALUES and "ultra" not in card_efforts
+
+
 def test_usage_no_longer_keeps_a_parallel_price_table():
     # The price data moved into the capability cards; a second table here would
     # be exactly the duplication this slice removed.
