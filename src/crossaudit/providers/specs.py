@@ -364,13 +364,19 @@ _CAPABILITIES: dict[str, tuple[tuple[str, CapabilityCard], ...]] = {
     "openai": (
         ("gpt-5.6-sol", CapabilityCard(
             token_param=_MAX_COMPLETION_TOKENS, temperature=False,
-            reasoning_efforts=_EFFORTS_566, price=Rates(5.0, 30.0, 6.25, 0.50))),
+            reasoning_efforts=_EFFORTS_566, context_window=1_050_000,
+            vision=True, structured_output=True,
+            price=Rates(5.0, 30.0, 6.25, 0.50))),
         ("gpt-5.6-terra", CapabilityCard(
             token_param=_MAX_COMPLETION_TOKENS, temperature=False,
-            reasoning_efforts=_EFFORTS_566, price=Rates(2.5, 15.0, 3.125, 0.25))),
+            reasoning_efforts=_EFFORTS_566, context_window=1_050_000,
+            vision=True, structured_output=True,
+            price=Rates(2.5, 15.0, 3.125, 0.25))),
         ("gpt-5.6-luna", CapabilityCard(
             token_param=_MAX_COMPLETION_TOKENS, temperature=False,
-            reasoning_efforts=_EFFORTS_566, price=Rates(1.0, 6.0, 1.25, 0.10))),
+            reasoning_efforts=_EFFORTS_566, context_window=1_050_000,
+            vision=True, structured_output=True,
+            price=Rates(1.0, 6.0, 1.25, 0.10))),
         ("gpt-5.6", CapabilityCard(
             token_param=_MAX_COMPLETION_TOKENS, temperature=False,
             reasoning_efforts=_EFFORTS_566)),
@@ -416,6 +422,7 @@ _CAPABILITIES: dict[str, tuple[tuple[str, CapabilityCard], ...]] = {
             price=_SONNET_RATES)),
         ("claude-opus-4-8", CapabilityCard(
             temperature=False, reasoning_efforts=_EFFORTS_GEN5,
+            context_window=1_000_000, vision=True, structured_output=True,
             price=_OPUS_RATES)),
         ("claude-opus-4-7", CapabilityCard(
             temperature=True, reasoning_efforts=_EFFORTS_GEN5,
@@ -428,15 +435,18 @@ _CAPABILITIES: dict[str, tuple[tuple[str, CapabilityCard], ...]] = {
             price=_OPUS_RATES)),
         ("claude-sonnet-4-6", CapabilityCard(
             temperature=True, reasoning_efforts=_EFFORTS_GEN4,
+            context_window=1_000_000, vision=True, structured_output=True,
             price=_SONNET_RATES)),
         ("claude-sonnet-4-5", CapabilityCard(
             temperature=True, price=_SONNET_RATES)),
         ("claude-haiku-4-5", CapabilityCard(
-            temperature=True, price=_HAIKU_RATES)),
+            temperature=True, context_window=200_000,
+            vision=True, structured_output=True, price=_HAIKU_RATES)),
     ),
     "google": (
         ("gemini-3", CapabilityCard(
-            temperature=True, reasoning_efforts=_EFFORTS_GEMINI)),
+            temperature=True, reasoning_efforts=_EFFORTS_GEMINI,
+            context_window=1_000_000, vision=True, structured_output=True)),
         ("gemini-2.5", CapabilityCard(
             temperature=True, reasoning_efforts=_EFFORTS_GEMINI)),
     ),
@@ -444,7 +454,8 @@ _CAPABILITIES: dict[str, tuple[tuple[str, CapabilityCard], ...]] = {
         ("grok-4.20-multi-agent", CapabilityCard(
             temperature=True, reasoning_efforts=_EFFORTS_55)),
         ("grok-4.5", CapabilityCard(
-            temperature=True, reasoning_efforts=_EFFORTS_5)),
+            temperature=True, reasoning_efforts=_EFFORTS_5,
+            context_window=500_000, vision=True, structured_output=True)),
     ),
 }
 

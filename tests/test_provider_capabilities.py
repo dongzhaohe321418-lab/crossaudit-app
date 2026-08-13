@@ -174,6 +174,11 @@ def test_unknown_model_returns_a_conservative_card():
     assert card.reasoning_efforts is None
     assert card.price is None
     assert card.compat_retry is True
+    # The §4 selector fields stay honestly blank for a model we cannot vouch
+    # for: no fabricated context window, vision, or structured-output claim.
+    assert card.context_window is None
+    assert card.vision is False
+    assert card.structured_output is False
 
 
 def test_recognised_model_disables_the_retry_only_on_a_builtin_origin():
@@ -196,3 +201,74 @@ def test_compatible_vendor_default_model_still_sends_its_temperature(monkeypatch
     get_provider("minimax")(model="MiniMax-M2.7", system="s", prompt="p",
                             key_env="CROSSAUDIT_MINIMAX_KEY", max_tokens=9)
     assert seen["payload"]["temperature"] == 1.0
+
+
+# ── §4 model-selector capability fields ───────────────────────────────────────
+#
+# context_window / vision / structured_output are the North Star §4 selector
+# fields.  Slice 2 declared them but left every card conservative (None/False)
+# rather than invent a value.  They are now populated for the curated first-party
+# families whose capabilities were verified against current official provider
+# documentation.  They are display-only: no adapter, price, or request-shaping
+# path reads them, so filling them changes no run behaviour.
+
+@pytest.mark.parametrize("vendor,model,context_window", [
+    ("openai", "gpt-5.6-sol", 1_050_000),
+    ("openai", "gpt-5.6-terra", 1_050_000),
+    ("openai", "gpt-5.6-luna", 1_050_000),
+    ("anthropic", "claude-opus-4-8", 1_000_000),
+    ("anthropic", "claude-sonnet-4-6", 1_000_000),
+    ("anthropic", "claude-haiku-4-5-20251001", 200_000),
+    ("google", "gemini-3.6-flash", 1_000_000),
+    ("google", "gemini-3.5-pro", 1_000_000),
+    ("google", "gemini-3.5-flash", 1_000_000),
+    ("xai", "grok-4.5", 500_000),
+])
+def test_curated_selector_fields_are_populated_from_documentation(
+        vendor, model, context_window):
+    # Each verified curated family accepts image input and can return a
+    # schema-guaranteed response, and reports its documented context window.
+    card = capability_card(vendor, model)
+    assert card.vision is True
+    assert card.structured_output is True
+    assert card.context_window == context_window
+
+
+def test_every_declared_context_window_is_a_positive_int_or_none():
+    # A populated context window is a real, positive token count; an unverified
+    # one stays None.  Neither 0 nor a negative sentinel is ever stored, so the
+    # selector never renders a nonsensical size.
+    from crossaudit.providers.specs import _CAPABILITIES
+
+    for cards in _CAPABILITIES.values():
+        for _prefix, card in cards:
+            cw = card.context_window
+            assert cw is None or (isinstance(cw, int) and cw > 0), _prefix
+
+
+@pytest.mark.parametrize("vendor,model", [
+    ("deepseek", "deepseek-v4-flash"),
+    ("zhipu", "glm-5.2"),
+    ("moonshot", "kimi-k2.6"),
+    ("minimax", "MiniMax-M2.7"),
+    ("qwen", "qwen3.7-plus"),
+    ("mistral", "mistral-medium-3-5"),
+])
+def test_uncarded_first_party_models_keep_honest_blank_selector_fields(vendor, model):
+    # These first-party vendors have no capability card yet, so their selector
+    # fields stay None/False rather than assert an unverified capability.
+    # Populating them means adding a recognised-model card, which flips
+    # compat_retry — deliberately out of scope for this data-only slice.
+    card = capability_card(vendor, model)
+    assert card.context_window is None
+    assert card.vision is False
+    assert card.structured_output is False
+
+
+def test_custom_endpoint_model_advertises_no_selector_capability():
+    # A custom OpenAI-compatible endpoint is unvouchable; its card must not
+    # claim vision, structured output, or any context window.
+    card = capability_card("openai", "local-model", official=False)
+    assert card.context_window is None
+    assert card.vision is False
+    assert card.structured_output is False
