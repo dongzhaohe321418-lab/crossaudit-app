@@ -15,6 +15,18 @@ import pytest
 from crossaudit.config import load
 from crossaudit.scaffold import read as read_template
 
+
+@pytest.fixture(autouse=True)
+def _reset_progress_tracker():
+    """The progress tracker is a process-global singleton. A test that leaves a
+    run bound to it would otherwise bleed a live-progress view into the next
+    module's snapshot (e.g. shadowing an HPC job's actor). Reset after each test
+    so ordering cannot make one module's state leak into another's."""
+    yield
+    from crossaudit.console.progress import TRACKER
+
+    TRACKER.clear()
+
 GOOD_RESULTS = {
     "quantities": [
         {"name": "binding_energy", "value": -3.65, "unit": "kcal/mol",
