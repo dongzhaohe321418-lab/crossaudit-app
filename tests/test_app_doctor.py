@@ -173,3 +173,34 @@ def test_settings_ui_exposes_doctor_and_only_allowlisted_actions():
     assert 'id="run-doctor"' in PAGE
     assert "'/api/doctor'" in PAGE
     assert "run_arbitrary_command" not in PAGE
+
+
+def test_doctor_problem_rows_explain_why_they_matter(cfg, monkeypatch, tmp_path):
+    """North Star §4: every readiness problem states why it matters, not only
+    what is wrong.  A healthy row stays quiet — no rationale noise."""
+    monkeypatch.setenv("CROSSAUDIT_WORKSPACE_ROOT", str(tmp_path))
+    # A bare machine: nothing installed, so several rows need attention while the
+    # workspace and TLS trust store remain ready.
+    monkeypatch.setattr(app_doctor.shutil, "which", lambda _name: None)
+    monkeypatch.setattr(app_doctor, "_latest_release",
+                        lambda: (None, app_doctor.LATEST_RELEASE_URL))
+
+    result = app_doctor.collect(cfg, online=False)
+    unresolved = [row for row in result["checks"]
+                  if row["status"] in app_doctor._WHY_STATES]
+    assert unresolved, "a bare environment should surface unresolved rows"
+    for row in unresolved:
+        assert row.get("why"), f"{row['id']} needs a why-it-matters explanation"
+        # The rationale is an outcome sentence, never a raw diagnostic dump.
+        assert "\n" not in row["why"] and len(row["why"]) < 200
+
+    for row in result["checks"]:
+        if row["status"] in {"ready", "unknown"}:
+            assert "why" not in row, f"{row['id']} should stay quiet when settled"
+
+
+def test_doctor_ui_renders_the_why_line():
+    from crossaudit.console.page import PAGE
+
+    assert "row.why" in PAGE
+    assert "doctor-why" in PAGE

@@ -1245,6 +1245,7 @@ details.credential-card[open]>.credential-head:after{transform:rotate(180deg)}
 .doctor-copy b{display:block;font-size:var(--fs-label)}
 .doctor-copy small{display:block;color:var(--text-2);font-size:var(--fs-caption);line-height:1.4;
   margin-top:2px;overflow-wrap:anywhere}
+.doctor-copy small.doctor-why{color:var(--text-3);margin-top:4px}
 .doctor-version{color:var(--text-3);font-family:var(--font-mono);font-size:var(--fs-caption);
   margin-top:2px;white-space:nowrap}
 .doctor-action{grid-column:2/4;display:flex;gap:7px;align-items:center;flex-wrap:wrap}
@@ -2589,7 +2590,8 @@ function renderDoctor(doctor){
       action='<div class="doctor-action"><button type="button" class="secondary" data-doctor-action="'+esc(repair.action)+'">'+esc(repair.label||'Fix')+'</button></div>';
     }
     const version=row.version?'<span class="doctor-version">v'+esc(row.version)+'</span>':'';
-    return '<div class="doctor-check '+esc(row.status||'unknown')+'"><span class="doctor-mark">'+(marks[row.status]||'?')+'</span><div class="doctor-copy"><b>'+esc(row.label||row.id)+'</b><small>'+esc(row.detail||'')+'</small></div>'+version+action+'</div>';
+    const why=row.why?'<small class="doctor-why">'+esc(row.why)+'</small>':'';
+    return '<div class="doctor-check '+esc(row.status||'unknown')+'"><span class="doctor-mark">'+(marks[row.status]||'?')+'</span><div class="doctor-copy"><b>'+esc(row.label||row.id)+'</b><small>'+esc(row.detail||'')+'</small>'+why+'</div>'+version+action+'</div>';
   }).join(''):'<div class="doctor-empty">'+(status==='running'?'Checking required software…':'Run the check to inspect this Mac.')+'</div>';
   const panel=document.querySelector('.doctor-panel'),toggle=document.getElementById('toggle-doctor-details');
   if(['blocked','failed','attention'].includes(status))panel.classList.add('expanded');

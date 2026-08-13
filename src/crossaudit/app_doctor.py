@@ -39,6 +39,31 @@ MINIMUM_CODEX = (0, 146, 0)
 VERSION = re.compile(r"(?<!\d)(\d+)\.(\d+)(?:\.(\d+))?")
 EMAIL = re.compile(r"[^\s@]+@[^\s@]+\.[^\s@]+")
 
+#: Why an unresolved check matters, in plain language.  North Star §4 asks every
+#: readiness problem to explain not only *what* is wrong (the row ``detail``) but
+#: *why it matters*, so a first-time user can judge whether to act now.  These
+#: are attached only to rows that still need attention, never to ready ones, so
+#: a healthy environment stays quiet.
+WHY = {
+    "python": "CrossAudit runs on this bundled Python; an older build cannot execute the app reliably.",
+    "macos": "Older macOS releases miss security fixes CrossAudit relies on for the Keychain and network trust.",
+    "git": "Git records every audit decision as a commit; without it CrossAudit cannot create or audit a project.",
+    "ssh": "Remote compute runs Generator jobs on a cluster over SSH; needed only if you use one.",
+    "github_cli": "This tool creates and syncs the work and audit repositories; not needed for local-only projects.",
+    "codex": "This runtime powers the official ChatGPT sign-in; needed only if you connect a ChatGPT subscription.",
+    "tls": "Every provider call is HTTPS; without trusted certificates CrossAudit cannot reach any model safely.",
+    "workspace": "Projects and their files live in this folder; CrossAudit needs to read and write inside it.",
+    "project_repo": "The audit reads commits from this repository; it must be initialized before a run can be recorded.",
+    "git_identity": "Every commit needs an author; without a name and email CrossAudit cannot record audit history.",
+    "config": "This file defines the project's roles, routes, and rules; the project cannot run without it.",
+    "constitution": "These are the rules the auditor judges against; an audit cannot run without them.",
+}
+
+#: States that represent an unresolved item worth explaining.  ``unknown`` (for
+#: example an update check that could not reach the network) is deliberately
+#: excluded: it is not a problem the user can or should act on.
+_WHY_STATES = {"missing", "outdated", "warning", "waiting"}
+
 
 def _tuple(value: str) -> tuple[int, int, int] | None:
     match = VERSION.search(value)
@@ -270,6 +295,10 @@ def collect(cfg: Config, *, online: bool = True) -> dict:
         **({"repair": {"action": "download_update", "label": "Download update",
                         "url": release_url}} if outdated else {}),
     })
+
+    for row in checks:
+        if row.get("status") in _WHY_STATES and row["id"] in WHY:
+            row["why"] = WHY[row["id"]]
 
     blockers = sum(row["status"] in {"missing", "outdated"} and row["blocking"]
                    for row in checks)
