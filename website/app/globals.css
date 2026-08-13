@@ -95,11 +95,14 @@ html {
   scroll-behavior: smooth;
   scroll-padding-top: 5.5rem;
   background: var(--background);
+  /* Clip horizontal overflow at the root, not on body: overflow on body
+     turns body into the scroll container, which breaks window scrolling and
+     the viewport IntersectionObserver that drives section reveal. */
+  overflow-x: clip;
 }
 
 body {
   margin: 0;
-  overflow-x: clip;
   background: var(--background);
   color: var(--text-primary);
   font-family: var(--sans);
@@ -1005,10 +1008,21 @@ code {
 }
 
 [data-reveal] {
-  opacity: 0;
-  transform: translateY(16px) scale(0.99);
   transition: opacity 640ms var(--ease-spring), transform 720ms var(--ease-spring);
   transition-delay: calc(var(--i, 0) * 90ms);
+}
+
+/* Hidden only once the reveal script has marked the document. Without it
+   (script blocked, hydration failed, no JS) the content stays visible
+   rather than blank. */
+html.js [data-reveal] {
+  opacity: 0;
+  transform: translateY(16px) scale(0.99);
+}
+
+html.js [data-reveal].is-visible {
+  opacity: 1;
+  transform: none;
 }
 
 [data-reveal].is-visible {
@@ -2628,8 +2642,8 @@ footer a:hover {
   .hero-copy h1 > span,
   .demo-shell,
   [data-reveal] {
-    opacity: 1;
-    transform: none;
+    opacity: 1 !important;
+    transform: none !important;
     animation: none;
   }
 
