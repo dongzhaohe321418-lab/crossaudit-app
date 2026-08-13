@@ -3,15 +3,21 @@
 The catalogue is deliberately data-driven.  A vendor shown in Settings, the
 project wizard, live model discovery and the runtime adapter must all refer to
 the same record; otherwise a UI can claim support while the request is sent to
-the wrong origin.  Only first-party inference services are presets here.
-Aggregators and self-hosted gateways remain available through the explicit
-custom OpenAI-compatible configuration because they cannot, by themselves,
-prove model-source independence.
+the wrong origin.  Only first-party inference services are presets here, and
+each carries ``source_independence`` so a receipt can state, per role, whether
+the model source was one CrossAudit can attest.  Aggregators and self-hosted
+gateways remain available through the explicit custom OpenAI-compatible
+configuration, but because they cannot by themselves prove model-source
+independence, a receipt records their runtime as ``parametric: False`` rather
+than asserting a cross-vendor independence it cannot back — see
+:func:`source_independent`, which the receipt builder consults with the
+*runtime-actual* vendor and base URL (a fallback may have switched origins).
 """
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass, replace
+from urllib.parse import urlparse
 
 
 @dataclass(frozen=True)
@@ -27,6 +33,14 @@ class ProviderSpec:
     models: tuple[tuple[str, str], ...]
     prefixes: tuple[str, ...] = ()
     exclude: tuple[str, ...] = ()
+    #: Whether this is a first-party inference service whose model source
+    #: CrossAudit can attest.  Every preset here is one, so the default is True.
+    #: An aggregator or self-hosted gateway — were one ever added as a preset —
+    #: would set this False; a custom OpenAI-compatible endpoint is judged False
+    #: at runtime by :func:`source_independent`.  This is what lets the receipt's
+    #: ``parametric`` field stay honest: an unattestable source never claims
+    #: cross-vendor independence it cannot prove.
+    source_independence: bool = True
     console_url: str = ""
     api_docs_url: str = ""
     subscription_detail: str = (
@@ -217,6 +231,50 @@ def endpoint(vendor: str, endpoint_id: str = "") -> tuple[str, str, str, str]:
         if row[0] == wanted:
             return row
     raise ValueError(f"unsupported {vendor} endpoint {endpoint_id!r}")
+
+
+def _origin(url: str) -> str:
+    """scheme://host[:port], case-folded, for comparing endpoints by origin."""
+    parsed = urlparse(url if "//" in url else "https://" + url)
+    return f"{parsed.scheme}://{parsed.netloc}".casefold()
+
+
+def official_origins(vendor: str) -> frozenset[str]:
+    """Every first-party origin a built-in vendor's key is allowed to reach.
+
+    An unknown vendor has none: it owns no origin this catalogue can vouch for.
+    """
+    item = SPECS.get((vendor or "").casefold().strip())
+    if item is None:
+        return frozenset()
+    origins = {_origin(item.api_base)}
+    origins.update(_origin(row[2]) for row in item.endpoints)
+    return frozenset(origins)
+
+
+def source_independent(vendor: str, base_url: str | None = None) -> bool:
+    """Whether a role's runtime origin can attest an independent model source.
+
+    True only for a first-party built-in vendor reached at one of its own
+    official origins.  A custom OpenAI-compatible ``base_url`` (an origin this
+    catalogue does not recognise), an aggregator, a self-hosted gateway, or an
+    unknown vendor cannot prove who serves the model, so a receipt must not
+    assert cross-vendor independence for it.
+
+    A ``human`` generator is not a model source at all — it can never route to
+    the auditor model's origin — so it is treated as independent; the parametric
+    dimension is about *model* sources reselling one another, which a person is
+    categorically outside of.
+    """
+    key = (vendor or "").casefold().strip()
+    if key == "human":
+        return True
+    item = SPECS.get(key)
+    if item is None or not item.source_independence:
+        return False
+    if not base_url:
+        return True
+    return _origin(base_url) in official_origins(vendor)
 
 
 EFFORT_HINTS = {

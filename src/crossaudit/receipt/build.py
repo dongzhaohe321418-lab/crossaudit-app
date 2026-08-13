@@ -12,17 +12,61 @@ from pathlib import Path
 
 from .. import RECEIPT_SCHEMA, _selfid
 from ..config import Config, heterogeneity
+from ..providers.specs import source_independent
+
+#: The honest reason parametric is withheld from an otherwise heterogeneous
+#: pair: one of the roles ran on (or could fall back to) an origin whose model
+#: source CrossAudit cannot attest, so it must not be recorded as independent.
+PARAMETRIC_UNATTESTABLE = (
+    "model source independence cannot be asserted for a custom or aggregator "
+    "endpoint")
 
 
 def _sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def _sources_attestable(cfg: Config, exchange: dict | None) -> bool:
+    """Whether both roles' model sources are ones CrossAudit can vouch for.
+
+    The auditor is judged from the *runtime-actual* origin recorded in the
+    exchange — a fallback may have switched away from the configured primary, so
+    the receipt must reflect what actually answered, not what was declared.  The
+    generator's increment is not produced during this audit, so it is judged
+    from configuration: every route it could have used (primary and each
+    fallback) must be attestable, because we cannot observe which one ran.  A
+    single custom, aggregator, or unknown-vendor origin on either side means the
+    cross-vendor independence claim cannot be backed.
+    """
+    if exchange and exchange.get("vendor"):
+        auditor_ok = source_independent(exchange.get("vendor"),
+                                        exchange.get("base_url"))
+    else:
+        auditor_ok = all(source_independent(role.vendor, role.base_url)
+                         for role in (cfg.auditor, *cfg.auditor.fallbacks))
+    # The generator's own runtime is not observed during this audit, so judge it
+    # from configuration — but honour the same base_url env override the
+    # generator role resolves with, so an operator who points generation at a
+    # custom origin cannot leave the receipt claiming a first-party source.
+    generator_base_url = (os.environ.get("CROSSAUDIT_GENERATOR_BASE_URL")
+                          or cfg.generator_base_url)
+    generator_routes = [(cfg.generator_vendor, generator_base_url),
+                        *((r.vendor, r.base_url) for r in cfg.generator_fallbacks)]
+    generator_ok = bool(cfg.generator_vendor) and all(
+        source_independent(vendor, base_url) for vendor, base_url in generator_routes)
+    return auditor_ok and generator_ok
+
+
 def isolation_evidence(cfg: Config, *, mode: str, provisioner: str,
                        admission: str, exchange: dict | None = None) -> dict:
     """Observed isolation, per dimension, plus the operational evidence.
 
-    parametric: the two roles name different vendors, asserted from config (I1).
+    parametric: the two roles name different vendors (I1) *and* both ran on a
+        model source CrossAudit can attest. A heterogeneous pair whose actual
+        origin is an aggregator, self-hosted gateway, or custom endpoint cannot
+        prove the two vendors are not reselling one underlying model, so the
+        claim is withheld — recorded as False with a note, never silently kept
+        True (North Star §31: required independence cannot be silently disabled).
     contextual: the auditor sees committed artefacts only — true by construction
         here, since the increment is materialised from the git tree.
     permissive: the two roles' credentials are not both reachable by this
@@ -30,6 +74,7 @@ def isolation_evidence(cfg: Config, *, mode: str, provisioner: str,
         false — recorded, not narrated.
     """
     ok, _why = heterogeneity(cfg)
+    sources_attestable = _sources_attestable(cfg, exchange)
     auditor_keys = {cfg.auditor.key_env,
                     *(item.key_env for item in cfg.auditor.fallbacks)}
     generator_keys = {cfg.generator_key_env or "CROSSAUDIT_GENERATOR_KEY",
@@ -38,8 +83,8 @@ def isolation_evidence(cfg: Config, *, mode: str, provisioner: str,
                       any(bool(os.environ.get(name)) for name in generator_keys))
     actual_provider = ((exchange or {}).get("provider") or cfg.auditor.provider)
     actual_model = ((exchange or {}).get("model") or cfg.auditor.model)
-    return {
-        "parametric": ok,
+    evidence = {
+        "parametric": ok and sources_attestable,
         "contextual": True,
         "permissive": mode != "local" and not both_keys_here,
         "execution": mode,
@@ -48,6 +93,12 @@ def isolation_evidence(cfg: Config, *, mode: str, provisioner: str,
         "provisioner": provisioner,
         "admission": admission,
     }
+    # Only when heterogeneity itself held but the source could not be attested:
+    # a same-vendor pair is already False for its own recorded reason, and a
+    # fully first-party pair stays byte-identical to a pre-hardening receipt.
+    if ok and not sources_attestable:
+        evidence["parametric_note"] = PARAMETRIC_UNATTESTABLE
+    return evidence
 
 
 def build(*, cfg: Config, subject: dict, cycle: dict, manifest: dict,

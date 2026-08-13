@@ -190,6 +190,7 @@ def run_audit(*, cfg: Config, sha: str, round_: int, files: Mapping[str, bytes],
                           reasoning_effort=route.get("reasoning_effort"))
             exchange = {"mode": retention, "provider": actual.provider,
                         "vendor": actual.vendor, "model": actual.model,
+                        "base_url": actual.base_url,
                         "fallback": bool(route.get("fallback")),
                         "reasoning_effort": actual.reasoning_effort or "provider-default",
                         **raw.commitments(retention)}

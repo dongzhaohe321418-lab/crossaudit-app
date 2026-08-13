@@ -99,8 +99,22 @@ Official references: [OpenAI reasoning models](https://developers.openai.com/api
 5. Aggregators are not first-party presets because a different billing endpoint
    does not prove an independent model source. An explicitly trusted custom
    OpenAI-compatible endpoint remains available for controlled CLI deployments,
-   but it should not be used as evidence of cross-vendor independence without a
-   separately verified model identity.
+   but it is never used as evidence of cross-vendor independence. Each preset
+   carries a `source_independence` flag (true for every first-party service
+   here), and the receipt builder consults `source_independent(vendor, base_url)`
+   with the *runtime-actual* origin of each role. When either role ran on — or
+   could fall back to — a custom endpoint, an aggregator, a self-hosted gateway,
+   or an unknown vendor, the receipt records `isolation.parametric: false` with
+   the note "model source independence cannot be asserted for a custom or
+   aggregator endpoint", even when the two roles' vendor *names* differ. This is
+   fail-open for running the audit (the verdict, deterministic checks, and other
+   isolation dimensions are unaffected) but fail-closed for admission: a
+   deployment whose `isolation.minimum.parametric` is true refuses a receipt
+   whose parametric evidence is false, so an unattestable source cannot be
+   admitted where independence is required (North Star §31: required
+   independence cannot be silently disabled). Two genuine first-party vendors
+   (for example `anthropic` + `openai`) are unaffected and keep
+   `parametric: true`.
 
 ## Adding another provider
 
