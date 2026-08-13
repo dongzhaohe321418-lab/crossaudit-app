@@ -912,17 +912,17 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                 if parsed.path == "/api/chats/delete":
                     current = self._config()
                     chat_id = str(payload.get("chat_id", ""))
+                    # The handler only gathers the live runtime facts; the rule
+                    # that a busy thread cannot be deleted lives in the service.
                     progress = TRACKER.snapshot()
-                    if (TRACKER.running and isinstance(progress, dict) and
-                            (progress.get("chat_id") or chats.LEGACY_CHAT_ID) == chat_id):
-                        raise ConfigDenial(
-                            "that chat has a task running; wait for it to finish before deleting")
+                    guard = ({"running_chat_id": progress.get("chat_id")}
+                             if TRACKER.running and isinstance(progress, dict) else {})
                     compute = hpc.MANAGER.snapshot(current)
-                    if any((row.get("chat_id") or chats.LEGACY_CHAT_ID) == chat_id and
-                           row.get("status") not in hpc.TERMINAL_STATES
-                           for row in compute.get("jobs", [])):
-                        raise ConfigDenial(
-                            "that chat has remote compute running; cancel or finish it first")
+                    active_compute = [row.get("chat_id")
+                                      for row in compute.get("jobs", [])
+                                      if row.get("status") not in hpc.TERMINAL_STATES]
+                    chats.ensure_deletable(chat_id, active_compute_chat_ids=active_compute,
+                                           **guard)
                     result = chats.delete(current, chat_id)
                     STREAM_CHANGES.notify()
                     self._send(json.dumps({"chat": result}).encode(),

@@ -20,7 +20,7 @@ from pathlib import Path
 from ..config import Config
 from ..dispute import DISPUTES_LOG, parse_findings
 from ..router import history as routing_history
-from .chats import LEGACY_CHAT_ID
+from .chats import LEGACY_CHAT_ID, canonical_id
 
 GENERATOR_LANES = {"generator", "project"}
 AUDITOR_LANES = {"auditor", "amendment", "dispute", "resolve", "query"}
@@ -72,7 +72,7 @@ def _commits(root: Path, limit: int = 200) -> list[dict]:
         if len(parts) < 4:
             continue
         rows.append({"sha": parts[0], "t": int(parts[1]), "subject": parts[2],
-                     "chat_id": parts[3].strip() or LEGACY_CHAT_ID,
+                     "chat_id": canonical_id(parts[3]),
                      "files": [f for f in files.split("\n") if f.strip()]})
     return rows[::-1]
 
@@ -90,7 +90,7 @@ def _chat_map(root: Path) -> dict[str, str]:
     for line in result.stdout.splitlines():
         sha, separator, chat_id = line.partition("\x1f")
         if separator:
-            rows[sha] = chat_id.strip() or LEGACY_CHAT_ID
+            rows[sha] = canonical_id(chat_id)
     return rows
 
 
@@ -138,7 +138,7 @@ def generator_stream(cfg: Config, routing: list[dict],
     for r in routing:
         if r.get("lane") in GENERATOR_LANES:
             stream.append({**r, "kind": "you",
-                           "chat_id": str(r.get("chat_id") or LEGACY_CHAT_ID)})
+                           "chat_id": canonical_id(r.get("chat_id"))})
     return sorted(stream, key=lambda m: m["t"])[-40:]
 
 
@@ -176,7 +176,7 @@ def auditor_stream(cfg: Config, routing: list[dict],
             d = json.loads(line)
             stream.append({
                 "kind": "auditor", "t": d.get("t", 0), "verdict": d["ruling"],
-                "chat_id": str(d.get("chat_id") or LEGACY_CHAT_ID),
+                "chat_id": canonical_id(d.get("chat_id")),
                 "findings": [{"severity": "dispute", "rule": d["rule"],
                               "artifact": d["artifact"],
                               "observation": d["reasoning"]}],
@@ -184,11 +184,11 @@ def auditor_stream(cfg: Config, routing: list[dict],
     for r in routing:
         if r.get("lane") in AUDITOR_LANES:
             stream.append({**r, "kind": "you",
-                           "chat_id": str(r.get("chat_id") or LEGACY_CHAT_ID)})
+                           "chat_id": canonical_id(r.get("chat_id"))})
             prefix = "answered by auditor: "
             if r.get("lane") == "auditor" and str(r.get("executed", "")).startswith(prefix):
                 stream.append({"kind": "auditor_chat", "t": r.get("t", 0),
-                               "chat_id": str(r.get("chat_id") or LEGACY_CHAT_ID),
+                               "chat_id": canonical_id(r.get("chat_id")),
                                "response": r["executed"][len(prefix):],
                                "addressed_to": "auditor"})
     return sorted(stream, key=lambda m: (m["t"], m.get("round", 0)))[-40:]
