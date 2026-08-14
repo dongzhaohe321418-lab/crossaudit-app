@@ -973,6 +973,8 @@ body.hub-mode .project-hub{display:block}
 .hub-heading h1{margin:0;font-size:var(--fs-display);letter-spacing:-.025em;font-weight:600}
 .hub-heading p{margin:5px 0 0;color:var(--text-2)}
 .hub-summary{margin-left:auto;color:var(--text-2);font-size:var(--fs-label)}
+.hub-note{margin-bottom:14px;padding:11px 14px;border:1px solid var(--line);border-radius:var(--r-md);
+  background:var(--surface);color:var(--text-2);font-size:var(--fs-label);line-height:1.5}
 .hub-tools{display:flex;gap:9px;margin-bottom:14px}
 .hub-search{height:38px;min-width:280px;border:1px solid var(--line);border-radius:var(--r-md);
   background:var(--surface);padding:0 12px;outline:0;color:var(--text)}
@@ -1604,6 +1606,143 @@ details.credential-card[open]>.credential-head:after{transform:rotate(180deg)}
   .state-pill .pill-detail{display:none}
 }
 
+/* ============ First-launch flow (North Star §4): "A base + graft B/C" ============ */
+#first-run{display:none}
+body.first-run .app,body.first-run .project-hub{display:none}
+body.first-run #first-run{display:flex;flex-direction:column;min-height:100vh;height:100vh;overflow:hidden;
+  background:radial-gradient(72% 62% at 88% -8%,var(--tint-a),transparent 66%),radial-gradient(55% 54% at -8% 96%,var(--tint-b),transparent 70%),var(--bg)}
+.fr-chrome{position:relative;z-index:2;display:flex;align-items:center;gap:var(--sp-4);
+  height:var(--topbar-h);padding:0 clamp(var(--sp-5),4vw,var(--sp-8));
+  background:var(--glass-nav-bg);-webkit-backdrop-filter:blur(20px) saturate(1.3);backdrop-filter:blur(20px) saturate(1.3);
+  border-bottom:1px solid var(--glass-border)}
+.fr-brand{display:flex;align-items:center;gap:var(--sp-2);font-size:var(--fs-title);font-weight:600;letter-spacing:-.01em}
+.fr-mark{color:var(--role-g)}
+.fr-steps{display:flex;align-items:center;gap:var(--sp-4);margin-left:var(--sp-5)}
+.fr-step{display:flex;align-items:baseline;gap:6px;color:var(--text-3);position:relative;padding-bottom:2px;
+  transition:color var(--dur-base) var(--ease-out)}
+.fr-step .fr-k{font-family:var(--font-mono);font-size:var(--fs-caption);letter-spacing:.1em}
+.fr-step .fr-l{font-size:var(--fs-caption);letter-spacing:.16em;text-transform:uppercase}
+.fr-step.complete{color:var(--text-2)}
+.fr-step.complete .fr-k{color:var(--pass)}
+.fr-step.active{color:var(--text)}
+.fr-step.active:after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;border-radius:2px;background:var(--accent)}
+.fr-skip{margin-left:auto;color:var(--text-3);font-size:var(--fs-label);background:none;border:0;padding:6px 8px;border-radius:var(--r-sm)}
+.fr-skip:hover{color:var(--text-2);background:var(--hover)}
+.fr-stage{position:relative;flex:1;min-height:0;overflow:auto;display:flex;align-items:safe center;
+  padding:clamp(var(--sp-7),6vh,var(--sp-10)) clamp(var(--sp-5),5vw,var(--sp-9))}
+.fr-stage:focus{outline:none}
+.fr-col{position:relative;z-index:2;width:100%;max-width:960px;margin:0 auto}
+.fr-ghost{position:absolute;z-index:1;top:50%;right:clamp(-40px,-2vw,0px);transform:translateY(-52%);
+  font-family:var(--font-mono);font-weight:700;font-size:clamp(180px,26vw,340px);line-height:.8;
+  color:var(--surface-3);pointer-events:none;user-select:none;letter-spacing:-.04em}
+.fr-display{margin:0;font-weight:600;letter-spacing:-.03em;line-height:1.02;
+  font-size:clamp(2.2rem,5.4vw,3.9rem);display:flex;flex-direction:column}
+.fr-display .l2{margin-left:clamp(24px,10vw,180px)}
+.fr-display .g{color:var(--role-g)}
+.fr-display .a{color:var(--role-a)}
+.fr-lede{margin:clamp(20px,4vh,34px) 0 clamp(26px,5vh,42px);max-width:54ch;color:var(--text-2);
+  font-size:var(--fs-prose);line-height:1.65}
+.fr-choices{display:flex;flex-direction:column;gap:var(--sp-5);max-width:520px}
+.fr-arw{transition:transform var(--dur-base) var(--spring)}
+.fr-primary{display:inline-flex;align-items:center;gap:9px;width:fit-content;
+  font-size:var(--fs-title);font-weight:600;border:1px solid transparent;border-radius:var(--r-md);
+  padding:12px 22px;background:var(--accent);color:var(--inverse-text);box-shadow:var(--shadow-2),var(--edge-highlight);
+  transition:transform var(--dur-fast) var(--ease-out),filter var(--dur-fast) var(--ease-out)}
+.fr-primary:hover{filter:brightness(1.06);transform:translateY(-1px)}
+.fr-primary:hover .fr-arw{transform:translateX(3px)}
+.fr-primary:active{transform:translateY(0)}
+.fr-primary:disabled{opacity:.6;cursor:default;filter:none;transform:none}
+.fr-choices-alt{display:flex;flex-direction:column}
+.fr-choice{display:flex;align-items:center;gap:12px;width:100%;padding:14px 12px 14px 4px;
+  color:var(--text-2);font-size:var(--fs-prose);background:none;border:0;border-top:1px solid var(--line);
+  transition:color var(--dur-fast) var(--ease-out),padding-left var(--dur-base) var(--spring),background-color var(--dur-fast) var(--ease-out)}
+.fr-choices-alt .fr-choice:last-child{border-bottom:1px solid var(--line)}
+.fr-choice em{font-style:normal;color:var(--text-3)}
+.fr-choice .fr-arw{margin-left:auto;color:var(--text-3);opacity:0;transform:translateX(-4px);
+  transition:opacity var(--dur-base) var(--ease-out),transform var(--dur-base) var(--spring)}
+.fr-choice:hover{color:var(--text);padding-left:14px;background:linear-gradient(90deg,var(--hover),transparent 60%)}
+.fr-choice:hover .fr-arw{opacity:1;transform:translateX(0)}
+.fr-head{display:flex;align-items:flex-end;justify-content:space-between;gap:var(--sp-6);flex-wrap:wrap}
+.fr-nameplate{display:block;font-family:var(--font-mono);font-size:var(--fs-caption);letter-spacing:.2em;
+  text-transform:uppercase;color:var(--text-3);margin-bottom:10px}
+.fr-rollup{margin:0;font-size:clamp(1.4rem,2.6vw,1.95rem);font-weight:600;letter-spacing:-.02em;line-height:1.18;color:var(--text)}
+.fr-rollup b{color:var(--escalated);font-weight:600}
+.fr-rollup .done{color:var(--pass)}
+.fr-recheck{display:inline-flex;align-items:center;gap:7px;color:var(--text-2);font-size:var(--fs-label);
+  height:32px;padding:0 12px;border-radius:var(--r-sm);border:1px solid var(--line);background:transparent}
+.fr-recheck:hover{background:var(--hover);color:var(--text);border-color:var(--line-strong)}
+.fr-recheck:disabled{opacity:.6;cursor:default}
+.fr-groups{margin-top:clamp(18px,4vh,34px);display:flex;flex-direction:column;gap:var(--sp-7)}
+.fr-group>.fr-nameplate{margin-bottom:4px}
+.fr-scanning,.fr-offline{padding:18px 0;color:var(--text-3);font-size:var(--fs-body);
+  border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.fr-rows{display:flex;flex-direction:column}
+.fr-row{display:grid;grid-template-columns:auto 1fr auto;align-items:start;gap:var(--sp-4);
+  padding:15px 0;border-top:1px solid var(--line)}
+.fr-rows .fr-row:last-child{border-bottom:1px solid var(--line)}
+.fr-row.soft{opacity:.92}
+.fr-dot{width:8px;height:8px;margin-top:7px;border-radius:50%;background:currentColor;flex:none;
+  box-shadow:0 0 0 4px color-mix(in srgb,currentColor 14%,transparent)}
+.fr-d-ready{color:var(--pass)}.fr-d-warn{color:var(--escalated)}.fr-d-opt{color:var(--text-3)}
+.fr-row-main{min-width:0}
+.fr-row-name{display:flex;align-items:baseline;gap:11px;flex-wrap:wrap}
+.fr-name{font-size:var(--fs-title);color:var(--text);font-weight:500}
+.fr-stat{font-size:var(--fs-caption);font-weight:600;letter-spacing:.06em;padding:3px 9px;border-radius:var(--r-pill)}
+.fr-s-ready{color:var(--pass);background:var(--pass-bg)}
+.fr-s-warn{color:var(--escalated);background:var(--escalated-bg)}
+.fr-s-opt{color:var(--text-3);background:var(--surface-2)}
+.fr-s-pending{color:var(--text-2);background:var(--surface-2);border:1px solid var(--line)}
+.fr-why{margin:5px 0 0;color:var(--text-2);font-size:var(--fs-body);max-width:64ch}
+.fr-row-act{display:flex;align-items:center;gap:12px;justify-self:end}
+.fr-fix{display:inline-flex;align-items:center;gap:7px;font-size:var(--fs-body);font-weight:600;
+  color:var(--inverse-text);background:var(--accent);border:1px solid transparent;
+  padding:8px 15px;border-radius:var(--r-sm);box-shadow:var(--edge-highlight);
+  transition:filter var(--dur-fast) var(--ease-out)}
+.fr-fix:hover{filter:brightness(1.06)}
+.fr-fix:disabled{opacity:.6;cursor:default;filter:none}
+.fr-learn{font-size:var(--fs-body);color:var(--accent);white-space:nowrap;background:none;border:0;padding:0}
+.fr-learn:hover{text-decoration:underline}
+.fr-tech{margin-top:9px}
+.fr-tech>summary{list-style:none;cursor:pointer;display:inline-flex;align-items:center;gap:6px;
+  font-family:var(--font-mono);font-size:var(--fs-caption);letter-spacing:.08em;text-transform:uppercase;color:var(--text-3)}
+.fr-tech>summary::-webkit-details-marker{display:none}
+.fr-tech>summary:before{content:"+";font-family:var(--font-mono);color:var(--text-3)}
+.fr-tech[open]>summary:before{content:"–"}
+.fr-tech:hover>summary{color:var(--text-2)}
+.fr-tech-body{margin-top:8px;padding:11px 13px;background:var(--surface);border:1px solid var(--line);
+  border-radius:var(--r-sm);font-family:var(--font-mono);font-size:var(--fs-caption);color:var(--text-2);line-height:1.7;white-space:pre-wrap}
+.fr-footbar{position:relative;z-index:2;border-top:1px solid var(--line);background:var(--surface)}
+.fr-foot-wrap{width:100%;max-width:960px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;
+  gap:var(--sp-4);padding:16px clamp(var(--sp-5),5vw,var(--sp-9))}
+.fr-hint{color:var(--text-3);font-size:var(--fs-caption)}
+.fr-foot-right{display:flex;align-items:center;gap:20px}
+.fr-back{color:var(--text-3);font-size:var(--fs-body);background:none;border:0;padding:6px 8px;border-radius:var(--r-sm)}
+.fr-back:hover{color:var(--text-2);background:var(--hover)}
+.fr-rail{position:relative;z-index:2;display:flex;align-items:center;justify-content:space-between;gap:var(--sp-4);
+  height:34px;padding:0 clamp(var(--sp-5),4vw,var(--sp-8));border-top:1px solid var(--line);
+  font-family:var(--font-mono);font-size:var(--fs-caption);letter-spacing:.08em;color:var(--text-3)}
+.fr-rail-grp{display:flex;align-items:center;gap:var(--sp-2);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fr-rail .fr-dot{width:6px;height:6px;margin-top:0;box-shadow:none}
+.fr-live{background:var(--accent);box-shadow:0 0 0 3px var(--accent-bg);animation:frpulse 2.4s var(--ease-out) infinite}
+.fr-rail-ok{background:var(--pass)}
+.fr-rail-warn{background:var(--escalated)}
+@keyframes frpulse{0%,100%{opacity:.4}50%{opacity:1}}
+@keyframes fr-stage-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+body.first-run [data-fr-step]:not([hidden]){animation:fr-stage-in var(--dur-slow) var(--ease-out)}
+@keyframes fr-choice-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+body.first-run [data-fr-step="1"]:not([hidden]) .fr-primary,
+body.first-run [data-fr-step="1"]:not([hidden]) .fr-choice{animation:fr-choice-in var(--dur-base) var(--ease-out) both}
+body.first-run [data-fr-step="1"]:not([hidden]) .fr-primary{animation-delay:80ms}
+body.first-run [data-fr-step="1"]:not([hidden]) .fr-choice:nth-of-type(1){animation-delay:130ms}
+body.first-run [data-fr-step="1"]:not([hidden]) .fr-choice:nth-of-type(2){animation-delay:175ms}
+body.first-run [data-fr-step="1"]:not([hidden]) .fr-choice:nth-of-type(3){animation-delay:220ms}
+@media(max-width:820px){.fr-steps .fr-l{display:none}.fr-steps{gap:var(--sp-3);margin-left:var(--sp-3)}}
+@media(max-width:720px){
+  .fr-display .l2{margin-left:clamp(14px,7vw,56px)}
+  .fr-row{grid-template-columns:auto 1fr;gap:12px}
+  .fr-row-act{grid-column:2;justify-self:start;margin-top:8px}
+}
+
 /* Degradation matrix: every row is a testable contract. */
 @media(prefers-contrast:more){
   :root,:root[data-theme="dark"]{--line:rgba(228,237,248,.28);--line-strong:rgba(228,237,248,.36);
@@ -1617,7 +1756,7 @@ details.credential-card[open]>.credential-head:after{transform:rotate(180deg)}
   *,*:before,*:after{scroll-behavior:auto!important;animation-duration:.001ms!important;
     animation-iteration-count:1!important;transition-duration:.001ms!important}
   .state-pill.pill-live .pill-glyph{animation:none;opacity:1}
-  .job-spinner,.project-progress i,.doctor-state.running{animation:none}
+  .job-spinner,.project-progress i,.doctor-state.running,.fr-live{animation:none}
 }
 @media(prefers-reduced-transparency:reduce){
   .topbar,.hub-bar,.sidebar,.inspector,.composer,.wizard,.palette,.project-table,.drop-target{
@@ -1651,9 +1790,71 @@ details.credential-card[open]>.credential-head:after{transform:rotate(180deg)}
       <b id="job-title">Creating project</b><span id="job-detail">Validating settings…</span>
       <ul class="job-steps" id="job-steps"></ul><div class="job-guidance" id="job-guidance"></div></div>
       <button class="secondary" id="open-created" hidden>Open project</button></div>
+    <div class="hub-note" id="hub-note" hidden></div>
     <div class="hub-tools"><input class="hub-search" id="project-search" placeholder="Search projects…"></div>
     <div class="project-table" id="project-list"><div class="hub-empty">Loading projects…</div></div>
   </main>
+</section>
+
+<section class="first-run" id="first-run" aria-label="First launch setup">
+  <header class="fr-chrome">
+    <div class="fr-brand"><span class="fr-mark" aria-hidden="true">◇</span>CrossAudit</div>
+    <nav class="fr-steps" id="fr-steps" aria-label="Setup steps">
+      <span class="fr-step active" data-fr-indicator="1" aria-current="step"><span class="fr-k">01</span><span class="fr-l">Welcome</span></span>
+      <span class="fr-step" data-fr-indicator="2"><span class="fr-k">02</span><span class="fr-l">Readiness</span></span>
+      <span class="fr-step" data-fr-indicator="3"><span class="fr-k">03</span><span class="fr-l">Providers</span></span>
+      <span class="fr-step" data-fr-indicator="4"><span class="fr-k">04</span><span class="fr-l">Roles</span></span>
+    </nav>
+    <button type="button" class="fr-skip" id="fr-skip">Skip for now</button>
+  </header>
+
+  <div class="fr-stage" data-fr-step="1" tabindex="-1">
+    <div class="fr-ghost" aria-hidden="true">01</div>
+    <div class="fr-col">
+      <h1 class="fr-display"><span class="l1">Build with <span class="g">one agent.</span></span><span class="l2">Verify with <span class="a">another.</span></span></h1>
+      <p class="fr-lede">One model does the work. A different model checks it, independently. Everything stays on your Mac — nothing is sent anywhere you didn't choose.</p>
+      <div class="fr-choices">
+        <button type="button" class="fr-primary" id="fr-create">Create your first project <span class="fr-arw" aria-hidden="true">→</span></button>
+        <div class="fr-choices-alt">
+          <button type="button" class="fr-choice" id="fr-open">Open an existing project <span class="fr-arw" aria-hidden="true">→</span></button>
+          <button type="button" class="fr-choice" id="fr-import">Import a folder <span class="fr-arw" aria-hidden="true">→</span></button>
+          <button type="button" class="fr-choice" id="fr-demo">Explore a local demo <em>— no credentials needed</em> <span class="fr-arw" aria-hidden="true">→</span></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="fr-stage" data-fr-step="2" tabindex="-1" hidden>
+    <div class="fr-ghost" aria-hidden="true">02</div>
+    <div class="fr-col">
+      <div class="fr-head">
+        <div>
+          <span class="fr-nameplate">System readiness</span>
+          <h2 class="fr-rollup" id="fr-rollup">Checking your Mac…</h2>
+        </div>
+        <button type="button" class="fr-recheck" id="fr-recheck" aria-label="Re-check the system">
+          <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M16.5 6.5A6.75 6.75 0 1 0 17 11"/><path d="M16.8 3.5v3.4h-3.4"/></svg>
+          <span class="fr-recheck-label">Re-check</span>
+        </button>
+      </div>
+      <div class="fr-groups" id="fr-groups"><div class="fr-scanning">Checking required software…</div></div>
+    </div>
+  </div>
+
+  <div class="fr-footbar" id="fr-footbar" hidden>
+    <div class="fr-foot-wrap">
+      <span class="fr-hint" id="fr-hint">You can re-run these checks any time from Settings.</span>
+      <div class="fr-foot-right">
+        <button type="button" class="fr-back" id="fr-back">Back</button>
+        <button type="button" class="fr-primary" id="fr-continue">Continue <span class="fr-arw" aria-hidden="true">→</span></button>
+      </div>
+    </div>
+  </div>
+
+  <footer class="fr-rail" id="fr-rail">
+    <span class="fr-rail-grp"><span class="fr-dot fr-live" id="fr-rail-dot" aria-hidden="true"></span><span id="fr-rail-status">Preflight — probing environment</span></span>
+    <span class="fr-rail-grp" id="fr-rail-queue">3 checks queued</span>
+  </footer>
 </section>
 
 <div class="project-modal" id="project-modal" role="dialog" aria-modal="true" aria-labelledby="wizard-title">
@@ -2347,12 +2548,29 @@ const ZH={
   "Independent review":"独立审查","Independent auditor approved the result":"独立审计者已批准该结果",
   "No blocking findings":"没有阻断性问题","Recorded in the audit ledger":"已记录到审计账本",
   "Findings":"发现的问题","Record":"记录","Commit":"提交","Cycle":"审计循环",
-  "Open Files panel":"打开文件面板","now":"刚刚","Human decision":"人工决定"
+  "Open Files panel":"打开文件面板","now":"刚刚","Human decision":"人工决定",
+  "First launch setup":"首次启动设置","Setup steps":"设置步骤","Welcome":"欢迎","Readiness":"就绪检查","Providers":"供应商","Roles":"角色",
+  "Skip for now":"暂时跳过","Build with":"用","one agent.":"一个智能体来构建。","Verify with":"用","another.":"另一个来验证。",
+  "One model does the work. A different model checks it, independently. Everything stays on your Mac — nothing is sent anywhere you didn't choose.":"一个模型完成工作，另一个模型独立检查它。一切都保留在你的 Mac 上——绝不会发送到任何你未选择的地方。",
+  "Create your first project":"创建你的第一个项目","Open an existing project":"打开已有项目","Import a folder":"导入文件夹",
+  "Explore a local demo":"体验本地演示","— no credentials needed":"— 无需凭据",
+  "System readiness":"系统就绪检查","Re-check the system":"重新检查系统","Re-check":"重新检查","Checking…":"正在检查…",
+  "Checking your Mac…":"正在检查你的 Mac…","Checking required software…":"正在检查所需软件…",
+  "Everything required is ready":"所有必需项都已就绪","Environment ready":"环境已就绪","Environment status unavailable":"无法获取环境状态",
+  "Environment status is unavailable — the check could not run. You can continue and re-check later.":"无法获取环境状态——检查未能运行。你可以继续，稍后再重新检查。",
+  "Doctor unavailable":"诊断不可用","No checks to show yet. Re-check to inspect this Mac.":"暂无可显示的检查项。重新检查以检测此 Mac。",
+  "Ready":"就绪","Needs attention":"需要处理","Optional enhancement":"可选增强","Optional":"可选",
+  "Fix automatically":"自动修复","Learn how →":"了解方法 →","Technical detail":"技术细节","Working…":"处理中…",
+  "Preflight — probing environment":"预检——正在探测环境","You can re-run these checks any time from Settings.":"你可以随时在设置中重新运行这些检查。",
+  "The guided local demo is not available yet. You are in CrossAudit with no credentials connected — create or import a project to begin.":"引导式本地演示尚未提供。你已进入 CrossAudit，但尚未连接任何凭据——创建或导入一个项目即可开始。"
 };
 const ZH_PATTERNS=[
   [/^(\d+) cycles?$/,m=>m[1]+' 个审计循环'],[/^(\d+) chats?$/,m=>m[1]+' 个对话'],
   [/^(\d+) required items? need fixing$/i,m=>m[1]+' 个必需项需要修复'],
   [/^(\d+) optional items? need attention$/i,m=>m[1]+' 个可选项需要处理'],
+  [/^(\d+) required items? needs? attention$/i,m=>m[1]+' 个必需项需要处理'],
+  [/^(\d+) checks? queued$/i,m=>m[1]+' 项检查排队中'],
+  [/^(\d+) checks?$/i,m=>m[1]+' 项检查'],
   [/^(\d+) trusted certificate authorities$/i,m=>m[1]+' 个受信任的证书颁发机构'],
   [/^round (\d+) of (\d+)$/i,m=>'第 '+m[1]+' / '+m[2]+' 轮'],[/^round (\d+)$/i,m=>'第 '+m[1]+' 轮'],
   [/^Updated (.+)$/i,m=>'更新于 '+m[1]],[/^Version (.+) is current\.$/i,m=>'版本 '+m[1]+' 已是最新版。'],
@@ -4664,7 +4882,121 @@ form.onsubmit=async ev=>{ev.preventDefault();const rawText=say.value.trim();if(!
   transferBusy=false;document.getElementById('attach').disabled=false;send.disabled=false;say.disabled=false;say.focus();};
 api('/api/state').then(render).catch(e=>{document.getElementById('thread-title').textContent='Disconnected: '+e.message;});
 startStream();
-if(location.hash==='#projects')showProjects();
+/* ---- First-launch flow (North Star §4): shell + Welcome + Readiness ---- */
+let firstRunStep=1,frSettingsSource=null,frScanning=false;
+function frBucket(row){return (row.status||'unknown')==='ready'?'ready':(row.blocking?'attention':'optional');}
+function frStatusLabel(row){const s=row.status||'unknown';
+  if(s==='ready')return 'Ready';if(row.blocking)return 'Needs attention';
+  if(s==='waiting'||s==='unknown')return 'Checking…';return 'Optional';}
+function frTechBody(row){const lines=[];if(row.detail)lines.push(row.detail);
+  if(row.version)lines.push('version  '+row.version);if(row.minimum)lines.push('expected  '+row.minimum);
+  const repair=row.repair||{};if(repair.url)lines.push('help  '+repair.url);return lines.join('\n');}
+function frRowMarkup(row,bucket){
+  const dot=bucket==='ready'?'fr-d-ready':bucket==='attention'?'fr-d-warn':'fr-d-opt';
+  const stat=bucket==='ready'?'fr-s-ready':bucket==='attention'?'fr-s-warn'
+    :((row.status==='waiting'||row.status==='unknown')?'fr-s-pending':'fr-s-opt');
+  const repair=row.repair||{};let act='';
+  if(bucket==='attention'){
+    if(repair.url)act='<a class="fr-fix" href="'+esc(repair.url)+'" target="_blank" rel="noopener">'+esc(repair.label||'Fix automatically')+' ↗</a>';
+    else if(repair.action)act='<button type="button" class="fr-fix" data-fr-fix="'+esc(repair.action)+'"'+(repair.inputs?' data-fr-inputs="1"':'')+'>'+esc(repair.label||'Fix automatically')+'</button>';
+  }else if(bucket==='optional'){
+    if(repair.url)act='<a class="fr-learn" href="'+esc(repair.url)+'" target="_blank" rel="noopener">Learn how →</a>';
+    else if(repair.action)act='<button type="button" class="fr-learn" data-fr-fix="'+esc(repair.action)+'"'+(repair.inputs?' data-fr-inputs="1"':'')+'>Learn how →</button>';
+  }
+  const why=row.why?'<p class="fr-why">'+esc(row.why)+'</p>':(bucket!=='ready'&&row.detail?'<p class="fr-why">'+esc(row.detail)+'</p>':'');
+  const body=frTechBody(row);
+  const tech=(bucket!=='ready'&&body)?'<details class="fr-tech"><summary>Technical detail</summary><div class="fr-tech-body">'+esc(body)+'</div></details>':'';
+  return '<div class="fr-row'+(bucket==='optional'?' soft':'')+'"><span class="fr-dot '+dot+'" aria-hidden="true"></span>'
+    +'<div class="fr-row-main"><div class="fr-row-name"><span class="fr-name">'+esc(row.label||row.id)+'</span>'
+    +'<span class="fr-stat '+stat+'">'+esc(frStatusLabel(row))+'</span></div>'+why+tech+'</div>'
+    +'<div class="fr-row-act">'+act+'</div></div>';}
+function frGroupMarkup(title,color,rows){if(!rows.length)return '';
+  return '<div class="fr-group"><span class="fr-nameplate"'+(color?' style="color:'+color+'"':'')+'>'+esc(title)+'</span>'
+    +'<div class="fr-rows">'+rows.join('')+'</div></div>';}
+function renderFirstRunReadiness(doctor,error){
+  const groups=document.getElementById('fr-groups'),rollup=document.getElementById('fr-rollup');
+  const railStatus=document.getElementById('fr-rail-status'),railQueue=document.getElementById('fr-rail-queue'),railDot=document.getElementById('fr-rail-dot');
+  const recheck=document.getElementById('fr-recheck'),recheckLabel=recheck.querySelector('.fr-recheck-label');
+  const value=doctor||{};const status=value.status||'idle';const checks=Array.isArray(value.checks)?value.checks:[];
+  const scanning=frScanning||status==='running'||(status==='idle'&&!checks.length&&!error);
+  recheck.disabled=scanning;recheckLabel.textContent=scanning?'Checking…':'Re-check';
+  if(error){groups.innerHTML='<div class="fr-offline">Environment status is unavailable — the check could not run. You can continue and re-check later.</div>';
+    rollup.textContent='Environment status unavailable';
+    railStatus.textContent='Doctor unavailable';railQueue.textContent='';railDot.className='fr-dot fr-rail-warn';return;}
+  if(scanning){groups.innerHTML='<div class="fr-scanning">Checking required software…</div>';
+    rollup.textContent='Checking your Mac…';railStatus.textContent='Preflight — probing environment';
+    railQueue.textContent=(checks.length||3)+' checks queued';railDot.className='fr-dot fr-live';return;}
+  const ready=[],attention=[],optional=[];
+  for(const row of checks){const b=frBucket(row);
+    if(b==='ready')ready.push(frRowMarkup(row,'ready'));
+    else if(b==='attention')attention.push(frRowMarkup(row,'attention'));
+    else optional.push(frRowMarkup(row,'optional'));}
+  const req=attention.length;
+  groups.innerHTML=[frGroupMarkup('Ready','var(--pass)',ready),
+    frGroupMarkup('Needs attention','var(--escalated)',attention),
+    frGroupMarkup('Optional enhancement','',optional)].join('')
+    ||'<div class="fr-offline">No checks to show yet. Re-check to inspect this Mac.</div>';
+  const noun=req===1?' required item needs attention':' required items need attention';
+  if(req>0)rollup.innerHTML='<b>'+req+esc(noun)+'</b>';
+  else rollup.innerHTML='<span class="done">Everything required is ready</span>';
+  railDot.className='fr-dot '+(req>0?'fr-rail-warn':'fr-rail-ok');
+  railStatus.textContent=req>0?(req+noun):'Environment ready';
+  railQueue.textContent=(ready.length+attention.length+optional.length)+' checks';}
+async function startFirstRunReadiness(){
+  renderFirstRunReadiness(settingsState&&settingsState.doctor);
+  try{const s=await api('/api/settings');settingsState=s;renderFirstRunReadiness(s.doctor);}
+  catch(e){renderFirstRunReadiness(null,e);}
+  if(!frSettingsSource){try{frSettingsSource=new EventSource('/api/settings/stream?t='+encodeURIComponent(T));
+    frSettingsSource.onmessage=ev=>{try{const s=JSON.parse(ev.data);settingsState=s;
+      if(document.body.classList.contains('first-run'))renderFirstRunReadiness(s.doctor);}catch(e){}};
+    frSettingsSource.onerror=()=>{};}catch(e){}}}
+function setFirstRunStep(step,focus=true){firstRunStep=Math.max(1,Math.min(2,Number(step)||1));
+  document.querySelectorAll('[data-fr-step]').forEach(sec=>sec.hidden=Number(sec.dataset.frStep)!==firstRunStep);
+  document.querySelectorAll('[data-fr-indicator]').forEach(item=>{const n=Number(item.dataset.frIndicator);
+    item.classList.toggle('active',n===firstRunStep);item.classList.toggle('complete',n<firstRunStep);
+    if(n===firstRunStep)item.setAttribute('aria-current','step');else item.removeAttribute('aria-current');});
+  document.getElementById('fr-footbar').hidden=firstRunStep!==2;
+  if(firstRunStep===2)startFirstRunReadiness();
+  if(focus)requestAnimationFrame(()=>{const pane=document.querySelector('[data-fr-step="'+firstRunStep+'"]');if(pane)pane.focus();});}
+function showFirstRun(){document.body.classList.add('first-run');if(typeof closePanels==='function')closePanels();
+  setFirstRunStep(1,false);startFirstRunReadiness();
+  history.replaceState(null,'',location.pathname+'?t='+encodeURIComponent(T)+'#first-run');}
+function hideFirstRun(){document.body.classList.remove('first-run');
+  if((location.hash||'')==='#first-run')history.replaceState(null,'',location.pathname+'?t='+encodeURIComponent(T));}
+async function completeOnboarding(action){const s=await api('/api/onboarding',{action:action||'complete'});
+  if(s&&typeof s==='object')settingsState=s;return s;}
+document.getElementById('fr-create').onclick=()=>setFirstRunStep(2);
+document.getElementById('fr-back').onclick=()=>setFirstRunStep(1);
+document.getElementById('fr-skip').onclick=async()=>{const b=document.getElementById('fr-skip');b.disabled=true;
+  try{await completeOnboarding('skip');}catch(e){}hideFirstRun();showProjects();};
+document.getElementById('fr-recheck').onclick=async()=>{frScanning=true;renderFirstRunReadiness(settingsState&&settingsState.doctor);
+  try{const d=await api('/api/doctor',{action:'scan'});frScanning=false;renderFirstRunReadiness(d);if(settingsState)settingsState.doctor=d;}
+  catch(e){frScanning=false;renderFirstRunReadiness(settingsState&&settingsState.doctor,e);}};
+document.getElementById('fr-continue').onclick=async()=>{const b=document.getElementById('fr-continue');b.disabled=true;
+  try{await completeOnboarding('complete');hideFirstRun();showProjects();await refreshProjects();openProjectModal();}
+  catch(e){b.disabled=false;document.getElementById('fr-rail-status').textContent=e.message;}};
+document.getElementById('fr-open').onclick=async()=>{try{await completeOnboarding('complete');}catch(e){}hideFirstRun();showProjects();};
+document.getElementById('fr-import').onclick=async()=>{
+  try{await completeOnboarding('complete');hideFirstRun();showProjects();await refreshProjects();openProjectModal();}catch(e){}};
+document.getElementById('fr-demo').onclick=async()=>{
+  // TODO(first-launch slice 2): build a credential-free local demo on the 'replay'
+  // provider (registry.NEEDS_KEY excludes it). Until then, do NOT fabricate a demo
+  // that implies real audits ran — honestly complete onboarding and enter the hub.
+  try{await completeOnboarding('complete');}catch(e){}hideFirstRun();showProjects();
+  const note=document.getElementById('hub-note');if(note){note.hidden=false;
+    note.textContent='The guided local demo is not available yet. You are in CrossAudit with no credentials connected — create or import a project to begin.';}};
+document.getElementById('fr-groups').onclick=async ev=>{
+  const btn=ev.target.closest('[data-fr-fix]');if(!btn)return;
+  const action=btn.getAttribute('data-fr-fix');
+  if(btn.getAttribute('data-fr-inputs')==='1'||action==='choose_workspace'){hideFirstRun();openSettings('general');return;}
+  const before=btn.textContent;btn.disabled=true;btn.textContent='Working…';
+  try{const d=await api('/api/doctor',{action});frScanning=false;renderFirstRunReadiness(d);if(settingsState)settingsState.doctor=d;}
+  catch(e){btn.disabled=false;btn.textContent=before;document.getElementById('fr-rail-status').textContent=e.message;}};
+async function bootRoute(){let s=null;
+  try{s=await api('/api/settings');settingsState=s;}catch(e){}
+  if(s&&s.app_mode&&!(s.onboarding&&s.onboarding.completed)){showFirstRun();return;}
+  if(location.hash==='#projects')showProjects();
+  initialReadiness();}
 async function initialReadiness(){
   for(let attempt=0;attempt<12;attempt++){
     try{const s=await api('/api/settings');settingsState=s;
@@ -4677,5 +5009,5 @@ async function initialReadiness(){
     await new Promise(resolve=>setTimeout(resolve,500));
   }
 }
-initialReadiness();
+bootRoute();
 </script></body></html>"""

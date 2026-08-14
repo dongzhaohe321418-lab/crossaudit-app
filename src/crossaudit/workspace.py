@@ -62,6 +62,57 @@ def configured_workspace(support: Path) -> Path:
     return saved_workspace(support) or default_workspace()
 
 
+def read_onboarding(support: Path) -> dict:
+    """The first-launch flow's completion flag, normalized to a boolean.
+
+    The setting lives beside the workspace choice in ``app-settings.json`` so a
+    single 0600 file records both. A brand-new user (missing file or key) reads
+    as not completed, which is what makes the first-launch flow appear once.
+    """
+    value = _read_settings(support).get("onboarding", {})
+    if not isinstance(value, dict):
+        return {"completed": False}
+    return {"completed": bool(value.get("completed"))}
+
+
+def _atomic_write_settings(support: Path, settings: dict) -> None:
+    """Replace app-settings.json in place with the same 0600 discipline as
+    ``select_workspace``: write a private temp file and rename over the target."""
+    support.mkdir(parents=True, exist_ok=True, mode=0o700)
+    path = _settings_path(support)
+    tmp = path.with_suffix(f".{uuid.uuid4().hex}.tmp")
+    body = json.dumps(settings, indent=2) + "\n"
+    try:
+        tmp.write_text(body, encoding="utf-8", newline="\n")
+        os.chmod(tmp, 0o600)
+        tmp.replace(path)
+        os.chmod(path, 0o600)
+    except OSError as exc:
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+        raise ConfigDenial(
+            "CrossAudit could not save the setup state. Check access to the "
+            "application support folder and try again",
+            issue="workspace_settings", action="choose_workspace") from exc
+
+
+def set_onboarding(support: Path, *, completed: bool = True) -> dict:
+    """Persist the first-launch completion flag, MERGING into existing settings.
+
+    The workspace and workspaces keys are read back and rewritten untouched, so
+    recording onboarding never drops a previously chosen workspace. A boolean
+    flag is deliberate: no wall-clock timestamp is stored, keeping the written
+    file deterministic for tests.
+    """
+    settings = dict(_read_settings(support))
+    settings.setdefault("version", 2)
+    settings["onboarding"] = {"completed": bool(completed)}
+    _atomic_write_settings(support, settings)
+    return {"completed": bool(completed)}
+
+
 def select_workspace(support: Path, selected: str) -> Path:
     """Validate a native-picked directory, persist it, and activate it now."""
     raw = selected.strip()
@@ -107,9 +158,13 @@ def select_workspace(support: Path, selected: str) -> Path:
     known = list(known_workspaces(support))
     if root not in known:
         known.append(root)
-    body = json.dumps({"version": 2, "workspace": str(root),
-                       "workspaces": [str(item) for item in known]},
-                      indent=2) + "\n"
+    # Merge over existing settings so a workspace change never drops the
+    # onboarding flag (which would re-open the first-launch flow) or any other
+    # future key.
+    settings = dict(_read_settings(support))
+    settings.update({"version": 2, "workspace": str(root),
+                     "workspaces": [str(item) for item in known]})
+    body = json.dumps(settings, indent=2) + "\n"
     try:
         tmp.write_text(body, encoding="utf-8", newline="\n")
         os.chmod(tmp, 0o600)

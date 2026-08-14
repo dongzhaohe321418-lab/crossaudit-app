@@ -46,10 +46,11 @@ import subprocess
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from socketserver import TCPServer
 from urllib.parse import parse_qs, quote, urlparse
 
-from .. import app_doctor, app_keys, connections, hpc, mcp, usage
+from .. import app_doctor, app_keys, connections, hpc, mcp, usage, workspace
 from ..autonomy import prepare_task
 from ..config import Config, load
 from ..controller import StateStore
@@ -93,6 +94,25 @@ MAX_UTTERANCE = 4000
 ALLOWED_HOSTS = {"localhost", "127.0.0.1", "[::1]"}
 
 
+def _support_dir() -> Path | None:
+    """The Application Support folder that holds app-settings.json, if the app
+    exported it. Onboarding state only matters in app mode, where the native
+    launcher always sets this."""
+    raw = os.environ.get("CROSSAUDIT_APP_SUPPORT", "").strip()
+    return Path(raw) if raw else None
+
+
+def onboarding_state() -> dict:
+    """Read-only view of the first-launch completion flag for the console."""
+    support = _support_dir()
+    if support is None:
+        return {"completed": False}
+    try:
+        return workspace.read_onboarding(support)
+    except OSError:
+        return {"completed": False}
+
+
 def app_settings(cfg: Config | None = None) -> dict:
     """Non-secret desktop readiness state for the Settings panel."""
     from .. import _selfid
@@ -124,6 +144,7 @@ def app_settings(cfg: Config | None = None) -> dict:
             "code_digest": identity["code_digest_sha256"][:12],
         },
         "doctor": doctor,
+        "onboarding": onboarding_state(),
     }
 
 
@@ -839,6 +860,7 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                                    "/api/skills",
                                    "/api/settings", "/api/providers/connect",
                                    "/api/doctor", "/api/hpc", "/api/mcp", "/api/admit",
+                                   "/api/onboarding",
                                    "/api/run", "/api/escalation", "/api/interrupted"}:
                 self._deny(404, "no such action")
                 return
@@ -1011,6 +1033,23 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                     app_keys.apply(payload)
                     connections.invalidate()
                     provider_resilience.reset(self._config())
+                    STREAM_CHANGES.notify()
+                    self._send(json.dumps(app_settings(self._config())).encode(),
+                               "application/json")
+                    return
+                if parsed.path == "/api/onboarding":
+                    if os.environ.get("CROSSAUDIT_APP_MODE") != "1":
+                        raise ConfigDenial("Onboarding is managed by the macOS app")
+                    action = str(payload.get("action", ""))
+                    if action not in {"complete", "skip"}:
+                        raise ConfigDenial("onboarding action must be complete or skip")
+                    support = _support_dir()
+                    if support is None:
+                        raise ConfigDenial("The application support folder is unavailable")
+                    # Both choices end the first-launch flow: "complete" is the
+                    # normal finish, "skip" is the deliberate escape hatch. Either
+                    # way the flow must not reappear on the next launch.
+                    workspace.set_onboarding(support, completed=True)
                     STREAM_CHANGES.notify()
                     self._send(json.dumps(app_settings(self._config())).encode(),
                                "application/json")
