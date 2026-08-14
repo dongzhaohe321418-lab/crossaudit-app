@@ -171,6 +171,13 @@ class _TricklingServer:
                         time.sleep(self.per_byte)
                 else:
                     conn.sendall(self.body)
+                # Clean close: signal EOF, then drain the rest of the client's
+                # request. An unread POST body left in the receive buffer makes
+                # close() send RST, which races the client's response read and
+                # surfaces as a flaky ConnectionResetError.
+                conn.shutdown(socket.SHUT_WR)
+                while conn.recv(4096):
+                    pass
             except OSError:
                 pass          # the client aborted at its deadline; expected
 
