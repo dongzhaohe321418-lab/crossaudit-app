@@ -718,30 +718,39 @@ export function CrossAuditLanding() {
           <div className="thesis-tracks" data-reveal>
             <article className="track track-plain">
               <h3>{t.trackATitle}</h3>
-              <div className="track-chips">
-                {t.trackA.map((chip) => (
-                  <span key={chip}>{chip}</span>
+              <ol className="track-steps">
+                {t.trackA.map((step) => (
+                  <li className="step" key={step}>
+                    <span className="step-dot" aria-hidden="true" />
+                    <span className="step-label">{step}</span>
+                  </li>
                 ))}
-              </div>
-              <p>{t.trackANote}</p>
+              </ol>
+              <p className="track-outcome fail">{t.trackANote}</p>
             </article>
             <article className="track track-crossaudit">
               <h3>{t.trackBTitle}</h3>
-              <div className="track-chips">
-                {t.trackB.map((chip, index) => (
-                  <span key={chip} className={index === 1 ? "chip-g" : index === 3 ? "chip-a" : ""}>
-                    {chip}
-                  </span>
+              <ol className="track-steps has-loop">
+                {t.trackB.map((step, index) => (
+                  <li
+                    className={`step ${index === 1 ? "is-g" : ""} ${index === 3 ? "is-a" : ""}`}
+                    key={step}
+                  >
+                    <span className="step-dot" aria-hidden="true" />
+                    <span className="step-label">{step}</span>
+                  </li>
                 ))}
-              </div>
-              <div className="track-loop">
-                <i aria-hidden="true" />
-                <span>{t.trackBLoop}</span>
-              </div>
-              <div className="track-end">
-                <span className="chip-pass">{t.trackBEnd}</span>
-              </div>
-              <p>{t.trackBNote}</p>
+                <span className="loop-edge" aria-hidden="true" />
+                <li className="loop-note">
+                  <span aria-hidden="true">↑ </span>
+                  {t.trackBLoop}
+                </li>
+                <li className="step step-pass">
+                  <span className="step-dot" aria-hidden="true" />
+                  <span className="step-label">{t.trackBEnd}</span>
+                </li>
+              </ol>
+              <p className="track-outcome pass">{t.trackBNote}</p>
             </article>
           </div>
         </section>
