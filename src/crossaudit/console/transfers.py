@@ -31,6 +31,13 @@ MAX_REQUEST_BYTES = 800_000
 UPLOAD_CHUNK_BYTES = 512_000
 MAX_INLINE_TEXT_BYTES = 400_000
 MAX_PREVIEW_TEXT_BYTES = 1_000_000
+#: On-disk ceiling for a DOCX preview. The text branch caps its read at
+#: MAX_PREVIEW_TEXT_BYTES; a .docx must be read whole to parse, so a multi-GB
+#: file on disk is refused before ``read_bytes()`` rather than pulled into
+#: memory. Small-but-explosive archives are caught separately by the
+#: decompression-bomb guard inside ``extract_document``. Kept at the auditor's
+#: own document ceiling so the Console and the auditor agree on what is too big.
+MAX_PREVIEW_DOCX_BYTES = 64 * 1024 * 1024
 UPLOAD_ID = re.compile(r"[a-f0-9]{32}")
 UPLOAD_BATCH = re.compile(r"[a-f0-9]{32}")
 
@@ -477,6 +484,10 @@ def preview_artifact(cfg: Config, relative: str) -> dict:
         return {**base, "kind": "image"}
     if suffix == ".docx":
         from ..document_export import extract_document
+        if size > MAX_PREVIEW_DOCX_BYTES:
+            raise TransferError(
+                f"Word preview is unavailable: document exceeds "
+                f"{MAX_PREVIEW_DOCX_BYTES} bytes", 413)
         view = extract_document(relative, resolved.read_bytes())
         if not view.valid:
             raise TransferError(f"Word preview is unavailable: {view.reason}", 422)

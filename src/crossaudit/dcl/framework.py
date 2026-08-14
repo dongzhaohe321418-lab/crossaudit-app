@@ -110,10 +110,13 @@ def run_checks(files: Mapping[str, bytes], names: list[str],
     from . import documents
     result.contracts[documents.CHECK_NAME] = documents.INTEGRITY_CONTRACT
     result.findings.extend(documents.validate(files))
-    # I8: an input we could not fully read can never end in PASS.
-    if any(n.startswith("truncated:") for n in result.notes):
+    # I8: an input we could not fully read — truncated at a blob bound, or left
+    # unread because it was too large for the working-tree walk — can never end
+    # in PASS.
+    if any(n.startswith(("truncated:", "unread ")) for n in result.notes):
         result.findings.append(Finding(
             BLOCKER, "CA-META-004", "increment",
-            "input truncated before the checks ran; a partial read cannot yield PASS",
+            "an input was truncated or too large to read before the checks ran; "
+            "a partial read cannot yield PASS",
             check="input-bound"))
     return result

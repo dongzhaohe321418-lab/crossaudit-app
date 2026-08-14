@@ -21,7 +21,7 @@ from ..dcl import run_checks
 from ..errors import (EXIT_BLOCKED, EXIT_CONFIG, EXIT_ESCALATED, EXIT_INTEGRITY,
                       EXIT_OK, ConfigDenial, Denial)
 from ..gitio import (changed_paths, entries, git, is_ancestor, is_repo, materialise,
-                     parent, resolve)
+                     parent, read_cap, resolve)
 from ..receipt import build as build_receipt
 from ..receipt import digest as receipt_digest
 from ..receipt import load as load_receipt
@@ -320,18 +320,52 @@ def cmd_check(args: argparse.Namespace) -> int:
             roots = [(cfg.root, cfg.root)]
         excluded = {".git", cfg.state_dir.split("/", 1)[0],
                     cfg.ledger_dir.split("/", 1)[0]}
+        kept: dict[str, bytes] = {}
+        oversized: list[str] = []
         for root, relative_to in roots:
-            for p in sorted(root.rglob("*")):
-                if p.is_symlink():
-                    raise ConfigDenial(f"refusing to read through a symlink: {p}")
-                if not p.is_file():
-                    continue
-                rel = p.relative_to(relative_to).as_posix()
-                if _is_scaffold_template(rel):
-                    continue
-                if not explicit and Path(rel).parts[0] in excluded:
-                    continue
-                files[rel] = p.read_bytes()
+            # os.walk is lazy and lets us PRUNE .git / the state dir / the ledger
+            # dir before descending, so a multi-GB ledger or object store is
+            # never walked — unlike the old sorted(rglob("*")) which materialised
+            # the whole recursive listing and filtered it afterwards.
+            for dirpath, dirnames, filenames in os.walk(root):
+                base = Path(dirpath)
+                keep_dirs = []
+                for name in dirnames:
+                    child = base / name
+                    parts = child.relative_to(relative_to).parts
+                    if not explicit and parts and parts[0] in excluded:
+                        continue
+                    if child.is_symlink():
+                        raise ConfigDenial(
+                            f"refusing to read through a symlink: {child}")
+                    keep_dirs.append(name)
+                dirnames[:] = keep_dirs
+                for name in filenames:
+                    p = base / name
+                    if p.is_symlink():
+                        raise ConfigDenial(f"refusing to read through a symlink: {p}")
+                    if not p.is_file():
+                        continue
+                    rel = p.relative_to(relative_to).as_posix()
+                    if _is_scaffold_template(rel):
+                        continue
+                    if not explicit and Path(rel).parts[0] in excluded:
+                        continue
+                    try:
+                        st = p.stat()
+                    except OSError:
+                        continue
+                    # Same per-path bound the blob reader uses; an oversized file
+                    # is noted unread rather than pulled whole into memory.
+                    if st.st_size > read_cap(rel):
+                        oversized.append(rel)
+                        continue
+                    kept[rel] = p.read_bytes()
+        # Preserve the previous global path ordering by sorting the kept keys
+        # only, rather than sorting a listing of the entire tree up front.
+        for rel in sorted(kept):
+            files[rel] = kept[rel]
+        notes.extend(f"unread (too large): {rel}" for rel in sorted(oversized))
         where = f"{', '.join(str(root) for root, _ in roots)} (working tree)"
     result = run_checks(files, cfg.checks, notes, cfg.plugins).as_dict()
     human = [f"deterministic layer over {where}",

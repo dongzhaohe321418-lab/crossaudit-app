@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
 from .errors import ProviderDenial
+from .gitio import OVERSIZE_DOCUMENT_MARKER
 
 EXPORT_MARKER = "CROSSAUDIT-DOCUMENT-EXPORT"
 SOURCE_SUFFIX = ".crossaudit.md"
@@ -29,6 +30,22 @@ INTEGRITY_CONTRACT = (
     "Every PDF/DOCX increment must be a valid, non-encrypted document with at "
     "least one page/paragraph and extractable text. Macro-enabled OOXML is refused."
 )
+
+#: Decompression-bomb bounds for the DOCX ZIP container. A few-MB archive whose
+#: ``word/document.xml`` declares gigabytes of uncompressed XML would OOM the
+#: auditor and the Console preview the instant ``testzip()``/``Document()``
+#: decompress it, so the declared sizes in the central directory are checked
+#: first — never the compressed payload. Every bound sits far above any real
+#: .docx (whose members are a handful of small XML parts plus already-compressed
+#: images), so a legitimate document is never rejected.
+MAX_DOCX_MEMBERS = 8192
+MAX_DOCX_MEMBER_BYTES = 256 * 1024 * 1024          # one member, uncompressed
+MAX_DOCX_TOTAL_BYTES = 512 * 1024 * 1024           # all members summed, uncompressed
+MAX_DOCX_RATIO = 500                               # summed uncompressed : compressed
+#: Below this summed-uncompressed size a high ratio cannot OOM anything, so the
+#: ratio test is skipped there to keep small, highly repetitive-but-legitimate
+#: documents from tripping it.
+_DOCX_RATIO_FLOOR = 8 * 1024 * 1024
 
 
 @dataclass(frozen=True)
@@ -607,10 +624,46 @@ def render_pdf(source: str, output: Path) -> None:
     document.build(story, onFirstPage=page, onLaterPages=page, canvasmaker=canvasmaker)
 
 
+def _oversized_archive_reason(archive: zipfile.ZipFile) -> str | None:
+    """Reason a DOCX ZIP looks like a decompression bomb, or None if it is sane.
+
+    Reads only the central directory's declared sizes — ``infolist()`` does not
+    decompress anything — so the check runs BEFORE ``testzip()``/``Document()``
+    detonate the archive. Guards member count, per-member uncompressed size,
+    summed uncompressed size, and the overall uncompressed/compressed ratio.
+    """
+    infos = archive.infolist()
+    if len(infos) > MAX_DOCX_MEMBERS:
+        return f"{len(infos)} members exceeds the {MAX_DOCX_MEMBERS} limit"
+    total_uncompressed = 0
+    total_compressed = 0
+    for info in infos:
+        if info.file_size > MAX_DOCX_MEMBER_BYTES:
+            return (f"member {info.filename!r} declares {info.file_size} "
+                    f"uncompressed bytes, over the {MAX_DOCX_MEMBER_BYTES} limit")
+        total_uncompressed += info.file_size
+        total_compressed += info.compress_size
+        if total_uncompressed > MAX_DOCX_TOTAL_BYTES:
+            return (f"members declare over {MAX_DOCX_TOTAL_BYTES} uncompressed "
+                    f"bytes in total")
+    ratio = total_uncompressed / max(total_compressed, 1)
+    if total_uncompressed > _DOCX_RATIO_FLOOR and ratio > MAX_DOCX_RATIO:
+        return (f"uncompressed/compressed ratio {ratio:.0f}:1 exceeds the "
+                f"{MAX_DOCX_RATIO}:1 limit")
+    return None
+
+
 def extract_document(path: str, data: bytes) -> DocumentView:
     """Recover semantic text from the exact final bytes used by the Auditor."""
     suffix = Path(path).suffix.lower()
     digest = hashlib.sha256(data).hexdigest()
+    if data == OVERSIZE_DOCUMENT_MARKER:
+        # gitio refused to buffer a document blob past its guard and handed back
+        # this deterministic marker instead. Audit and verify both reach here
+        # with the identical bytes, so the document is recorded as too-large on
+        # both sides rather than OOMing either of them.
+        return DocumentView(suffix.removeprefix(".").upper(), "", 0, digest, False,
+                            "document too large to audit")
     try:
         if suffix == ".pdf":
             from pypdf import PdfReader
@@ -629,6 +682,10 @@ def extract_document(path: str, data: bytes) -> DocumentView:
         if suffix == ".docx":
             from docx import Document
             with zipfile.ZipFile(io.BytesIO(data)) as archive:
+                bomb = _oversized_archive_reason(archive)
+                if bomb:
+                    raise ValueError(
+                        f"document too large / suspicious compression: {bomb}")
                 names = set(archive.namelist())
                 if "word/document.xml" not in names:
                     raise ValueError("DOCX has no Word document part")
