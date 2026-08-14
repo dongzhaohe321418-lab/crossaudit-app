@@ -1,0 +1,19 @@
+# Deploy hygiene: keep the production artifact to just what the site needs.
+# Vercel rebuilds remotely via vercel.json buildCommand (`next build`), so
+# local build output and all dev/verification artifacts are excluded here.
+# NOTE: when a .vercelignore exists it takes precedence over .gitignore, so
+# the standard build excludes are repeated below on purpose.
+
+# Dev / verification artifacts — not part of the build or the served output
+.shots
+scripts
+tests
+.wrangler
+
+# Local build output and deps (rebuilt remotely)
+node_modules
+.next
+.git
+
+# Logs
+*.log
