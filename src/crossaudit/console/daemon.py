@@ -42,6 +42,8 @@ from ..errors import Denial, park_escalation_kind
 from ..gitio import git, is_repo
 from ..runtime import (
     ACTIVE_STATES,
+    RETAIN_RECENT_RUNS,
+    RETENTION_DAYS,
     RunJournal,
     RunState,
     journal_path,
@@ -71,6 +73,15 @@ _CYCLE_LESS_OUTCOMES = frozenset({"", "refused", "provider_unavailable"})
 #: orphan the older interrupted row forever, so the sweep looks at recent
 #: history, bounded so it stays a few cheap reads.
 RECONCILE_SCAN_LIMIT = 20
+#: How often the watchdog runs the D1 retention prune (not every 30 s sweep):
+#: pruning + an occasional VACUUM is far heavier than the liveness reads, and a
+#: journal only grows slowly. Throttled per-process, per-journal so a long-lived
+#: console prunes about hourly while a short session may never need to.
+RETENTION_SWEEP_INTERVAL_S = 3600.0
+#: Last wall-clock time this process pruned a given journal, keyed by resolved
+#: path. Purely a throttle; losing it (process restart) at worst prunes once
+#: more, which is idempotent.
+_LAST_RETENTION: dict[str, float] = {}
 # Read-only migration fallback for a build interrupted by CrossAudit <= 4.14.
 LEGACY_BUILD_FLAG = "build-in-flight.json"
 #: Active run states that read as a crash-interruption when the owner is
@@ -589,27 +600,57 @@ def settle_closed_escalation(cfg: Config, cycle: dict) -> bool:
     return True
 
 
+def _maybe_prune(journal: RunJournal, *, now: float | None = None) -> dict | None:
+    """Run the D1 retention prune at most once per RETENTION_SWEEP_INTERVAL_S.
+
+    ``keep_recent`` is pinned to at least ``RECONCILE_SCAN_LIMIT`` so the prune
+    can never remove a row inside the window ``reconcile_human_wait`` scans:
+    the reconciler only references runs within its recent scan, and this keeps
+    that entire window resident. Returns the prune result when a sweep ran, or
+    ``None`` when the throttle skipped it.
+    """
+    key = str(journal.path.resolve())
+    stamp = time.time() if now is None else now
+    last = _LAST_RETENTION.get(key)
+    if last is not None and stamp - last < RETENTION_SWEEP_INTERVAL_S:
+        return None
+    _LAST_RETENTION[key] = stamp
+    return journal.prune_terminal_runs(
+        keep_days=RETENTION_DAYS,
+        keep_recent=max(RETAIN_RECENT_RUNS, RECONCILE_SCAN_LIMIT))
+
+
 def watchdog_sweep(cfg: Config) -> dict:
     """One idempotent liveness pass over this project's runs table.
 
-    Three duties, each bounded: dead owners are recovered exactly once (a
+    Four duties, each bounded: dead owners are recovered exactly once (a
     durable cancellation still ends CANCELLED, other work INTERRUPTED — the
     existing recover_abandoned semantics); an expired lease under a living
-    owner becomes a display-only stall note, never a state change; and a torn
-    needs-a-human write is completed on whichever side is missing. Running
-    the sweep twice changes nothing the first pass did not.
+    owner becomes a display-only stall note, never a state change; a torn
+    needs-a-human write is completed on whichever side is missing; and, at most
+    hourly, the operational journal is pruned of finished runs beyond the
+    retention horizon and the recent/reconciler window (D1). Running the sweep
+    twice changes nothing the first pass did not, and the prune touches only
+    operational rows, never git, receipts or the audit ledger.
     """
     reconciled: dict = {"run_completed": None, "cycle_recorded": None}
     runtime = journal_path(cfg)
     if not runtime.is_file():
         return {"changed": False, "recovered": [], "stalled": [],
-                "reconciled": reconciled}
+                "reconciled": reconciled, "pruned": None}
     journal = RunJournal(runtime)
     recovered = journal.recover_abandoned(alive=_pid_alive)
     stalled = journal.mark_stalled_runs(alive=_pid_alive)
     reconciled = reconcile_human_wait(cfg, journal)
+    # Retention runs LAST: liveness/reconciliation must see every recent row
+    # before anything old is reclaimed. It is also throttled and best-effort,
+    # so a prune failure never masks a liveness change.
+    try:
+        pruned = _maybe_prune(journal)
+    except Exception:      # noqa: BLE001 — retention must never break liveness
+        pruned = None
     return {"changed": bool(recovered or stalled
                             or reconciled["run_completed"]
                             or reconciled["cycle_recorded"]),
             "recovered": recovered, "stalled": stalled,
-            "reconciled": reconciled}
+            "reconciled": reconciled, "pruned": pruned}

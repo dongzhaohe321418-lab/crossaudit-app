@@ -10,9 +10,12 @@ from .processes import pid_alive, windows_pid_alive, zombie
 from .provisioning import ProvisioningJournal
 from .runs import (
     ACTIVE_STATES,
+    LATEST_STEP_LIMIT,
     LEASE_SECONDS,
     PARKED_STATES,
     PROVIDER_WAIT_CATEGORIES,
+    RETAIN_RECENT_RUNS,
+    RETENTION_DAYS,
     TERMINAL_STATES,
     RunJournal,
     RunState,
@@ -22,8 +25,9 @@ from .runs import (
 from .workspaces import acquire_workspace_slot, release_workspace_slot, workspace_capacity
 
 __all__ = [
-    "ACTIVE_STATES", "LEASE_SECONDS", "PARKED_STATES",
-    "PROVIDER_WAIT_CATEGORIES", "TERMINAL_STATES",
+    "ACTIVE_STATES", "LATEST_STEP_LIMIT", "LEASE_SECONDS", "PARKED_STATES",
+    "PROVIDER_WAIT_CATEGORIES", "RETAIN_RECENT_RUNS", "RETENTION_DAYS",
+    "TERMINAL_STATES",
     "PreparedRun", "ProvisioningJournal",
     "RunCommandService", "RunEvent", "RunJournal", "RunLaunch", "RunState",
     "acquire_workspace_slot", "journal_path",

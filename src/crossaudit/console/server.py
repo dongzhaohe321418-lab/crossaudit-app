@@ -94,6 +94,13 @@ STREAM_POLL_S = 0.1          # fallback for changes made by another local proces
 STREAM_HEARTBEAT_S = 15.0
 MAX_UTTERANCE = 4000
 ALLOWED_HOSTS = {"localhost", "127.0.0.1", "[::1]"}
+#: The per-frame snapshot carries only the most-recent cycles (D2), mirroring
+#: the generator/auditor streams' existing ``[-40:]`` window. A long-lived
+#: project stops re-serializing its entire cycle map every frame; the live UI
+#: only ever renders the latest cycle and recent history. Admission,
+#: escalations and reconciliation read the full controller store directly, so
+#: this cap bounds only what each FRAME carries, never any decision.
+CYCLES_WINDOW = 40
 
 
 def _support_dir() -> Path | None:
@@ -282,14 +289,25 @@ def _ordered_cycles(state: dict, commit_chats: dict[str, str] | None = None) -> 
         if cycle_id in states:
             updated[cycle_id] = max(updated.get(cycle_id, 0),
                                     int(event.get("t", 0) or 0))
+
+    def when(cid: str, cycle: dict) -> int:
+        # History (capped on write) is authoritative when it still carries the
+        # cycle's events; a cycle whose events have aged out of the retained
+        # tail falls back to its own recorded ``updated_at`` so it still orders
+        # and renders with a correct time rather than sinking to 0.
+        return updated.get(cid) or int(cycle.get("updated_at") or 0)
+
     ordered = sorted(states.items(), key=lambda item: (
-        updated.get(item[0], 0), item[0]))
+        when(item[0], item[1]), item[0]))
     chat_map = commit_chats or {}
+    # D2: only the most-recent cycles ride in each frame (mirrors the stream
+    # windows). The list is oldest-first, so the tail keeps the newest cycles —
+    # exactly the ones the live view renders.
     return [{"id": cid, "status": cycle["status"], "round": cycle["round"],
-             "sha": cycle["active_sha"], "updated": updated.get(cid, 0),
+             "sha": cycle["active_sha"], "updated": when(cid, cycle),
              "chat_id": chats.canonical_id(
                  cycle.get("chat_id") or chat_map.get(cycle["active_sha"]))}
-            for cid, cycle in ordered]
+            for cid, cycle in ordered][-CYCLES_WINDOW:]
 
 
 def _stat_sig(path: Path) -> tuple[int, int] | None:

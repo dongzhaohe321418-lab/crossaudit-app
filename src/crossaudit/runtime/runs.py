@@ -75,6 +75,25 @@ PROVIDER_WAIT_CATEGORIES = frozenset({"routes_exhausted", "circuit_open",
                                       "budget"})
 
 
+#: Operational retention for the run journal (D1). The ``runs``/``run_events``
+#: tables are otherwise INSERT-only. A TERMINAL run older than this horizon AND
+#: outside the most-recent ``RETAIN_RECENT_RUNS`` window is eligible for
+#: pruning; everything else is always kept — any active or parked (non-terminal)
+#: run, and the recent window cross-store reconciliation scans. This is
+#: operational state only: git, receipts and the audit ledger are never touched.
+RETENTION_DAYS = 14.0
+RETAIN_RECENT_RUNS = 200
+
+#: The per-frame progress snapshot (D2) carries only the most-recent slice of a
+#: run's event log, so a long run stops re-serializing its whole step-log on
+#: every change (turning an O(N^2) stream into O(N) over the run). The full log
+#: stays queryable in the journal; only what each FRAME carries is bounded. The
+#: live UI renders a short recent window and the latest round marker (always
+#: within this tail), so the cap changes how much history a frame carries, never
+#: the correctness of the latest state.
+LATEST_STEP_LIMIT = 200
+
+
 def waiting_kind(category: str) -> str:
     """The machine-readable waiting_reason kind for a park category.
 
@@ -861,6 +880,82 @@ class RunJournal:
             db.commit()
         return recovered
 
+    def prune_terminal_runs(self, *, keep_days: float = RETENTION_DAYS,
+                            keep_recent: int = RETAIN_RECENT_RUNS,
+                            vacuum: bool = True) -> dict:
+        """Bounded retention sweep over the operational journal (D1).
+
+        The journal is explicitly operational, never evidence (see the module
+        docstring): git commits, receipts and the audit ledger are the audit
+        record, and this database only narrates run liveness for the UI. So it
+        is safe to prune finished runs — but only the ones nothing living or
+        reconciling still needs. A row is deleted iff ALL hold:
+
+        * its state is TERMINAL — never an active run, and never a parked
+          (PROVIDER_UNAVAILABLE) run, both of which are non-terminal and are
+          therefore left entirely alone;
+        * it finished before the retention horizon (``keep_days`` ago); and
+        * it is NOT among the most-recent ``keep_recent`` runs.
+
+        ``keep_recent`` is chosen by the caller to be at least the reconciler's
+        ``RECONCILE_SCAN_LIMIT``, so the entire window ``reconcile_human_wait``
+        scans (``recent(RECONCILE_SCAN_LIMIT)``) and the single ``latest()`` row
+        always survive. Reconciliation only ever references runs inside that
+        recent window; anything this sweep can reach is already invisible to it,
+        so a referenced row is never removed. The whole delete runs in one
+        ``BEGIN IMMEDIATE`` transaction (mirroring ``recover_abandoned``): a
+        crash mid-sweep either keeps every row or commits the complete prune —
+        it can never tear a run from its events. ``run_events`` for a victim are
+        deleted before the run so the foreign key is respected.
+
+        The optional ``PRAGMA wal_checkpoint(TRUNCATE)`` + ``VACUUM`` after a
+        non-empty prune is pure space reclamation: it runs only after the delete
+        has committed and is best-effort, so a transient lock cannot turn a
+        successful prune into a raised error.
+        """
+        keep_recent = max(1, int(keep_recent))
+        now = self._clock()
+        cutoff = now - max(0.0, float(keep_days)) * 86400.0
+        terminal = tuple(state.value for state in TERMINAL_STATES)
+        tph = ",".join("?" for _ in terminal)
+        deleted_runs = 0
+        deleted_events = 0
+        with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            # The most-recent keep_recent runs are retained unconditionally,
+            # whatever their state or age — this is the reconciler's safety
+            # window (keep_recent >= RECONCILE_SCAN_LIMIT by the caller).
+            protected = {
+                str(r["run_id"]) for r in db.execute(
+                    "SELECT run_id FROM runs ORDER BY started DESC, rowid DESC "
+                    "LIMIT ?", (keep_recent,)).fetchall()}
+            # Candidates are TERMINAL runs finished before the horizon; parked
+            # and active runs are excluded by the state filter itself.
+            rows = db.execute(
+                f"SELECT run_id FROM runs WHERE state IN ({tph}) "
+                "AND COALESCE(finished, updated, started) < ?",
+                (*terminal, cutoff)).fetchall()
+            victims = [str(r["run_id"]) for r in rows
+                       if str(r["run_id"]) not in protected]
+            for run_id in victims:
+                cur = db.execute(
+                    "DELETE FROM run_events WHERE run_id=?", (run_id,))
+                deleted_events += max(0, cur.rowcount)
+            if victims:
+                qph = ",".join("?" for _ in victims)
+                cur = db.execute(
+                    f"DELETE FROM runs WHERE run_id IN ({qph})", victims)
+                deleted_runs = max(0, cur.rowcount) or len(victims)
+            db.commit()
+            if deleted_runs and vacuum:
+                try:
+                    db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                    db.execute("VACUUM")
+                except sqlite3.Error:
+                    pass
+        return {"runs_deleted": deleted_runs, "events_deleted": deleted_events,
+                "cutoff": cutoff, "kept_recent": keep_recent}
+
     def dismiss_interruption(self, run_id: str | None = None) -> bool:
         now = self._clock()
         with self._connect() as db:
@@ -955,10 +1050,18 @@ class RunJournal:
             ).fetchone()
             if row is None:
                 return None
+            # D2: carry only the most-recent slice of the event log per frame.
+            # Fetching the tail (newest first, bounded) and re-ordering ascending
+            # keeps this an O(LATEST_STEP_LIMIT) read instead of re-reading and
+            # re-serializing the whole log on every snapshot. The newest event is
+            # always in this tail, so last_event_id and the latest round marker
+            # stay correct; the full log remains queryable in the journal.
             events = db.execute(
-                "SELECT * FROM run_events WHERE run_id=? ORDER BY sequence",
-                (row["run_id"],),
+                "SELECT * FROM run_events WHERE run_id=? "
+                "ORDER BY sequence DESC LIMIT ?",
+                (row["run_id"], LATEST_STEP_LIMIT),
             ).fetchall()
+            events = list(reversed(events))
         steps = [
             {"t": event["t"], "actor": event["actor"], "text": event["text"],
              "detail": event["detail"], "event_id": event["sequence"],

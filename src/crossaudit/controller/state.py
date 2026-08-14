@@ -32,6 +32,17 @@ STATE_FILENAME = "state.json"
 LOCK_TIMEOUT_S = 30.0
 LOCK_STALE_S = 120.0
 
+#: The operational ``history`` list is read whole every render frame and only
+#: ever used to derive a per-cycle "updated" timestamp (server._ordered_cycles)
+#: and to detect a stuck cycle (stuck_cycles). It is NOT evidence — git,
+#: receipts and the audit ledger hold that — so it is capped on write to a
+#: generous tail rather than grown without bound over a long-lived project.
+#: The cap is fail-safe: it only trims already-persisted operational notes, and
+#: every cycle carries its OWN ``updated_at`` (stamped in _log) so a cycle whose
+#: events age out of the retained tail still orders and renders with a correct
+#: time instead of a blank/zero.
+HISTORY_LIMIT = 500
+
 OPEN, BLOCKED, PASSED, ESCALATED, CONSUMED = "OPEN", "BLOCKED", "PASSED", "ESCALATED", "CONSUMED"
 TERMINAL = frozenset({CONSUMED})
 
@@ -118,7 +129,21 @@ class StateStore:
 
     @staticmethod
     def _log(state: dict, event: str, **kw: object) -> None:
-        state.setdefault("history", []).append({"t": int(time.time()), "event": event, **kw})
+        t = int(time.time())
+        history = state.setdefault("history", [])
+        history.append({"t": t, "event": event, **kw})
+        # Retention (operational only): keep a generous tail so a long-lived
+        # project does not grow state.json without bound. The trim is in-place
+        # and touches nothing but already-persisted notes.
+        if len(history) > HISTORY_LIMIT:
+            del history[:-HISTORY_LIMIT]
+        # Stamp the referenced cycle's own recorded time so its "updated"
+        # timestamp survives the history it contributed being trimmed away.
+        cid = kw.get("cycle")
+        if cid is not None:
+            cycle = state.get("cycles", {}).get(str(cid))
+            if cycle is not None:
+                cycle["updated_at"] = t
 
     # ------------------------------------------------------------------ reads
     def snapshot(self) -> dict:
@@ -467,6 +492,11 @@ class StateStore:
             if "cycle" in h:
                 last[h["cycle"]] = h["t"]
         now = int(time.time())
+        # A cycle whose events have aged out of the (capped) history tail falls
+        # back to its own recorded ``updated_at`` rather than defaulting to
+        # "just touched" — so history trimming can never hide a stuck cycle.
+        def touched(cid: str, c: dict) -> int:
+            return last.get(cid) or int(c.get("updated_at") or now)
         return [dict(c, cycle_id=cid) for cid, c in state["cycles"].items()
                 if c["status"] in (OPEN, BLOCKED) and not c.get("deadlettered")
-                and now - last.get(cid, now) > max_age_s]
+                and now - touched(cid, c) > max_age_s]
