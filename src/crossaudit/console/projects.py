@@ -32,11 +32,11 @@ from ..cli import wizard
 from ..config import CONFIG_NAME, Config, heterogeneity, load
 from ..controller import StateStore
 from ..dcl import describe as describe_checks
-from ..errors import ConfigDenial, Denial
+from ..errors import ConfigDenial, Denial, ProviderDenial
 from ..gitio import git, is_repo
 from ..providers import codex_subscription
 from ..providers.catalog import list_models
-from ..providers.specs import EFFORT_HINTS, SPECS, reasoning_efforts
+from ..providers.specs import EFFORT_HINTS, SPECS, capability_json, reasoning_efforts
 from ..providers.specs import endpoint as provider_endpoint
 from ..providers.specs import endpoints as provider_endpoints
 from ..runtime import ProvisioningJournal, journal_path, workspace_capacity
@@ -650,6 +650,71 @@ def refresh_models(current: Config, vendor: str, role: str,
     return {"vendor": vendor, "role": role, "method": method,
             "endpoint": endpoint_id, "models": rows,
             "refreshed": int(time.time())}
+
+
+_MODEL_CATALOG_CACHE: dict | None = None
+
+
+def model_catalog() -> dict:
+    """Static preset models and their capability cards, per built-in vendor.
+
+    Single-sourced from ``providers.specs`` so the first-launch role picker
+    (North Star §4) shows only the controls a model actually documents and never
+    keeps its own capability copy that could drift.  The data is derived purely
+    from the catalogue — no network, no credentials — so it is safe to compute on
+    load and cache for the process lifetime."""
+    global _MODEL_CATALOG_CACHE
+    if _MODEL_CATALOG_CACHE is None:
+        _MODEL_CATALOG_CACHE = {
+            vendor: {
+                "label": item.label,
+                "provider": item.provider,
+                "default_model": item.default_model,
+                "models": [{"id": model, "hint": hint,
+                            "capability": capability_json(vendor, model)}
+                           for model, hint in item.models],
+            }
+            for vendor, item in SPECS.items()
+        }
+    return _MODEL_CATALOG_CACHE
+
+
+def validate_credential(vendor: str) -> dict:
+    """Test one already-stored provider key without ever receiving or echoing it.
+
+    The key was written to this process's environment by ``app_keys`` on save;
+    this reads it there and asks the provider — at its official origin only, since
+    :func:`list_models` pins egress with ``allow_custom=False`` — which models the
+    key can see.  The raw secret never enters the request body and never appears
+    in the reply: only a boolean, a distinct state, a human detail line and a
+    model *count* are returned.  Ready / Invalid / No-access are reported apart
+    from mere "configured", and never as an adapter-parameter error."""
+    vendor = str(vendor).strip()
+    if vendor not in SPECS:
+        raise ConfigDenial(f"{vendor!r} has no supported model catalogue")
+    key_env = env_for_vendor(vendor)
+    if not os.environ.get(key_env, "").strip():
+        return {"vendor": vendor, "ok": False, "state": "unconfigured", "models": 0,
+                "detail": "No API key is stored for this provider yet."}
+    try:
+        rows = list_models(vendor, key_env)
+    except ValueError as exc:
+        raise ConfigDenial(str(exc)) from exc
+    except ProviderDenial as exc:
+        category = str(exc.detail.get("category", ""))
+        state = ("invalid" if category == "authentication"
+                 else "no_access" if category in {"permission", "endpoint", "model"}
+                 else "unreachable")
+        return {"vendor": vendor, "ok": False, "state": state, "models": 0,
+                "detail": exc.reason}
+    except ConfigDenial as exc:
+        return {"vendor": vendor, "ok": False, "state": "invalid", "models": 0,
+                "detail": exc.reason}
+    if not rows:
+        return {"vendor": vendor, "ok": False, "state": "no_access", "models": 0,
+                "detail": "The key authenticated but exposes no compatible models."}
+    return {"vendor": vendor, "ok": True, "state": "ready", "models": len(rows),
+            "detail": f"Connection verified — {len(rows)} models available."}
 
 
 def _runtime_role(current: Config, role: str, model: str | None = None, *,

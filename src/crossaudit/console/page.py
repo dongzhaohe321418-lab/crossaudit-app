@@ -1736,11 +1736,100 @@ body.first-run [data-fr-step="1"]:not([hidden]) .fr-primary{animation-delay:80ms
 body.first-run [data-fr-step="1"]:not([hidden]) .fr-choice:nth-of-type(1){animation-delay:130ms}
 body.first-run [data-fr-step="1"]:not([hidden]) .fr-choice:nth-of-type(2){animation-delay:175ms}
 body.first-run [data-fr-step="1"]:not([hidden]) .fr-choice:nth-of-type(3){animation-delay:220ms}
+/* ── Step 3 · Providers ─────────────────────────────────────────────────── */
+.fr-keychain{display:inline-flex;align-items:center;gap:8px;margin:14px 0 0;color:var(--text-2);font-size:var(--fs-body)}
+.fr-keychain svg{color:var(--text-3);flex:none}
+.fr-lede-3{margin:10px 0 0;max-width:56ch;color:var(--text-2);font-size:var(--fs-prose);line-height:1.5}
+.fr-provs{margin-top:clamp(18px,3.5vh,30px);display:flex;flex-direction:column}
+.fr-prov{padding:18px 0;border-top:1px solid var(--line)}
+.fr-provs .fr-prov:last-child{border-bottom:1px solid var(--line)}
+.fr-prov-id{display:flex;align-items:center;gap:14px}
+.fr-prov-mark{width:32px;height:32px;flex:none;display:grid;place-items:center;border-radius:var(--r-sm);
+  background:var(--surface-2);border:1px solid var(--line);color:var(--text-2);font-weight:600;font-size:var(--fs-prose)}
+.fr-prov-name{font-size:var(--fs-title);color:var(--text);font-weight:500}
+.fr-prov-sub{font-family:var(--font-mono);font-size:var(--fs-caption);color:var(--text-3);letter-spacing:.02em}
+.fr-prov-id .fr-stat{margin-left:auto}
+.fr-s-invalid{color:var(--blocked);background:color-mix(in srgb,var(--blocked) 14%,transparent)}
+.fr-s-info{color:var(--accent);background:var(--accent-bg)}
+.fr-prov-body{margin-top:13px;padding-left:46px;display:flex;flex-direction:column;gap:10px}
+@media(max-width:560px){.fr-prov-body{padding-left:0}}
+.fr-configured{display:flex;align-items:center;gap:12px;color:var(--text-2);font-size:var(--fs-body)}
+.fr-configured .fr-mask{font-family:var(--font-mono);letter-spacing:.18em;color:var(--text-3)}
+.fr-keyfield{display:flex;align-items:center;gap:6px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--line);
+  border-radius:var(--r-md);padding:6px 8px 6px 13px;transition:border-color var(--dur-fast) var(--ease-out),box-shadow var(--dur-fast) var(--ease-out)}
+.fr-keyfield:focus-within{border-color:var(--line-strong);box-shadow:0 0 0 3px var(--accent-bg)}
+.fr-key{flex:1;min-width:120px;background:none;border:0;outline:0;font-family:var(--font-mono);
+  font-size:var(--fs-body);letter-spacing:.02em;color:var(--text)}
+.fr-key::placeholder{color:var(--text-3);font-family:var(--font-ui);letter-spacing:0}
+.fr-tool{display:inline-flex;align-items:center;gap:6px;flex:none;color:var(--text-2);font-size:var(--fs-label);
+  padding:7px 10px;border-radius:var(--r-xs);background:none;border:0;cursor:pointer;
+  transition:background-color var(--dur-fast) var(--ease-out),color var(--dur-fast) var(--ease-out)}
+.fr-tool:hover{background:var(--hover);color:var(--text)}
+.fr-tool:disabled{opacity:.4;cursor:default;background:none}
+.fr-tool-cta{border:1px solid var(--line-strong);color:var(--text)}
+.fr-tool[aria-pressed="true"]{color:var(--accent);background:var(--accent-bg)}
+.fr-divider{display:flex;align-items:center;gap:12px;margin:2px 0;color:var(--text-3);font-size:var(--fs-label)}
+.fr-divider:before,.fr-divider:after{content:"";height:1px;flex:1;background:var(--line)}
+.fr-chatgpt{display:inline-flex;align-items:center;gap:9px;width:fit-content;padding:9px 15px;border-radius:var(--r-md);
+  color:var(--text);font-size:var(--fs-body);font-weight:500;background:var(--surface);border:1px solid var(--line-strong)}
+.fr-chatgpt:hover{background:var(--hover)}
+.fr-chatgpt:disabled{opacity:.6;cursor:default}
+.fr-honesty{margin:0;color:var(--text-3);font-size:var(--fs-caption);max-width:60ch}
+.fr-keymsg{margin:0;font-size:var(--fs-caption)}
+.fr-keymsg.bad{color:var(--blocked)}
+.fr-keymsg.ok{color:var(--pass)}
+.fr-keymsg.info{color:var(--text-2)}
+
+/* ── Step 4 · Generator / Auditor ───────────────────────────────────────── */
+.fr-pair{margin-top:clamp(22px,4vh,38px);display:grid;grid-template-columns:1fr auto 1fr;align-items:start;gap:clamp(16px,3vw,40px)}
+.fr-role{position:relative;padding-left:20px}
+.fr-role:before{content:"";position:absolute;left:0;top:4px;bottom:4px;width:2px;border-radius:2px}
+.fr-role-g:before{background:var(--role-g)}
+.fr-role-a{margin-top:clamp(28px,5vw,60px)}
+.fr-role-a:before{background:var(--role-a)}
+.fr-role-kicker{font-family:var(--font-mono);font-size:var(--fs-caption);letter-spacing:.22em;text-transform:uppercase}
+.fr-role-g .fr-role-kicker{color:var(--role-g)}
+.fr-role-a .fr-role-kicker{color:var(--role-a)}
+.fr-role-does{margin:8px 0 14px;font-size:var(--fs-prose);color:var(--text-2);max-width:36ch;line-height:1.5}
+.fr-role-pickers{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+.fr-select{appearance:none;-webkit-appearance:none;background:var(--surface);border:1px solid var(--line);color:var(--text);
+  font-size:var(--fs-label);font-family:var(--font-ui);padding:7px 26px 7px 11px;border-radius:var(--r-sm);cursor:pointer;
+  background-image:linear-gradient(45deg,transparent 50%,var(--text-3) 50%),linear-gradient(135deg,var(--text-3) 50%,transparent 50%);
+  background-position:calc(100% - 14px) 52%,calc(100% - 9px) 52%;background-size:5px 5px,5px 5px;background-repeat:no-repeat}
+.fr-select:focus-visible{outline:none;border-color:var(--line-strong);box-shadow:0 0 0 3px var(--accent-bg)}
+.fr-role-model{font-size:var(--fs-h2);font-weight:600;letter-spacing:-.01em;color:var(--text)}
+.fr-role-mid{font-family:var(--font-mono);font-size:var(--fs-caption);color:var(--text-3);margin-top:3px}
+.fr-chips{margin-top:15px;display:flex;flex-wrap:wrap;gap:8px}
+.fr-chip{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:var(--r-pill);
+  border:1px solid var(--line);color:var(--text-2);font-size:var(--fs-caption)}
+.fr-chip .n{font-family:var(--font-mono);color:var(--text)}
+.fr-chip-auth{color:var(--pass);border-color:color-mix(in srgb,var(--pass) 30%,transparent)}
+.fr-chip-price{font-family:var(--font-mono);color:var(--text)}
+.fr-chip-muted{color:var(--text-3)}
+.fr-handoff{align-self:center;display:grid;place-items:center;padding-top:clamp(14px,2.5vw,30px)}
+.fr-handoff svg{width:clamp(40px,7vw,82px);height:auto}
+.fr-handoff .ho0{stop-color:var(--role-g)}
+.fr-handoff .ho1{stop-color:var(--role-a)}
+.fr-handoff .ho-line{stroke:url(#fr-ho)}
+.fr-handoff .ho-head{stroke:var(--role-a)}
+.fr-independent{margin-top:clamp(22px,4vh,36px);display:inline-flex;align-items:center;gap:10px;padding:11px 16px;
+  border-radius:var(--r-md);background:var(--pass-bg);color:var(--pass);font-size:var(--fs-body);font-weight:500}
+.fr-independent svg{flex:none}
+.fr-independent.bad{background:color-mix(in srgb,var(--blocked) 14%,transparent);color:var(--blocked)}
+.fr-role-msg{margin:14px 0 0;font-size:var(--fs-body);color:var(--blocked)}
+.fr-role-msg:empty{display:none}
+.fr-rollup .fr-g{color:var(--role-g)}
+.fr-rollup .fr-a{color:var(--role-a)}
+
 @media(max-width:820px){.fr-steps .fr-l{display:none}.fr-steps{gap:var(--sp-3);margin-left:var(--sp-3)}}
 @media(max-width:720px){
   .fr-display .l2{margin-left:clamp(14px,7vw,56px)}
   .fr-row{grid-template-columns:auto 1fr;gap:12px}
   .fr-row-act{grid-column:2;justify-self:start;margin-top:8px}
+  .fr-pair{grid-template-columns:1fr;gap:8px}
+  .fr-role-a{margin-top:6px}
+  .fr-handoff{justify-self:start;padding:6px 0 6px 20px}
+  .fr-handoff svg{transform:rotate(90deg);width:34px}
 }
 
 /* Degradation matrix: every row is a testable contract. */
@@ -1841,12 +1930,67 @@ body.first-run [data-fr-step="1"]:not([hidden]) .fr-choice:nth-of-type(3){animat
     </div>
   </div>
 
+  <div class="fr-stage" data-fr-step="3" tabindex="-1" hidden>
+    <div class="fr-ghost" aria-hidden="true">03</div>
+    <div class="fr-col">
+      <span class="fr-nameplate">Provider setup</span>
+      <h2 class="fr-rollup">Connect the providers you'll build and verify with.</h2>
+      <p class="fr-lede-3">You need at least two different providers — one to do the work, a different one to check it.</p>
+      <span class="fr-keychain">
+        <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="4.5" y="8.6" width="11" height="7.4" rx="2"/><path d="M7 8.6V6.6a3 3 0 0 1 6 0v2"/></svg>
+        Keys are stored in your macOS Keychain and never shown again.
+      </span>
+      <div class="fr-provs" id="fr-provs"><div class="fr-scanning">Loading providers…</div></div>
+    </div>
+  </div>
+
+  <div class="fr-stage" data-fr-step="4" tabindex="-1" hidden>
+    <div class="fr-ghost" aria-hidden="true">04</div>
+    <div class="fr-col">
+      <span class="fr-nameplate">Generator / Auditor</span>
+      <h2 class="fr-rollup"><span class="fr-g">One builds.</span> <span class="fr-a">Another checks.</span></h2>
+      <p class="fr-lede-3">We picked a recommended pair on two different providers. You can change either one.</p>
+      <div class="fr-pair" id="fr-pair">
+        <div class="fr-role fr-role-g">
+          <span class="fr-role-kicker">Generator</span>
+          <p class="fr-role-does">Does the work.</p>
+          <div class="fr-role-pickers">
+            <select class="fr-select" id="fr-gen-vendor" aria-label="Generator provider"></select>
+            <select class="fr-select" id="fr-gen-model" aria-label="Generator model"></select>
+          </div>
+          <div class="fr-role-model" id="fr-gen-name">—</div>
+          <div class="fr-role-mid" id="fr-gen-mid"></div>
+          <div class="fr-chips" id="fr-gen-chips"></div>
+        </div>
+        <div class="fr-handoff" aria-hidden="true">
+          <svg viewBox="0 0 90 40" fill="none"><defs><linearGradient id="fr-ho" x1="0" y1="0" x2="1" y2="0"><stop class="ho0" offset="0"/><stop class="ho1" offset="1"/></linearGradient></defs><path class="ho-line" d="M2 20h78" stroke-width="2"/><path class="ho-head" d="M72 12l14 8-14 8" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" fill="none"/></svg>
+        </div>
+        <div class="fr-role fr-role-a">
+          <span class="fr-role-kicker">Auditor</span>
+          <p class="fr-role-does">Independently checks the work — must run on a different provider.</p>
+          <div class="fr-role-pickers">
+            <select class="fr-select" id="fr-aud-vendor" aria-label="Auditor provider"></select>
+            <select class="fr-select" id="fr-aud-model" aria-label="Auditor model"></select>
+          </div>
+          <div class="fr-role-model" id="fr-aud-name">—</div>
+          <div class="fr-role-mid" id="fr-aud-mid"></div>
+          <div class="fr-chips" id="fr-aud-chips"></div>
+        </div>
+      </div>
+      <div class="fr-independent" id="fr-independent">
+        <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 10.5 8.2 14.5 16 6"/></svg>
+        <span id="fr-independent-text">Independent — your auditor runs on a different provider than your generator.</span>
+      </div>
+      <p class="fr-role-msg" id="fr-role-msg" role="alert"></p>
+    </div>
+  </div>
+
   <div class="fr-footbar" id="fr-footbar" hidden>
     <div class="fr-foot-wrap">
       <span class="fr-hint" id="fr-hint">You can re-run these checks any time from Settings.</span>
       <div class="fr-foot-right">
         <button type="button" class="fr-back" id="fr-back">Back</button>
-        <button type="button" class="fr-primary" id="fr-continue">Continue <span class="fr-arw" aria-hidden="true">→</span></button>
+        <button type="button" class="fr-primary" id="fr-continue"><span class="fr-continue-label">Continue</span> <span class="fr-arw" aria-hidden="true">→</span></button>
       </div>
     </div>
   </div>
@@ -2562,7 +2706,31 @@ const ZH={
   "Ready":"就绪","Needs attention":"需要处理","Optional enhancement":"可选增强","Optional":"可选",
   "Fix automatically":"自动修复","Learn how →":"了解方法 →","Technical detail":"技术细节","Working…":"处理中…",
   "Preflight — probing environment":"预检——正在探测环境","You can re-run these checks any time from Settings.":"你可以随时在设置中重新运行这些检查。",
-  "The guided local demo is not available yet. You are in CrossAudit with no credentials connected — create or import a project to begin.":"引导式本地演示尚未提供。你已进入 CrossAudit，但尚未连接任何凭据——创建或导入一个项目即可开始。"
+  "The guided local demo is not available yet. You are in CrossAudit with no credentials connected — create or import a project to begin.":"引导式本地演示尚未提供。你已进入 CrossAudit，但尚未连接任何凭据——创建或导入一个项目即可开始。",
+  "Provider setup":"供应商设置","Connect the providers you'll build and verify with.":"连接你将用来构建和验证的供应商。",
+  "You need at least two different providers — one to do the work, a different one to check it.":"你至少需要两家不同的供应商——一家负责完成工作，另一家负责检查。",
+  "Keys are stored in your macOS Keychain and never shown again.":"密钥仅存入你的 macOS 钥匙串，之后不再显示。","Loading providers…":"正在加载供应商…",
+  "New API key":"新的 API key","Paste":"粘贴","Clear":"清除","Validate":"验证","Replace":"替换",
+  "Reveal the key you just typed":"显示你刚输入的密钥","Stored in your macOS Keychain.":"已存入你的 macOS 钥匙串。",
+  "or":"或","Sign in with ChatGPT (official)":"使用 ChatGPT 登录（官方）",
+  "Invalid":"无效","No access":"无访问权限","Unavailable":"不可用","Configured":"已配置",
+  "Connection verified.":"连接已验证。","This key was rejected. Check it and try again.":"该密钥被拒绝。请检查后重试。",
+  "The key works, but no models are available to it.":"该密钥有效，但没有可用的模型。",
+  "Could not reach the provider. Check your connection and try again.":"无法连接到供应商。请检查网络后重试。",
+  "Two different providers is enough to begin — one to build, one to check.":"两家不同的供应商即可开始——一家构建，一家检查。",
+  "Generator / Auditor":"生成者 / 审计者","One builds.":"一个负责构建。","Another checks.":"另一个负责检查。",
+  "We picked a recommended pair on two different providers. You can change either one.":"我们在两家不同的供应商上挑选了推荐搭配。你可以随时更换其中任意一个。",
+  "Does the work.":"负责完成工作。","Independently checks the work — must run on a different provider.":"独立检查工作——必须运行在不同的供应商上。",
+  "Generator provider":"生成者供应商","Generator model":"生成者模型","Auditor provider":"审计者供应商","Auditor model":"审计者模型",
+  "context":"上下文","Vision":"视觉","Structured output":"结构化输出","Reasoning":"推理","/ Mtok":"/ 百万 tok","Price not published":"暂无公开价格","Keychain key":"钥匙串密钥",
+  "Independent — your auditor runs on a different provider than your generator.":"相互独立——你的审计者运行在与生成者不同的供应商上。",
+  "Connect at least two different providers on the previous step to form an independent Generator / Auditor pair.":"请在上一步至少连接两家不同的供应商，以组成独立的生成者 / 审计者搭配。",
+  "Generator and auditor must run on different providers. Independent review is the core of the protocol and cannot be turned off.":"生成者和审计者必须运行在不同的供应商上。独立审查是本协议的核心，无法关闭。",
+  "You can swap either model later without losing history.":"你之后可以更换任一模型而不丢失历史记录。",
+  "Start using CrossAudit":"开始使用 CrossAudit","Paste your API key":"粘贴你的 API key",
+  "Paste a new key to replace the saved one":"粘贴新密钥以替换已保存的密钥","Starting…":"正在启动…",
+  "Same provider — independent review is not possible.":"同一家供应商——无法进行独立审查。",
+  "Your provider setup is saved. Create your first project to put the recommended pair to work.":"你的供应商设置已保存。创建你的第一个项目，即可让推荐搭配开始工作。"
 };
 const ZH_PATTERNS=[
   [/^(\d+) cycles?$/,m=>m[1]+' 个审计循环'],[/^(\d+) chats?$/,m=>m[1]+' 个对话'],
@@ -4884,6 +5052,7 @@ api('/api/state').then(render).catch(e=>{document.getElementById('thread-title')
 startStream();
 /* ---- First-launch flow (North Star §4): shell + Welcome + Readiness ---- */
 let firstRunStep=1,frSettingsSource=null,frScanning=false;
+let frValidation={},frRoles=null;
 function frBucket(row){return (row.status||'unknown')==='ready'?'ready':(row.blocking?'attention':'optional');}
 function frStatusLabel(row){const s=row.status||'unknown';
   if(s==='ready')return 'Ready';if(row.blocking)return 'Needs attention';
@@ -4948,33 +5117,279 @@ async function startFirstRunReadiness(){
   catch(e){renderFirstRunReadiness(null,e);}
   if(!frSettingsSource){try{frSettingsSource=new EventSource('/api/settings/stream?t='+encodeURIComponent(T));
     frSettingsSource.onmessage=ev=>{try{const s=JSON.parse(ev.data);settingsState=s;
-      if(document.body.classList.contains('first-run'))renderFirstRunReadiness(s.doctor);}catch(e){}};
+      if(!document.body.classList.contains('first-run'))return;
+      if(firstRunStep===2)renderFirstRunReadiness(s.doctor);
+      else if(firstRunStep===3)renderFirstRunProviders();
+      else if(firstRunStep===4)renderFirstRunRoles();}catch(e){}};
     frSettingsSource.onerror=()=>{};}catch(e){}}}
-function setFirstRunStep(step,focus=true){firstRunStep=Math.max(1,Math.min(2,Number(step)||1));
+const FR_HINTS={2:'You can re-run these checks any time from Settings.',
+  3:'Two different providers is enough to begin — one to build, one to check.',
+  4:'You can swap either model later without losing history.'};
+function setFirstRunStep(step,focus=true){firstRunStep=Math.max(1,Math.min(4,Number(step)||1));
   document.querySelectorAll('[data-fr-step]').forEach(sec=>sec.hidden=Number(sec.dataset.frStep)!==firstRunStep);
   document.querySelectorAll('[data-fr-indicator]').forEach(item=>{const n=Number(item.dataset.frIndicator);
     item.classList.toggle('active',n===firstRunStep);item.classList.toggle('complete',n<firstRunStep);
     if(n===firstRunStep)item.setAttribute('aria-current','step');else item.removeAttribute('aria-current');});
-  document.getElementById('fr-footbar').hidden=firstRunStep!==2;
+  document.getElementById('fr-footbar').hidden=firstRunStep<2;
+  document.querySelector('#fr-continue .fr-continue-label').textContent=firstRunStep===4?'Start using CrossAudit':'Continue';
+  document.getElementById('fr-continue').disabled=false;
+  document.getElementById('fr-hint').textContent=FR_HINTS[firstRunStep]||FR_HINTS[2];
   if(firstRunStep===2)startFirstRunReadiness();
+  else if(firstRunStep===3)renderFirstRunProviders();
+  else if(firstRunStep===4)renderFirstRunRoles();
   if(focus)requestAnimationFrame(()=>{const pane=document.querySelector('[data-fr-step="'+firstRunStep+'"]');if(pane)pane.focus();});}
 function showFirstRun(){document.body.classList.add('first-run');if(typeof closePanels==='function')closePanels();
+  frValidation={};frRoles=null;
   setFirstRunStep(1,false);startFirstRunReadiness();
   history.replaceState(null,'',location.pathname+'?t='+encodeURIComponent(T)+'#first-run');}
 function hideFirstRun(){document.body.classList.remove('first-run');
   if((location.hash||'')==='#first-run')history.replaceState(null,'',location.pathname+'?t='+encodeURIComponent(T));}
 async function completeOnboarding(action){const s=await api('/api/onboarding',{action:action||'complete'});
   if(s&&typeof s==='object')settingsState=s;return s;}
+
+// ── Step 3 · Providers ──────────────────────────────────────────────────────
+function frProvVendors(){
+  const providers=(settingsState&&settingsState.providers)||{};
+  // connections.status() lists exactly the key-needing built-in vendors; the
+  // ChatGPT-only Codex runtime and the replay provider are not vendors here, so
+  // iterating its keys is the capability-driven "needs a key" set — no hardcoded
+  // provider list, and openai_codex / replay are excluded for free.
+  return Object.keys(providers).sort((a,b)=>{
+    const rank=v=>v==='openai'?0:(providers[v]||{}).configured?1:2;
+    return rank(a)-rank(b)||String((providers[a]||{}).label||a).localeCompare(String((providers[b]||{}).label||b));});
+}
+function frProvRow(vendor,p){
+  const label=p.label||vendor;const mark=esc(String(label).slice(0,1).toUpperCase());
+  const links=(p.console_url?'<a class="fr-learn" href="'+esc(p.console_url)+'" target="_blank" rel="noopener">Get key ↗</a> ':'')
+    +(p.docs_url?'<a class="fr-learn" href="'+esc(p.docs_url)+'" target="_blank" rel="noopener">API docs ↗</a>':'');
+  const configured='<div class="fr-configured" data-fr-configured hidden><span class="fr-mask" aria-hidden="true">•••• •••• ••••</span>'
+    +'<span>Stored in your macOS Keychain.</span>'
+    +'<button type="button" class="fr-tool" data-fr-replace="'+esc(vendor)+'">Replace</button>'
+    +'<button type="button" class="fr-tool" data-fr-remove="'+esc(vendor)+'">Remove</button></div>';
+  const field='<div class="fr-keyfield">'
+    +'<input class="fr-key" type="password" id="fr-key-'+esc(vendor)+'" data-fr-key="'+esc(vendor)+'" autocomplete="new-password" placeholder="Paste your API key">'
+    +'<button type="button" class="fr-tool" data-fr-paste="'+esc(vendor)+'">Paste</button>'
+    +'<button type="button" class="fr-tool" data-fr-reveal="'+esc(vendor)+'" aria-pressed="false" aria-label="Reveal the key you just typed">'
+    +'<svg viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M1.5 10S4.5 4 10 4s8.5 6 8.5 6-3 6-8.5 6-8.5-6-8.5-6Z"/><circle cx="10" cy="10" r="2.3"/></svg></button>'
+    +'<button type="button" class="fr-tool" data-fr-clear="'+esc(vendor)+'">Clear</button>'
+    +'<button type="button" class="fr-tool fr-tool-cta" data-fr-validate="'+esc(vendor)+'">Validate</button></div>';
+  const chatgpt=vendor==='openai'
+    ?'<div class="fr-divider">or</div><button type="button" class="fr-chatgpt" id="fr-chatgpt"><svg viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="10" cy="10" r="6.5"/><path d="M10 3.5v13M3.5 10h13"/></svg> Sign in with ChatGPT (official)</button>':'';
+  const honesty=(p.subscription&&p.subscription.detail)?'<p class="fr-honesty">'+esc(p.subscription.detail)+'</p>':'';
+  return '<div class="fr-prov" data-fr-prov="'+esc(vendor)+'"><div class="fr-prov-id"><span class="fr-prov-mark" aria-hidden="true">'+mark+'</span>'
+    +'<div><div class="fr-prov-name">'+esc(label)+'</div><div class="fr-prov-sub">'+esc(vendor)+'</div></div>'
+    +'<span class="fr-stat fr-s-pending" data-fr-stat>Checking…</span></div>'
+    +'<div class="fr-prov-body"><span class="fr-prov-label"><span>New API key</span> · '+links+'</span>'
+    +configured+field+chatgpt+honesty
+    +'<p class="fr-keymsg" data-fr-msg></p></div></div>';
+}
+function renderFirstRunProviders(){
+  const host=document.getElementById('fr-provs');if(!host)return;
+  const providers=(settingsState&&settingsState.providers)||{};
+  const vendors=frProvVendors();
+  if(!vendors.length){host.innerHTML='<div class="fr-scanning">Loading providers…</div>';host.removeAttribute('data-vendors');return;}
+  if(host.getAttribute('data-vendors')!==vendors.join(',')){
+    host.setAttribute('data-vendors',vendors.join(','));
+    host.innerHTML=vendors.map(v=>frProvRow(v,providers[v]||{})).join('');
+  }
+  updateFirstRunProviderStates();
+}
+function updateFirstRunProviderStates(){
+  const providers=(settingsState&&settingsState.providers)||{};
+  document.querySelectorAll('#fr-provs [data-fr-prov]').forEach(row=>{
+    const vendor=row.getAttribute('data-fr-prov');const p=providers[vendor]||{};
+    const configured=!!p.configured;const chatgpt=p.chatgpt&&p.chatgpt.connected;
+    const v=frValidation[vendor];
+    let cls='fr-s-opt',text='Not connected';
+    if(v&&v.state==='ready'){cls='fr-s-ready';text='Ready';}
+    else if(v&&v.state==='invalid'){cls='fr-s-invalid';text='Invalid';}
+    else if(v&&v.state==='no_access'){cls='fr-s-warn';text='No access';}
+    else if(v&&v.state==='unreachable'){cls='fr-s-warn';text='Unavailable';}
+    else if(chatgpt){cls='fr-s-ready';text='Connected';}
+    else if(configured){cls='fr-s-info';text='Configured';}
+    const stat=row.querySelector('[data-fr-stat]');if(stat){stat.className='fr-stat '+cls;stat.textContent=text;}
+    const note=row.querySelector('[data-fr-configured]');if(note)note.hidden=!configured;
+    const input=row.querySelector('[data-fr-key]');
+    if(input)input.placeholder=configured?'Paste a new key to replace the saved one':'Paste your API key';
+    const msg=row.querySelector('[data-fr-msg]');
+    if(msg){
+      if(v&&v.state==='ready'){msg.className='fr-keymsg ok';msg.textContent='Connection verified.';}
+      else if(v&&v.state==='invalid'){msg.className='fr-keymsg bad';msg.textContent='This key was rejected. Check it and try again.';}
+      else if(v&&v.state==='no_access'){msg.className='fr-keymsg bad';msg.textContent='The key works, but no models are available to it.';}
+      else if(v&&v.state==='unreachable'){msg.className='fr-keymsg bad';msg.textContent='Could not reach the provider. Check your connection and try again.';}
+      else if(!v){msg.className='fr-keymsg';msg.textContent='';}
+    }
+  });
+}
+function frShowKeyMsg(vendor,text,cls){const el=document.querySelector('#fr-provs [data-fr-msg]');
+  const row=document.querySelector('#fr-provs [data-fr-prov="'+vendor+'"]');const m=row?row.querySelector('[data-fr-msg]'):el;
+  if(!m)return;m.className='fr-keymsg'+(cls?' '+cls:'');m.textContent=text||'';}
+async function frValidate(vendor){
+  const input=document.getElementById('fr-key-'+vendor);const typed=input?input.value.trim():'';
+  const btn=document.querySelector('#fr-provs [data-fr-validate="'+vendor+'"]');const original=btn?btn.textContent:'';
+  if(btn){btn.disabled=true;btn.textContent='Checking…';}    // §26 loading state
+  try{
+    if(typed){await api('/api/settings',{[vendor+'_key']:typed});if(input){input.value='';input.type='password';}}
+    frValidation[vendor]=await api('/api/providers/validate',{vendor});
+    try{settingsState=await api('/api/settings');}catch(e){}
+  }catch(e){frValidation[vendor]={ok:false,state:'unreachable'};}
+  if(btn){btn.disabled=false;btn.textContent=original||'Validate';}
+  renderFirstRunProviders();
+}
+async function frConnectChatGPT(btn){
+  const label=btn.textContent;btn.disabled=true;btn.textContent='Starting…';
+  try{const result=await api('/api/providers/connect',{provider:'openai',method:'chatgpt'});
+    if(result.url){const link=document.createElement('a');link.href=result.url;document.body.appendChild(link);link.click();link.remove();}
+    try{settingsState=await api('/api/settings');}catch(e){}renderFirstRunProviders();
+  }catch(e){frShowKeyMsg('openai',e.message,'bad');btn.disabled=false;btn.textContent=label;}
+}
+document.getElementById('fr-provs').addEventListener('click',async ev=>{
+  const t=ev.target.closest('button');if(!t)return;
+  if(t.id==='fr-chatgpt'){await frConnectChatGPT(t);return;}
+  const vendor=t.getAttribute('data-fr-paste')||t.getAttribute('data-fr-reveal')||t.getAttribute('data-fr-clear')
+    ||t.getAttribute('data-fr-replace')||t.getAttribute('data-fr-remove')||t.getAttribute('data-fr-validate');
+  if(!vendor)return;const input=document.getElementById('fr-key-'+vendor);
+  if(t.hasAttribute('data-fr-paste')){
+    try{const text=await navigator.clipboard.readText();if(input){input.value=(text||'').trim();input.focus();}}
+    catch(e){if(input)input.focus();}return;}
+  if(t.hasAttribute('data-fr-reveal')){if(!input)return;const on=t.getAttribute('aria-pressed')==='true';
+    input.type=on?'password':'text';t.setAttribute('aria-pressed',String(!on));return;}
+  if(t.hasAttribute('data-fr-clear')){if(input){input.value='';input.type='password';
+    const r=document.querySelector('#fr-provs [data-fr-reveal="'+vendor+'"]');if(r)r.setAttribute('aria-pressed','false');input.focus();}return;}
+  if(t.hasAttribute('data-fr-replace')){if(input){input.value='';input.focus();}return;}
+  if(t.hasAttribute('data-fr-remove')){
+    try{settingsState=await api('/api/settings',{['remove_'+vendor]:true});delete frValidation[vendor];renderFirstRunProviders();}
+    catch(e){frShowKeyMsg(vendor,e.message,'bad');}return;}
+  if(t.hasAttribute('data-fr-validate')){await frValidate(vendor);return;}
+});
+
+// ── Step 4 · Generator / Auditor ────────────────────────────────────────────
+function frConfiguredVendors(){
+  const providers=(settingsState&&settingsState.providers)||{};
+  return Object.keys(providers).filter(v=>(providers[v]||{}).configured);
+}
+function frRecommendRoles(){
+  const configured=frConfiguredVendors();
+  const pref=['anthropic','openai','google','xai','deepseek','qwen','moonshot','zhipu','minimax','mistral'];
+  const rank=v=>{const i=pref.indexOf(v);return i<0?pref.length:i;};
+  const pool=configured.slice().sort((a,b)=>rank(a)-rank(b)||a.localeCompare(b));
+  const cat=(settingsState&&settingsState.model_catalog)||{};
+  const def=v=>(cat[v]&&cat[v].default_model)||'';
+  if(pool.length>=2){const gen=pool[0],aud=pool.find(v=>v!==gen);
+    return {gen:{vendor:gen,model:def(gen)},aud:{vendor:aud,model:def(aud)}};}
+  return null;
+}
+function frFmtContext(n){if(!n)return '';if(n>=1000000)return (n/1000000).toFixed(n%1000000?1:0).replace(/\.0$/,'')+'M';
+  if(n>=1000)return Math.round(n/1000)+'K';return String(n);}
+function frOptions(items,selected){return items.map(o=>'<option value="'+esc(o.value)+'"'+(o.value===selected?' selected':'')+'>'+esc(o.label)+'</option>').join('');}
+function frFillSelect(id,items,selected){const el=document.getElementById(id);if(!el)return;
+  el.innerHTML=frOptions(items,selected);if(items.some(o=>o.value===selected))el.value=selected;}
+function frRenderRoleCard(role,sel){
+  const cat=(settingsState&&settingsState.model_catalog)||{};const providers=(settingsState&&settingsState.providers)||{};
+  const meta=cat[sel.vendor]||{};const label=meta.label||sel.vendor;
+  const model=(meta.models||[]).find(m=>m.id===sel.model)||{};const cap=model.capability||{};
+  document.getElementById('fr-'+role+'-name').textContent=label+' · '+(sel.model||'—');
+  document.getElementById('fr-'+role+'-mid').textContent=sel.vendor+' · '+(sel.model||'');
+  const chips=[];
+  if(cap.context_window)chips.push('<span class="fr-chip"><span class="n">'+esc(frFmtContext(cap.context_window))+'</span> <span>context</span></span>');
+  if(cap.vision)chips.push('<span class="fr-chip">Vision</span>');
+  if(cap.structured_output)chips.push('<span class="fr-chip">Structured output</span>');
+  if(cap.reasoning)chips.push('<span class="fr-chip">Reasoning</span>');
+  const price=cap.price||{};
+  if(price.state==='reported')chips.push('<span class="fr-chip fr-chip-price"><span class="n">$'+esc(price.input)+' · $'+esc(price.output)+'</span> <span>/ Mtok</span></span>');
+  else if(price.state==='estimated')chips.push('<span class="fr-chip fr-chip-price"><span class="n">~$'+esc(price.input)+' · $'+esc(price.output)+'</span> <span>/ Mtok</span></span>');
+  else chips.push('<span class="fr-chip fr-chip-muted">Price not published</span>');
+  const p=providers[sel.vendor]||{};const check='<svg viewBox="0 0 20 20" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 10.5 8.2 14.5 16 6"/></svg>';
+  if(p.chatgpt&&p.chatgpt.connected)chips.push('<span class="fr-chip fr-chip-auth">'+check+' ChatGPT</span>');
+  else if(p.configured)chips.push('<span class="fr-chip fr-chip-auth">'+check+' <span>Keychain key</span></span>');
+  document.getElementById('fr-'+role+'-chips').innerHTML=chips.join('');
+}
+function frUpdateIndependence(){
+  const banner=document.getElementById('fr-independent');const msg=document.getElementById('fr-role-msg');
+  const cont=document.getElementById('fr-continue');if(!frRoles){banner.hidden=true;return;}
+  banner.hidden=false;const same=frRoles.gen.vendor&&frRoles.gen.vendor===frRoles.aud.vendor;
+  const _g=banner.querySelector('svg path');if(_g)_g.setAttribute('d',same?'M6 6 14 14M14 6 6 14':'M4 10.5 8.2 14.5 16 6');
+  if(same){banner.classList.add('bad');
+    document.getElementById('fr-independent-text').textContent='Same provider — independent review is not possible.';
+    msg.className='fr-role-msg';msg.textContent='Generator and auditor must run on different providers. Independent review is the core of the protocol and cannot be turned off.';
+    if(cont)cont.disabled=true;
+  }else{banner.classList.remove('bad');
+    document.getElementById('fr-independent-text').textContent='Independent — your auditor runs on a different provider than your generator.';
+    msg.className='fr-role-msg';msg.textContent='';if(cont)cont.disabled=false;}
+}
+function renderFirstRunRoles(){
+  if(firstRunStep!==4)return;
+  const cat=(settingsState&&settingsState.model_catalog)||{};const providers=(settingsState&&settingsState.providers)||{};
+  const configured=frConfiguredVendors();
+  const msg=document.getElementById('fr-role-msg');const cont=document.getElementById('fr-continue');
+  const pair=document.getElementById('fr-pair');const banner=document.getElementById('fr-independent');
+  if(!frRoles||!configured.includes(frRoles.gen.vendor)||!configured.includes(frRoles.aud.vendor)
+     ||frRoles.gen.vendor===frRoles.aud.vendor){frRoles=frRecommendRoles();}
+  if(!frRoles){pair.hidden=true;banner.hidden=true;
+    msg.className='fr-role-msg';msg.textContent='Connect at least two different providers on the previous step to form an independent Generator / Auditor pair.';
+    if(cont)cont.disabled=true;return;}
+  pair.hidden=false;
+  const label=v=>(cat[v]&&cat[v].label)||(providers[v]&&providers[v].label)||v;
+  const modelOpts=v=>((cat[v]&&cat[v].models)||[]).map(m=>({value:m.id,label:m.id}));
+  const vendorOpts=exclude=>configured.filter(v=>v!==exclude).map(v=>({value:v,label:label(v)}));
+  // The generator vendor picker excludes the auditor vendor and vice versa, so
+  // independence cannot be selected away (mirrors the wizard.py:310 exclusion).
+  frFillSelect('fr-gen-vendor',vendorOpts(frRoles.aud.vendor),frRoles.gen.vendor);
+  frFillSelect('fr-aud-vendor',vendorOpts(frRoles.gen.vendor),frRoles.aud.vendor);
+  const ensure=role=>{const v=frRoles[role].vendor;const models=(cat[v]&&cat[v].models)||[];
+    if(!models.some(m=>m.id===frRoles[role].model))frRoles[role].model=(cat[v]&&cat[v].default_model)||(models[0]&&models[0].id)||'';};
+  ensure('gen');ensure('aud');
+  frFillSelect('fr-gen-model',modelOpts(frRoles.gen.vendor),frRoles.gen.model);
+  frFillSelect('fr-aud-model',modelOpts(frRoles.aud.vendor),frRoles.aud.model);
+  frRenderRoleCard('gen',frRoles.gen);frRenderRoleCard('aud',frRoles.aud);
+  frUpdateIndependence();
+}
+document.getElementById('fr-gen-vendor').onchange=e=>{if(!frRoles)return;frRoles.gen.vendor=e.target.value;frRoles.gen.model='';renderFirstRunRoles();};
+document.getElementById('fr-gen-model').onchange=e=>{if(!frRoles)return;frRoles.gen.model=e.target.value;frRenderRoleCard('gen',frRoles.gen);frUpdateIndependence();};
+document.getElementById('fr-aud-vendor').onchange=e=>{if(!frRoles)return;frRoles.aud.vendor=e.target.value;frRoles.aud.model='';renderFirstRunRoles();};
+document.getElementById('fr-aud-model').onchange=e=>{if(!frRoles)return;frRoles.aud.model=e.target.value;frRenderRoleCard('aud',frRoles.aud);frUpdateIndependence();};
+async function frEnterHub(action,note){
+  try{await completeOnboarding(action);}catch(e){}
+  hideFirstRun();showProjects();try{await refreshProjects();}catch(e){}
+  if(note){const n=document.getElementById('hub-note');if(n){n.hidden=false;
+    n.textContent='Your provider setup is saved. Create your first project to put the recommended pair to work.';}}
+  try{openProjectModal();}catch(e){}
+}
+async function frFinishOnboarding(){
+  const cont=document.getElementById('fr-continue');const msg=document.getElementById('fr-role-msg');
+  if(!frRoles){await frEnterHub('complete');return;}
+  if(frRoles.gen.vendor===frRoles.aud.vendor){frUpdateIndependence();return;} // hard refusal
+  cont.disabled=true;
+  // Persist the chosen models onto the current project via the real runtime path
+  // (projects.update_runtime → atomic crossaudit.yml rewrite; the server refuses
+  // the write while a loop runs, TRACKER.running). update_runtime rewrites the
+  // model/effort of a role, never its vendor — so send a role model only when
+  // the project role vendor already matches the selection, else leave it as is.
+  try{
+    const opts=await api('/api/runtime/options',{});const roles=(opts&&opts.roles)||{};
+    const cat=(settingsState&&settingsState.model_catalog)||{};
+    const keep=(role,sel)=>{const cur=roles[role]||{};if(cur.vendor===sel.vendor)return sel.model;
+      return cur.model||(cat[cur.vendor]&&cat[cur.vendor].default_model)||sel.model;};
+    await api('/api/runtime',{generator_model:keep('generator',frRoles.gen),
+                              auditor_model:keep('auditor',frRoles.aud)});
+    await frEnterHub('complete');
+  }catch(e){
+    if(e&&e.issue==='runtime_busy'){cont.disabled=false;msg.className='fr-role-msg';msg.textContent=e.message;return;}
+    // No writable project yet (first launch may have no repo). Do not fabricate a
+    // config write — finish onboarding honestly and let them create their first.
+    await frEnterHub('complete',true);
+  }
+}
 document.getElementById('fr-create').onclick=()=>setFirstRunStep(2);
-document.getElementById('fr-back').onclick=()=>setFirstRunStep(1);
+document.getElementById('fr-back').onclick=()=>setFirstRunStep(firstRunStep-1);
 document.getElementById('fr-skip').onclick=async()=>{const b=document.getElementById('fr-skip');b.disabled=true;
   try{await completeOnboarding('skip');}catch(e){}hideFirstRun();showProjects();};
 document.getElementById('fr-recheck').onclick=async()=>{frScanning=true;renderFirstRunReadiness(settingsState&&settingsState.doctor);
   try{const d=await api('/api/doctor',{action:'scan'});frScanning=false;renderFirstRunReadiness(d);if(settingsState)settingsState.doctor=d;}
   catch(e){frScanning=false;renderFirstRunReadiness(settingsState&&settingsState.doctor,e);}};
-document.getElementById('fr-continue').onclick=async()=>{const b=document.getElementById('fr-continue');b.disabled=true;
-  try{await completeOnboarding('complete');hideFirstRun();showProjects();await refreshProjects();openProjectModal();}
-  catch(e){b.disabled=false;document.getElementById('fr-rail-status').textContent=e.message;}};
+document.getElementById('fr-continue').onclick=async()=>{
+  if(firstRunStep<4){setFirstRunStep(firstRunStep+1);return;}
+  await frFinishOnboarding();};
 document.getElementById('fr-open').onclick=async()=>{try{await completeOnboarding('complete');}catch(e){}hideFirstRun();showProjects();};
 document.getElementById('fr-import').onclick=async()=>{
   try{await completeOnboarding('complete');hideFirstRun();showProjects();await refreshProjects();openProjectModal();}catch(e){}};

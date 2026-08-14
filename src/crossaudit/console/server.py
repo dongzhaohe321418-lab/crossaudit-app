@@ -145,6 +145,7 @@ def app_settings(cfg: Config | None = None) -> dict:
         },
         "doctor": doctor,
         "onboarding": onboarding_state(),
+        "model_catalog": projects.model_catalog(),
     }
 
 
@@ -859,6 +860,7 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                                    "/api/runtime/options", "/api/runtime",
                                    "/api/skills",
                                    "/api/settings", "/api/providers/connect",
+                                   "/api/providers/validate",
                                    "/api/doctor", "/api/hpc", "/api/mcp", "/api/admit",
                                    "/api/onboarding",
                                    "/api/run", "/api/escalation", "/api/interrupted"}:
@@ -1121,6 +1123,15 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                     result = connections.LOGINS.start(
                         str(payload.get("provider", "")),
                         str(payload.get("method", "")), STREAM_CHANGES.notify)
+                    self._send(json.dumps(result).encode(), "application/json")
+                    return
+                if parsed.path == "/api/providers/validate":
+                    # Tests a stored key by listing the models it can see. The raw
+                    # key is neither accepted here nor returned: only vendor comes
+                    # in, and only a state and a model count go back.
+                    if os.environ.get("CROSSAUDIT_APP_MODE") != "1":
+                        raise ConfigDenial("Credential checks are available in the macOS app")
+                    result = projects.validate_credential(str(payload.get("vendor", "")))
                     self._send(json.dumps(result).encode(), "application/json")
                     return
                 if parsed.path == "/api/admit":

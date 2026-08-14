@@ -519,3 +519,30 @@ def reasoning_efforts(vendor: str, model: str, provider: str = "") -> tuple[str,
     turn a valid run into an HTTP 400.
     """
     return capability_card(vendor, model, provider).reasoning_efforts or ()
+
+
+def capability_json(vendor: str, model: str, *, official: bool = True) -> dict:
+    """A JSON-safe capability card for one concrete (vendor, model).
+
+    The single source the onboarding role picker reads to decide which chips to
+    show.  It mirrors :class:`CapabilityCard` exactly: an unknown or custom card
+    reports ``None``/``False``/``unknown`` so the UI renders an honest blank
+    rather than fabricating a capability the model never documented.  The price
+    dimension distinguishes a *reported* snapshot (North Star §17) from an
+    *unknown* one; there is no invented estimate.
+    """
+    card = capability_card(vendor, model, official=official)
+    if card.price is not None:
+        price = {"state": "reported", "input": card.price.input,
+                 "output": card.price.output, "snapshot": card.price_snapshot}
+    else:
+        price = {"state": "unknown"}
+    return {
+        "known": bool(card.known),
+        "context_window": card.context_window,
+        "vision": bool(card.vision),
+        "structured_output": bool(card.structured_output),
+        "reasoning": bool(card.reasoning_efforts),
+        "reasoning_efforts": list(card.reasoning_efforts or ()),
+        "price": price,
+    }

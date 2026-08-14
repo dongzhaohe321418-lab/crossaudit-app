@@ -263,3 +263,198 @@ def test_every_new_first_run_string_has_chinese_parity():
     # Count-bearing strings are covered by ZH_PATTERNS, not the exact map.
     for zh in ("个必需项需要处理", "项检查排队中"):
         assert zh in PAGE, zh
+
+
+# ------------------------------------------------ steps 3 & 4 static markers
+def test_first_run_step_3_and_4_markers_present_and_unique():
+    for marker in (
+        'data-fr-step="3"', 'data-fr-step="4"',
+        'data-fr-indicator="3"', 'data-fr-indicator="4"',
+        'id="fr-provs"', 'id="fr-pair"', 'id="fr-independent"',
+        'id="fr-independent-text"', 'id="fr-role-msg"',
+        'id="fr-gen-vendor"', 'id="fr-gen-model"', 'id="fr-gen-chips"',
+        'id="fr-aud-vendor"', 'id="fr-aud-model"', 'id="fr-aud-chips"',
+        'class="fr-continue-label"',
+        "function renderFirstRunProviders(", "function renderFirstRunRoles(",
+        "function frFinishOnboarding(", "/api/providers/validate",
+        "Provider setup", "Generator / Auditor",
+        "Keys are stored in your macOS Keychain and never shown again.",
+        "Independent — your auditor runs on a different provider than your generator.",
+        # the write-only reveal: the field is a password input, never a stored key.
+        'type="password" id="fr-key-',
+    ):
+        assert marker in PAGE, marker
+
+    # The old shell ids the earlier tests assert must survive the extension.
+    for kept in ('id="fr-continue"', 'id="fr-back"', 'id="fr-skip"',
+                 'id="fr-groups"', 'id="fr-rail"'):
+        assert kept in PAGE, kept
+
+    parser = _PageContract()
+    parser.feed(PAGE)
+    assert [v for v, c in Counter(parser.ids).items() if c > 1] == []
+    known = set(parser.ids)
+    for dialog in parser.dialogs:
+        assert dialog.get("aria-modal") == "true"
+        assert dialog.get("aria-labelledby") in known
+
+
+def test_step_3_and_4_new_strings_have_chinese_parity():
+    for pair in (
+        '"Provider setup":"供应商设置"',
+        '"Loading providers…":"正在加载供应商…"',
+        '"Validate":"验证"', '"Replace":"替换"', '"Paste":"粘贴"', '"Clear":"清除"',
+        '"Sign in with ChatGPT (official)":"使用 ChatGPT 登录（官方）"',
+        '"Invalid":"无效"', '"No access":"无访问权限"', '"Configured":"已配置"',
+        '"Generator / Auditor":"生成者 / 审计者"',
+        '"One builds.":"一个负责构建。"', '"Another checks.":"另一个负责检查。"',
+        '"Does the work.":"负责完成工作。"',
+        '"context":"上下文"', '"Vision":"视觉"', '"Structured output":"结构化输出"',
+        '"Reasoning":"推理"', '"Keychain key":"钥匙串密钥"',
+        '"Start using CrossAudit":"开始使用 CrossAudit"',
+    ):
+        assert pair in PAGE, pair
+
+
+# --------------------------------------------------- credential validation
+def test_capability_json_reports_honest_blanks_for_unknown_models():
+    from crossaudit.providers.specs import capability_json
+
+    known = capability_json("anthropic", "claude-sonnet-4-6")
+    assert known["known"] is True and known["context_window"]
+    assert known["price"]["state"] == "reported"
+
+    # An unrecognised model must not fabricate a capability it never documented.
+    blank = capability_json("anthropic", "claude-does-not-exist-9")
+    assert blank["known"] is False
+    assert blank["context_window"] is None
+    assert blank["vision"] is False and blank["structured_output"] is False
+    assert blank["reasoning"] is False and blank["price"]["state"] == "unknown"
+
+
+def test_model_catalog_is_capability_driven_from_specs():
+    from crossaudit.console import projects
+    from crossaudit.providers.specs import SPECS
+
+    catalog = projects.model_catalog()
+    assert set(catalog) == set(SPECS)
+    for vendor, spec in SPECS.items():
+        entry = catalog[vendor]
+        assert entry["default_model"] == spec.default_model
+        assert [m["id"] for m in entry["models"]] == [m for m, _ in spec.models]
+        assert all("capability" in m for m in entry["models"])
+
+
+def test_validate_credential_reports_distinct_states_without_network(monkeypatch):
+    from crossaudit.app_keys import env_for_vendor
+    from crossaudit.console import projects
+    from crossaudit.errors import ProviderDenial
+
+    monkeypatch.setenv(env_for_vendor("openai"), "sk-secret-never-returned")
+
+    monkeypatch.setattr(projects, "list_models", lambda *a, **k: ["gpt-5.6-terra", "x"])
+    ready = projects.validate_credential("openai")
+    assert ready["ok"] is True and ready["state"] == "ready" and ready["models"] == 2
+    assert "sk-secret-never-returned" not in json.dumps(ready)
+
+    def reject(*a, **k):
+        raise ProviderDenial("provider returned HTTP 401", status=401,
+                             category="authentication")
+
+    monkeypatch.setattr(projects, "list_models", reject)
+    invalid = projects.validate_credential("openai")
+    assert invalid["ok"] is False and invalid["state"] == "invalid"
+    assert invalid["models"] == 0
+
+    monkeypatch.setattr(projects, "list_models", lambda *a, **k: [])
+    empty = projects.validate_credential("openai")
+    assert empty["ok"] is False and empty["state"] == "no_access"
+
+    # No stored key at all is a fourth, distinct state — never a raised 500.
+    monkeypatch.delenv(env_for_vendor("openai"), raising=False)
+    assert projects.validate_credential("openai")["state"] == "unconfigured"
+
+
+def test_validate_endpoint_gated_tokened_and_never_echoes_a_key(
+        console, monkeypatch):
+    from crossaudit.app_keys import env_for_vendor
+    from crossaudit.console import projects
+
+    secret = "sk-validate-must-stay-hidden"
+    monkeypatch.setenv(env_for_vendor("openai"), secret)
+    monkeypatch.setattr(projects, "list_models",
+                        lambda *a, **k: ["gpt-5.6-terra", "gpt-5.6-luna"])
+
+    # Off app mode the endpoint is on the allowlist but refuses (no 500).
+    monkeypatch.delenv("CROSSAUDIT_APP_MODE", raising=False)
+    code, body, _h = rejected(
+        lambda: post_json_to(console, "/api/providers/validate",
+                             {"vendor": "openai"}))
+    assert code == 400 and b"macOS app" in body
+
+    # In app mode a stored key is tested and only a count comes back — a raw key
+    # smuggled into the body is ignored, and no secret appears in the response.
+    monkeypatch.setenv("CROSSAUDIT_APP_MODE", "1")
+    status, result, _h = post_json_to(
+        console, "/api/providers/validate",
+        {"vendor": "openai", "openai_key": "sk-injected-should-be-ignored"})
+    assert status == 200 and result["ok"] is True and result["state"] == "ready"
+    assert result["models"] == 2
+    encoded = json.dumps(result)
+    assert secret not in encoded
+    assert "sk-injected-should-be-ignored" not in encoded
+    assert "key" not in {k.lower() for k in result}
+
+
+def test_validate_endpoint_needs_the_token_and_stays_on_the_allowlist(console):
+    bare = console.split("?", 1)[0] + "api/providers/validate"
+    req = urllib.request.Request(
+        bare, data=b'{"vendor":"openai"}', method="POST",
+        headers={"content-type": "application/json"})
+    code, body, _headers = rejected(lambda: urllib.request.urlopen(req, timeout=5))
+    assert code == 403
+
+    off_list = console.replace("/?t=", "/api/providers/validates?t=")
+    req = urllib.request.Request(
+        off_list, data=b"{}", method="POST",
+        headers={"content-type": "application/json"})
+    code, _body, _headers = rejected(lambda: urllib.request.urlopen(req, timeout=5))
+    assert code == 404
+
+
+# ------------------------------------------------ role independence (I1/§31)
+def test_role_selection_rejects_a_same_vendor_pair(tmp_path: Path):
+    from crossaudit.config import heterogeneity, load
+
+    def _cfg(generator_vendor: str, auditor_vendor: str):
+        root = tmp_path / f"{generator_vendor}-{auditor_vendor}"
+        root.mkdir()
+        subprocess.run(["git", "init", "-q", "-b", "main"], cwd=root, check=True)
+        (root / "AUDIT_RULES.md").write_text("### CA-X-001\n**BLOCKER.** be exact\n\nx\n")
+        (root / "crossaudit.yml").write_text(
+            "version: 1\nscience_repo: t/p\nconstitution: AUDIT_RULES.md\n"
+            f"auditor: {{vendor: {auditor_vendor}, provider: openai_compat, model: m,"
+            " key_env: CROSSAUDIT_AUDITOR_KEY}\n"
+            f"generator: {{vendor: {generator_vendor}, provider: openai_compat, model: g,"
+            " key_env: CROSSAUDIT_GENERATOR_KEY}\n"
+            "ledger: {dir: cycles}\nstate: {dir: .crossaudit}\n"
+            "checks: [parseable]\n")
+        return load(root / "crossaudit.yml")
+
+    ok, why = heterogeneity(_cfg("anthropic", "openai"))
+    assert ok is True and "anthropic" in why
+
+    denied, reason = heterogeneity(_cfg("openai", "openai"))
+    assert denied is False and "I1" in reason
+
+
+def test_unknown_or_custom_origin_never_masquerades_as_independent():
+    from crossaudit.providers.specs import source_independent
+
+    # A built-in vendor at its own origin is the only independent case.
+    assert source_independent("openai") is True
+    assert source_independent("openai", "https://api.openai.com/v1") is True
+    # A custom base_url this catalogue does not own cannot prove its model source.
+    assert source_independent("openai", "https://aggregator.example/v1") is False
+    # An unknown vendor owns no origin at all.
+    assert source_independent("mystery-aggregator") is False
