@@ -1225,16 +1225,15 @@ html.js [data-reveal].is-visible {
   grid-row: 1;
   display: flex;
   flex-direction: column;
-  padding: clamp(1rem, 2vw, 1.4rem);
+  padding: clamp(1.1rem, 2vw, 1.5rem);
   overflow: hidden;
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--border);
   border-radius: 16px;
-  background:
-    radial-gradient(circle at 74% 12%, rgba(94, 160, 255, 0.1), transparent 30%),
-    var(--surface);
-  box-shadow: 0 30px 80px var(--shadow), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  background: var(--surface);
+  box-shadow: 0 24px 60px var(--shadow), inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
+/* the graph label is an insider caption, kept quiet so the flow itself leads */
 .flow-map-head {
   display: flex;
   align-items: center;
@@ -1242,8 +1241,9 @@ html.js [data-reveal].is-visible {
   gap: 1rem;
   color: var(--text-tertiary);
   font-family: var(--mono);
-  font-size: 0.6rem;
-  letter-spacing: 0.08em;
+  font-size: 0.54rem;
+  letter-spacing: 0.14em;
+  opacity: 0.62;
 }
 
 .flow-map-head > div {
@@ -1252,21 +1252,15 @@ html.js [data-reveal].is-visible {
   gap: 0.55rem;
 }
 
+/* the flow lives directly on the panel: no framed well, no grid paper, so the
+   trunk of nodes and the verdict fork are the only structure the eye meets */
 .flow-canvas {
   position: relative;
   display: grid;
-  grid-template-columns: 36px minmax(0, 1fr);
-  gap: 0.5rem 0.6rem;
-  margin-top: 0.9rem;
-  padding: 0.9rem;
-  overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background-color: #0a0d11;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.028) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.028) 1px, transparent 1px);
-  background-size: 2rem 2rem;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 0 0.4rem;
+  margin-top: 0.85rem;
+  padding: 0.2rem 0.1rem;
 }
 
 /* evidence timeline: six trunk cards on a spine, three verdict exits,
@@ -1276,125 +1270,183 @@ html.js [data-reveal].is-visible {
   grid-column: 1;
   grid-row: 1 / 7;
   justify-self: center;
-  width: 2px;
+  width: 1.5px;
   border-radius: 2px;
   background: var(--border-strong);
 }
 
+/* each step is a node on the trunk, not a filled card. At rest it is a quiet
+   name; only the active step earns full weight and reveals its evidence, so a
+   first glance reads one flowing line with a single lit focus. */
 .fc-card {
   grid-column: 2;
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 0.2rem 1rem;
-  padding: 0.55rem 0.75rem;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: #10141b;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: center;
+  gap: 0.1rem;
+  min-height: 2.1rem;
+  padding: 0.32rem 0.55rem;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
   text-align: left;
-  transition: border-color 180ms var(--ease-spring), background-color 180ms var(--ease-spring),
-    transform 180ms var(--ease-spring), box-shadow 180ms var(--ease-spring);
+  opacity: 0.46;
+  transition: opacity 220ms var(--ease-spring), background-color 200ms var(--ease-spring),
+    border-color 200ms var(--ease-spring), transform 200ms var(--ease-spring);
 }
 
+/* the node dot sits on the trunk, aligned to the step name */
 .fc-card::before {
   content: "";
   position: absolute;
-  top: 50%;
-  left: calc(-0.6rem - 22px);
-  width: 8px;
-  height: 8px;
+  top: 1.05rem;
+  left: calc(17px - 34px - 0.4rem);
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
-  background: var(--surface-strong);
-  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  border: 1.5px solid var(--border-strong);
   transform: translateY(-50%);
-  transition: background-color 240ms ease, border-color 240ms ease;
+  transition: background-color 240ms var(--ease-spring), border-color 240ms var(--ease-spring),
+    box-shadow 240ms var(--ease-spring);
 }
 
 .fc-card:hover {
-  border-color: var(--border-strong);
-  transform: translateY(-1px);
+  opacity: 0.82;
+}
+
+.fc-card.active:hover {
+  opacity: 1;
 }
 
 .fc-card:active {
-  transform: translateY(0) scale(0.995);
+  transform: translateY(0.5px);
 }
 
 .fc-head {
-  display: grid;
-  gap: 0.1rem;
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
   min-width: 0;
 }
 
 .fc-head strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--text-primary);
-  font-size: 0.8rem;
+  font-size: 0.82rem;
   font-weight: var(--fw-strong);
   line-height: 1.25;
 }
 
+/* the role reads down the right edge: who owns each step */
 .fc-head small {
+  flex: none;
+  margin-left: auto;
   color: var(--text-tertiary);
   font-family: var(--mono);
-  font-size: 0.62rem;
+  font-size: 0.6rem;
+  letter-spacing: 0.02em;
 }
 
+/* evidence stays collapsed until the step is the active one */
 .fc-card > code {
+  overflow: hidden;
+  max-height: 0;
+  opacity: 0;
   color: var(--text-secondary);
-  font-size: 0.66rem;
-  text-align: right;
-  white-space: nowrap;
-}
-
-.fc-g {
-  border-color: rgba(94, 160, 255, 0.32);
+  font-size: 0.64rem;
+  line-height: 1.4;
+  transition: max-height 260ms var(--ease-spring), opacity 200ms var(--ease-spring),
+    margin-top 200ms var(--ease-spring);
 }
 
 .fc-g .fc-head small {
   color: var(--generator);
 }
 
-.fc-a {
-  border-color: rgba(154, 124, 255, 0.36);
-}
-
 .fc-a .fc-head small {
   color: var(--auditor);
 }
 
+/* passed steps stay faint but their node fills in, marking progress */
+.fc-card.reached {
+  opacity: 0.64;
+}
+
 .fc-card.reached::before {
-  background: var(--generator);
-  border-color: var(--generator);
+  background: var(--text-tertiary);
+  border-color: var(--text-tertiary);
 }
 
 .fc-card.active {
-  border-color: var(--generator);
-  background: var(--surface-accent);
-  transform: translateY(-2px);
-  box-shadow: 0 0 0 1px rgba(94, 160, 255, 0.22), 0 14px 34px rgba(24, 58, 112, 0.34);
+  opacity: 1;
+  background: var(--surface-strong);
+  border-color: var(--border);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .fc-card.active::before {
   background: var(--accent-strong);
   border-color: var(--accent-strong);
+  box-shadow: 0 0 0 4px rgba(94, 160, 255, 0.16);
+}
+
+.fc-card.active > code {
+  max-height: 2.6rem;
+  margin-top: 0.15rem;
+  opacity: 1;
+  animation: flow-detail-in 320ms var(--ease-spring);
+}
+
+@keyframes flow-detail-in {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* role colour only when the step is live, so blue and violet mark the two
+   model actors precisely rather than tinting the whole column */
+.fc-g.active {
+  background: rgba(94, 160, 255, 0.07);
+  border-color: rgba(94, 160, 255, 0.22);
+}
+
+.fc-g.active::before {
+  background: var(--generator);
+  border-color: var(--generator);
+  box-shadow: 0 0 0 4px rgba(94, 160, 255, 0.18);
 }
 
 .fc-a.active {
-  border-color: var(--auditor);
-  background: rgba(154, 124, 255, 0.09);
-  transform: translateY(-2px);
-  box-shadow: 0 0 0 1px rgba(154, 124, 255, 0.24), 0 14px 34px rgba(74, 52, 128, 0.36);
+  background: rgba(154, 124, 255, 0.07);
+  border-color: rgba(154, 124, 255, 0.24);
 }
 
 .fc-a.active::before {
   background: var(--auditor);
   border-color: var(--auditor);
+  box-shadow: 0 0 0 4px rgba(154, 124, 255, 0.18);
 }
 
+/* the revision loop: a bracket that returns from the verdict up to the
+   generator. Faint by default (the path exists), it lights amber to match the
+   BLOCKED verdict the moment the run is blocked, so "not passed, go round
+   again" reads in one glance, exactly like the thesis loop. */
 .fc-bracket {
   grid-column: 1;
   grid-row: 3 / 8;
   position: relative;
+  opacity: 0.24;
+  transition: opacity 260ms var(--ease-spring);
 }
 
 .fc-bracket svg {
@@ -1406,14 +1458,14 @@ html.js [data-reveal].is-visible {
 }
 
 .fcb-main {
-  stroke: url(#fcb-grad);
-  stroke-width: 2.2;
-  opacity: 0.95;
+  stroke: var(--warning);
+  stroke-width: 2;
+  opacity: 0.9;
   transition: stroke-width 260ms ease;
 }
 
 .fcb-flow {
-  stroke: rgba(244, 245, 247, 0.38);
+  stroke: rgba(242, 185, 75, 0.75);
   stroke-width: 1.2;
   stroke-dasharray: 4 8;
   stroke-linecap: round;
@@ -1432,12 +1484,16 @@ html.js [data-reveal].is-visible {
   height: 0;
   border-top: 4px solid transparent;
   border-bottom: 4px solid transparent;
-  border-left: 6px solid var(--generator);
+  border-left: 6px solid var(--warning);
   transform: translateY(-50%);
 }
 
+.fc-bracket.active {
+  opacity: 1;
+}
+
 .fc-bracket.active .fcb-main {
-  stroke-width: 2.8;
+  stroke-width: 2.6;
   opacity: 1;
 }
 
@@ -1445,29 +1501,36 @@ html.js [data-reveal].is-visible {
   animation-play-state: paused;
 }
 
+/* the three verdicts the independent audit can return: the product's core
+   difference. The dashed rule reads as the fork off the audit node above. */
 .fc-exits {
   grid-column: 2;
   grid-row: 7;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.5rem;
-  margin-top: 0.2rem;
+  gap: 0.45rem;
+  margin-top: 0.7rem;
+  padding-top: 0.75rem;
+  border-top: 1px dashed var(--border-strong);
 }
 
 .fc-exit {
   display: grid;
   align-content: start;
   gap: 0.22rem;
-  padding: 0.55rem 0.65rem;
+  padding: 0.5rem 0.6rem 0.55rem;
   border: 1px solid var(--border);
-  border-radius: 10px;
-  background: rgba(23, 26, 32, 0.72);
+  border-left-width: 2px;
+  border-radius: 9px;
+  background: var(--surface-strong);
   text-align: left;
+  opacity: 0.6;
   transition: border-color 160ms var(--ease-spring), background-color 160ms var(--ease-spring),
-    transform 160ms var(--ease-spring);
+    opacity 160ms var(--ease-spring), transform 160ms var(--ease-spring);
 }
 
 .fc-exit:hover {
+  opacity: 0.85;
   transform: translateY(-1px);
 }
 
@@ -1477,36 +1540,46 @@ html.js [data-reveal].is-visible {
 
 .fc-exit strong {
   font-family: var(--mono);
-  font-size: 0.62rem;
+  font-size: 0.6rem;
   font-weight: 600;
   letter-spacing: 0.05em;
 }
 
 .fc-exit span {
   color: var(--text-tertiary);
-  font-size: 0.64rem;
-  line-height: 1.45;
+  font-size: 0.62rem;
+  line-height: 1.4;
 }
 
+.fc-exit-0 { border-left-color: rgba(77, 211, 154, 0.45); }
+.fc-exit-1 { border-left-color: rgba(242, 185, 75, 0.5); }
+.fc-exit-2 { border-left-color: rgba(255, 107, 107, 0.45); }
+
 .fc-exit-0 strong { color: var(--pass); }
-.fc-exit-1 strong { color: var(--blocked); }
-.fc-exit-2 strong { color: var(--warning); }
+.fc-exit-1 strong { color: var(--warning); }
+.fc-exit-2 strong { color: var(--blocked); }
 
 .fc-exit-0.active {
-  border-color: rgba(77, 211, 154, 0.5);
-  background: rgba(77, 211, 154, 0.07);
+  opacity: 1;
+  border-color: rgba(77, 211, 154, 0.55);
+  border-left-color: var(--pass);
+  background: rgba(77, 211, 154, 0.1);
 }
 
 .fc-exit-1.active {
-  border-color: rgba(255, 107, 107, 0.45);
-  background: rgba(255, 107, 107, 0.06);
+  opacity: 1;
+  border-color: rgba(242, 185, 75, 0.55);
+  border-left-color: var(--warning);
+  background: rgba(242, 185, 75, 0.1);
 }
 
+/* one quiet "you are here" line that keeps the left narration and the right
+   graph pointing at the same step */
 .flow-now {
   display: flex;
   align-items: baseline;
-  gap: 0.7rem;
-  margin: 0.85rem 0 0;
+  gap: 0.55rem;
+  margin: 0.9rem 0 0;
   padding-top: 0.8rem;
   border-top: 1px solid var(--border);
 }
@@ -1531,7 +1604,7 @@ html.js [data-reveal].is-visible {
 .flow-now span {
   color: var(--accent-strong);
   font-family: var(--mono);
-  font-size: 0.9rem;
+  font-size: 0.74rem;
   font-variant-numeric: tabular-nums;
   animation: tick-in 200ms var(--ease-spring);
 }
@@ -1548,30 +1621,36 @@ html.js [data-reveal].is-visible {
 }
 
 .flow-now strong {
-  font-size: 0.9rem;
-  font-weight: var(--fw-strong);
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  font-weight: 500;
 }
 
 .flow-now em {
   font-style: normal;
   color: var(--text-tertiary);
   font-family: var(--mono);
-  font-size: 0.68rem;
+  font-size: 0.58rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
+/* the sample run stays a faint secondary strip; events brighten in turn as the
+   scroll reaches them, but they never compete with the trunk for first read */
 .flow-events {
   display: grid;
-  gap: 0.3rem;
-  margin-top: 0.9rem;
-  padding-top: 0.8rem;
+  gap: 0.22rem;
+  margin-top: 0.85rem;
+  padding-top: 0.75rem;
   border-top: 1px solid var(--border);
 }
 
 .flow-events-label {
   color: var(--text-tertiary);
   font-family: var(--mono);
-  font-size: 0.56rem;
-  letter-spacing: 0.08em;
+  font-size: 0.52rem;
+  letter-spacing: 0.12em;
+  opacity: 0.7;
 }
 
 .flow-events p {
@@ -1581,8 +1660,8 @@ html.js [data-reveal].is-visible {
   margin: 0;
   color: var(--text-tertiary);
   font-family: var(--mono);
-  font-size: 0.64rem;
-  opacity: 0.68;
+  font-size: 0.6rem;
+  opacity: 0.4;
   transform: translateX(-3px);
   transition: opacity 300ms var(--ease-spring), color 300ms var(--ease-spring),
     transform 300ms var(--ease-spring);
@@ -1590,7 +1669,7 @@ html.js [data-reveal].is-visible {
 }
 
 .flow-events p.active {
-  opacity: 1;
+  opacity: 0.92;
   transform: none;
   color: var(--text-secondary);
 }
@@ -1609,13 +1688,18 @@ html.js [data-reveal].is-visible {
 
 .flow-events p i {
   flex: 0 0 auto;
-  width: 0.32rem;
-  height: 0.32rem;
+  width: 0.3rem;
+  height: 0.3rem;
   border-radius: 50%;
   background: var(--text-tertiary);
+  opacity: 0.5;
   transform: scale(0.62);
-  transition: background-color 240ms ease, transform 240ms var(--ease-spring);
+  transition: background-color 240ms ease, opacity 240ms ease, transform 240ms var(--ease-spring);
   transition-delay: inherit;
+}
+
+.flow-events p.active i {
+  opacity: 1;
 }
 
 .flow-events p.active i {
@@ -1628,11 +1712,13 @@ html.js [data-reveal].is-visible {
 .flow-events p.active.event-information i { background: var(--information); }
 
 .flow-boundary {
-  margin: auto 0 0;
-  padding-top: 0.8rem;
+  margin: 0.85rem 0 0;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
   color: var(--text-tertiary);
-  font-size: 0.64rem;
+  font-size: 0.62rem;
   line-height: 1.45;
+  opacity: 0.78;
 }
 
 .flow-chapters {
@@ -2718,9 +2804,47 @@ footer a:hover {
     transform: none;
   }
 
-  /* state stays visible; only its motion is removed */
-  .flow-events p,
+  /* the scroll no longer advances the graph, so present it whole and static:
+     every node lit, every evidence line and verdict shown at once */
   .fc-card {
+    opacity: 1;
+    transform: none;
+    transition-delay: 0ms;
+  }
+
+  .fc-card > code {
+    max-height: 3rem;
+    margin-top: 0.15rem;
+    opacity: 1;
+    animation: none;
+  }
+
+  .fc-card::before {
+    background: var(--text-tertiary);
+    border-color: var(--text-tertiary);
+  }
+
+  .fc-g::before {
+    background: var(--generator);
+    border-color: var(--generator);
+  }
+
+  .fc-a::before {
+    background: var(--auditor);
+    border-color: var(--auditor);
+  }
+
+  .fc-bracket {
+    opacity: 1;
+  }
+
+  .fc-exit {
+    opacity: 1;
+    transform: none;
+  }
+
+  .flow-events p {
+    opacity: 0.9;
     transform: none;
     transition-delay: 0ms;
   }
