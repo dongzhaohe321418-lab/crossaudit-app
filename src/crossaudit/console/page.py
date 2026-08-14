@@ -1674,6 +1674,15 @@ body.first-run #first-run{display:flex;flex-direction:column;min-height:100vh;he
 .fr-recheck:disabled{opacity:.6;cursor:default}
 .fr-groups{margin-top:clamp(18px,4vh,34px);display:flex;flex-direction:column;gap:var(--sp-7)}
 .fr-group>.fr-nameplate{margin-bottom:4px}
+.fr-ready-group>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:var(--sp-2);padding:4px 0;border-radius:var(--r-sm)}
+.fr-ready-group>summary::-webkit-details-marker{display:none}
+.fr-ready-group>summary .fr-nameplate{display:inline;margin:0}
+.fr-ready-n{color:var(--text-3);font-size:var(--fs-label)}
+.fr-ready-chev{color:var(--text-3);transition:transform var(--dur-fast) var(--ease-out);display:inline-block;line-height:1}
+.fr-ready-group[open]>summary .fr-ready-chev{transform:rotate(90deg)}
+.fr-ready-group>summary:hover .fr-ready-n,.fr-ready-group>summary:hover .fr-ready-chev{color:var(--text-2)}
+.fr-ready-group>.fr-rows{margin-top:var(--sp-3)}
+.fr-ready-group:not([open])>.fr-rows{display:none}
 .fr-scanning,.fr-offline{padding:18px 0;color:var(--text-3);font-size:var(--fs-body);
   border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
 .fr-rows{display:flex;flex-direction:column}
@@ -2739,6 +2748,7 @@ const ZH_PATTERNS=[
   [/^(\d+) required items? needs? attention$/i,m=>m[1]+' 个必需项需要处理'],
   [/^(\d+) checks? queued$/i,m=>m[1]+' 项检查排队中'],
   [/^(\d+) checks?$/i,m=>m[1]+' 项检查'],
+  [/^(\d+) checks? passed$/i,m=>m[1]+' 项检查通过'],
   [/^(\d+) trusted certificate authorities$/i,m=>m[1]+' 个受信任的证书颁发机构'],
   [/^round (\d+) of (\d+)$/i,m=>'第 '+m[1]+' / '+m[2]+' 轮'],[/^round (\d+)$/i,m=>'第 '+m[1]+' 轮'],
   [/^Updated (.+)$/i,m=>'更新于 '+m[1]],[/^Version (.+) is current\.$/i,m=>'版本 '+m[1]+' 已是最新版。'],
@@ -5082,6 +5092,14 @@ function frRowMarkup(row,bucket){
 function frGroupMarkup(title,color,rows){if(!rows.length)return '';
   return '<div class="fr-group"><span class="fr-nameplate"'+(color?' style="color:'+color+'"':'')+'>'+esc(title)+'</span>'
     +'<div class="fr-rows">'+rows.join('')+'</div></div>';}
+function frReadyGroup(rows){if(!rows.length)return '';
+  const label=rows.length+(rows.length===1?' check passed':' checks passed');
+  return '<details class="fr-group fr-ready-group"><summary class="fr-ready-sum">'
+    +'<span class="fr-dot fr-d-ready" aria-hidden="true"></span>'
+    +'<span class="fr-nameplate" style="color:var(--pass)">Ready</span>'
+    +'<span class="fr-ready-n">'+label+'</span>'
+    +'<span class="fr-ready-chev" aria-hidden="true">›</span></summary>'
+    +'<div class="fr-rows">'+rows.join('')+'</div></details>';}
 function renderFirstRunReadiness(doctor,error){
   const groups=document.getElementById('fr-groups'),rollup=document.getElementById('fr-rollup');
   const railStatus=document.getElementById('fr-rail-status'),railQueue=document.getElementById('fr-rail-queue'),railDot=document.getElementById('fr-rail-dot');
@@ -5101,7 +5119,7 @@ function renderFirstRunReadiness(doctor,error){
     else if(b==='attention')attention.push(frRowMarkup(row,'attention'));
     else optional.push(frRowMarkup(row,'optional'));}
   const req=attention.length;
-  groups.innerHTML=[frGroupMarkup('Ready','var(--pass)',ready),
+  groups.innerHTML=[frReadyGroup(ready),
     frGroupMarkup('Needs attention','var(--escalated)',attention),
     frGroupMarkup('Optional enhancement','',optional)].join('')
     ||'<div class="fr-offline">No checks to show yet. Re-check to inspect this Mac.</div>';
