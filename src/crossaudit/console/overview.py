@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
+from pathlib import Path
 
 from ..config import Config
 from ..controller import StateStore
@@ -47,14 +48,34 @@ class Cycle:
         return sum(1 for f in self.findings if f["severity"] == "BLOCKER")
 
 
-def read_cycles(cfg: Config) -> list[Cycle]:
-    """Every audit the ledger holds, oldest first."""
+def read_report_texts(cfg: Config) -> list[tuple[Path, str]]:
+    """Every ``*/report.md`` under the ledger, read once as (path, text) pairs.
+
+    read_cycles and streams.auditor_stream both derive from this same set. A
+    snapshot reads it once and shares it, rather than globbing-and-reading the
+    reports twice per frame.
+    """
+    ledger = cfg.root / cfg.ledger_dir
+    if not ledger.is_dir():
+        return []
+    return [(report, report.read_text(encoding="utf-8"))
+            for report in ledger.glob("*/report.md")]
+
+
+def read_cycles(cfg: Config,
+                reports: list[tuple[Path, str]] | None = None) -> list[Cycle]:
+    """Every audit the ledger holds, oldest first.
+
+    ``reports`` may carry a pre-read report set (see read_report_texts) so a
+    caller that already read the reports does not read them again; when absent
+    the reports are read here, preserving the original standalone behaviour.
+    """
     out: list[Cycle] = []
     ledger = cfg.root / cfg.ledger_dir
     if not ledger.is_dir():
         return out
-    for report in ledger.glob("*/report.md"):
-        text = report.read_text(encoding="utf-8")
+    pairs = reports if reports is not None else read_report_texts(cfg)
+    for report, text in pairs:
         name = report.parent.name
         sha, _, _rest = name.partition("-r")
         verdict = (VERDICT_RE.search(text) or [None, "?"])[1] if VERDICT_RE.search(text) else "?"

@@ -42,6 +42,7 @@ import os
 import re
 import secrets
 import shutil
+import sqlite3
 import subprocess
 import threading
 import time
@@ -54,6 +55,7 @@ from .. import app_doctor, app_keys, connections, hpc, mcp, usage, workspace
 from ..autonomy import prepare_task
 from ..config import Config, load
 from ..controller import StateStore
+from ..dispute import DISPUTES_LOG
 from ..errors import ConfigDenial, Denial, classify_escalation_kind
 from ..gitio import is_ancestor
 from ..providers import resilience as provider_resilience
@@ -290,6 +292,149 @@ def _ordered_cycles(state: dict, commit_chats: dict[str, str] | None = None) -> 
             for cid, cycle in ordered]
 
 
+def _stat_sig(path: Path) -> tuple[int, int] | None:
+    """(mtime_ns, size) for a path, or None when it does not exist.
+
+    A missing signal reads as absent, which only forces a recompute — the safe
+    direction. Cheap: a single ``stat`` syscall, never a read or a subprocess.
+    Only safe for files the snapshot does NOT itself rewrite (see _content_sig).
+    """
+    try:
+        st = path.stat()
+    except OSError:
+        return None
+    return (st.st_mtime_ns, st.st_size)
+
+
+def _content_sig(path: Path) -> bytes | None:
+    """A hash of a file's bytes, or None when it does not exist.
+
+    Used where ``stat`` would flap on the snapshot's own execution:
+    ``StateStore.capabilities()`` runs on every snapshot and rewrites
+    state.json with identical content but a fresh mtime, so an mtime signal
+    would never let an idle tick reuse the cache. Hashing the content is stable
+    across that no-op rewrite yet moves on any real controller change (a
+    verdict, an escalation). state.json is small; this is one bounded read.
+    """
+    try:
+        return hashlib.sha256(path.read_bytes()).digest()
+    except OSError:
+        return None
+
+
+def _git_dir(root: Path) -> Path | None:
+    """The repository's ``.git`` directory, resolving a linked-worktree file."""
+    dot = root / ".git"
+    try:
+        if dot.is_dir():
+            return dot
+        if dot.is_file():
+            for line in dot.read_text(encoding="utf-8").splitlines():
+                if line.startswith("gitdir:"):
+                    return Path(line.split(":", 1)[1].strip())
+    except OSError:
+        return None
+    return None
+
+
+def _journal_sig(journal: Path) -> tuple | None:
+    """A cheap content signature of the run journal, read-only and WAL-stable.
+
+    The journal is SQLite in WAL mode: constructing a RunJournal appends a
+    frame to the ``-wal`` sidecar (the schema PRAGMAs write the header), so a
+    file ``stat`` would flap on this process's own reads. A raw read-only query
+    of ``(max event sequence, max run updated-at, run count)`` does not — a pure
+    SELECT writes nothing — yet it moves the instant any run is started,
+    appended to, finished or recovered, by THIS process or another. That is
+    exactly the signal the snapshot's ``progress`` and ``interrupted`` fields
+    depend on. A missing journal maps to the empty-journal value so the file's
+    later creation (the snapshot builds it on first run) does not flap the
+    fingerprint; ``connect`` would otherwise CREATE the file, a write the
+    fingerprint must never cause.
+    """
+    if not journal.is_file():
+        return (0, 0.0, 0)      # no journal == no runs, same as an empty one
+    try:
+        db = sqlite3.connect(journal, timeout=1)
+        try:
+            seq = db.execute(
+                "SELECT COALESCE(MAX(sequence), 0) FROM run_events").fetchone()[0]
+            updated, count = db.execute(
+                "SELECT COALESCE(MAX(updated), 0), COUNT(*) FROM runs").fetchone()
+            return (int(seq), float(updated), int(count))
+        finally:
+            db.close()
+    except sqlite3.Error:
+        return None
+
+
+def _snapshot_fingerprint(cfg: Config) -> tuple:
+    """A cheap signature of every input the expensive snapshot derivation reads.
+
+    Only the in-process change version, ``stat`` calls, and one read-only
+    SQLite probe — never a git log, a glob-and-read, or a YAML parse. The
+    stream's 0.1 s poll exists to catch changes another local CrossAudit
+    process makes without waking this one; the idle re-derivation it drove
+    pegged a core on a large or old project (North Star §32). Caching the
+    snapshot behind this fingerprint keeps an unchanged project from touching
+    git/glob/YAML at all.
+
+    The signature catches BOTH change sources without being perturbed by the
+    snapshot's own reads (so an idle tick stays stable and reuses the cache):
+
+    * in-process mutations — every one already calls ``STREAM_CHANGES.notify``,
+      so ``STREAM_CHANGES.current()`` covers them wholesale;
+    * cross-process mutations — the controller state file, the committed ledger
+      (a git commit moves HEAD and the reflog), the routing and dispute append
+      logs, the ledger directory (a new audit cycle is a new subdir), the run
+      journal (via the WAL-stable content probe above), and the config file (a
+      model switch a rival console wrote). A signal that cannot be read stats as
+      absent, which only forces a recompute — the safe direction.
+    """
+    state_dir = cfg.root / cfg.state_dir
+    ledger = cfg.root / cfg.ledger_dir
+    # Files the snapshot does not itself rewrite: a plain stat is enough.
+    watched = [
+        cfg.path,
+        ledger,
+        ledger / "routing.jsonl",
+        ledger / DISPUTES_LOG,
+    ]
+    git = _git_dir(cfg.root)
+    if git is not None:
+        # The reflog moves on every commit/reset/checkout; HEAD on branch
+        # switch; the refs dir and packed-refs on commit/pack. Together these
+        # catch a rival process committing a round without a full git log.
+        watched += [git / "HEAD", git / "logs" / "HEAD",
+                    git / "packed-refs", git / "refs" / "heads"]
+    return (STREAM_CHANGES.current(),
+            _journal_sig(journal_path(cfg)),
+            # state.json by CONTENT, not mtime: capabilities() rewrites it
+            # identically on every snapshot, which an mtime signal would flap.
+            _content_sig(state_dir / "state.json"),
+            *(_stat_sig(path) for path in watched))
+
+
+def _memoized_snapshot(cfg: Config, cache: dict) -> dict:
+    """A snapshot recomputed only when the cheap fingerprint actually moved.
+
+    ``cache`` is per-connection mutable state ({"fingerprint", "state"}). On an
+    idle tick the fingerprint is unchanged and the cached snapshot is returned
+    untouched — no git, no globs, no YAML re-parse. Any real change (in-process
+    OR cross-process) moves the fingerprint and forces a fresh derivation, so a
+    live update still propagates promptly. The config is re-parsed only on that
+    recompute (the fingerprint includes the config file's mtime), which is the
+    audit's "parse _config from cache unless the config changed".
+    """
+    fingerprint = _snapshot_fingerprint(cfg)
+    if "state" in cache and cache.get("fingerprint") == fingerprint:
+        return cache["state"]
+    state = snapshot(load(cfg.path))
+    cache["fingerprint"] = fingerprint
+    cache["state"] = state
+    return state
+
+
 def snapshot(cfg: Config) -> dict:
     from .. import __version__
     from .. import admission as adm
@@ -304,7 +449,11 @@ def snapshot(cfg: Config) -> dict:
                       controller_persistent=caps["persistent"],
                       controller_atomic=caps["atomic"], online=False)
     const = cfg.root / cfg.constitution
-    gen_stream, aud_stream, commit_chats = bundle(cfg)
+    # The audit report set is globbed-and-read once and shared: auditor_stream
+    # (inside bundle) and read_cycles below both derive from it, so a snapshot
+    # reads each report.md a single time instead of twice.
+    report_texts = overview.read_report_texts(cfg)
+    gen_stream, aud_stream, commit_chats = bundle(cfg, reports=report_texts)
     cycles = _ordered_cycles(controller_state, commit_chats)
     known_chats = {str(row.get("chat_id", ""))
                    for row in (*gen_stream, *aud_stream, *cycles)
@@ -319,7 +468,7 @@ def snapshot(cfg: Config) -> dict:
                          related[-1]["status"].lower() if related else "ready")
         if related:
             row["updated"] = max(row["updated"], related[-1]["updated"])
-    audits = overview.read_cycles(cfg)
+    audits = overview.read_cycles(cfg, reports=report_texts)
     escalation_rows = overview.escalations(cfg)
     cycle_chats = {row["id"]: row["chat_id"] for row in cycles}
     for row in escalation_rows:
@@ -807,6 +956,7 @@ def make_handler(cfg: Config, token: str, touch) -> type:
             change_version = STREAM_CHANGES.current()
             progress_version = PROGRESS_CHANGES.current()
             last_state = None
+            snapshot_cache: dict = {}
             try:
                 while not self.server.stop_event.is_set():
                     current_progress_version = PROGRESS_CHANGES.current()
@@ -819,7 +969,10 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                         state = dict(last_state)
                         state["progress"] = TRACKER.snapshot()
                     else:
-                        state = snapshot(self._config())
+                        # Idle ticks reuse the memoized snapshot; the expensive
+                        # git/glob/YAML derivation runs only when a cheap
+                        # fingerprint shows something actually changed (§32).
+                        state = _memoized_snapshot(cfg, snapshot_cache)
                     progress_version = current_progress_version
                     last_state = state
                     payload = json.dumps(state, sort_keys=True)

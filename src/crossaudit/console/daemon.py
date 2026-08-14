@@ -41,7 +41,7 @@ from ..controller import CONSUMED, ESCALATED, PASSED, StateStore
 from ..errors import Denial, park_escalation_kind
 from ..gitio import git, is_repo
 from ..runtime import (
-    RunCommandService,
+    ACTIVE_STATES,
     RunJournal,
     RunState,
     journal_path,
@@ -73,6 +73,12 @@ _CYCLE_LESS_OUTCOMES = frozenset({"", "refused", "provider_unavailable"})
 RECONCILE_SCAN_LIMIT = 20
 # Read-only migration fallback for a build interrupted by CrossAudit <= 4.14.
 LEGACY_BUILD_FLAG = "build-in-flight.json"
+#: Active run states that read as a crash-interruption when the owner is
+#: provably gone. CANCELLING is deliberately excluded: the user already asked
+#: to abandon that run, so a dead owner settles it to CANCELLED (the durable
+#: cancellation stays authoritative), never presented as an interruption.
+_INTERRUPTIBLE_ACTIVE = frozenset(
+    state.value for state in ACTIVE_STATES if state is not RunState.CANCELLING)
 KILL_SIGNAL = getattr(signal, "SIGKILL", signal.SIGTERM)
 
 
@@ -293,19 +299,56 @@ def _zombie(pid: int) -> bool:
 
 
 # ------------------------------------------------------- interrupted builds
+def _read_interruption(journal: RunJournal) -> dict | None:
+    """The interruption to DISPLAY, computed as a pure read — never a write.
+
+    Surfacing an interruption must never become a reclaim. This runs on the
+    project-list render path (console.projects._project_row calls interrupted()
+    for every sibling project) and on every state snapshot, so it may only
+    read. Two shapes qualify, and neither mutates the journal:
+
+    * a run the owning worker or daemon already moved to INTERRUPTED or FAILED
+      — the durable stop is recorded; this reads it back;
+    * an in-flight run whose owner process is PROVABLY gone (``kill(pid, 0)``
+      fails). A dead owner cannot return, so the view names the stop, but the
+      durable INTERRUPTED transition stays the owning daemon's watchdog (or the
+      command side's) responsibility.
+
+    A living owner is NEVER presented as stopped — not one whose lease expired,
+    nor one whose identity probe is momentarily slow. That is the sibling
+    isolation guarantee (North Star §6/§31): the render runs only the cheap,
+    reliable ``kill(pid, 0)`` liveness, never the write-capable
+    ``recover_abandoned`` (whose identity ``ps`` probe can time out under load
+    and reclaim a healthy sibling under the controller's own pid). A healthy
+    sibling mid a long provider call is thus neither reclaimed nor falsely
+    declared dead; a recycled pid errs toward "still running" here and is
+    reclaimed only by the owning daemon's full identity check.
+    """
+    row = journal.latest()
+    if row is None:
+        return None
+    state = row["state"]
+    if state in {RunState.INTERRUPTED.value, RunState.FAILED.value}:
+        return row
+    if state in _INTERRUPTIBLE_ACTIVE and not _pid_alive(row.get("owner_pid", 0)):
+        return row
+    return None
+
+
 def interrupted(cfg: Config) -> dict | None:
     """A build that was in flight when the process ended.
 
     The ledger holds the rounds that were committed; what it cannot know is that
     a round was cut off. This says so rather than letting a half-finished loop
     read as a finished one.
+
+    This is a PURE READ (see _read_interruption): it must never trigger a state
+    write, because it is called while rendering the multi-project overview and
+    a mere view of one project must not reclaim another's run.
     """
     runtime = journal_path(cfg)
     if runtime.is_file():
-        service = RunCommandService(
-            cfg, journal=RunJournal(runtime), alive=_pid_alive)
-        journal = service.journal
-        row = journal.interruption()
+        row = _read_interruption(RunJournal(runtime))
         if row:
             steps = row.get("steps") or []
             failed = row["state"] == "FAILED"

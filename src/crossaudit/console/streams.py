@@ -77,12 +77,21 @@ def _commits(root: Path, limit: int = 200) -> list[dict]:
     return rows[::-1]
 
 
-def _chat_map(root: Path) -> dict[str, str]:
-    """All durable Chat associations; unlike the visible stream, never capped."""
+def _chat_map(root: Path, limit: int = 200) -> dict[str, str]:
+    """Durable Chat associations for the recent commits, bounded like _commits.
+
+    Once uncapped, this ``git log`` walked the WHOLE repository on every
+    snapshot — the dominant idle-CPU cost on a large or old project (North Star
+    §32). It is now capped at the same ``-N`` horizon as _commits: the visible
+    streams and cycles only reference recent commits, and every cycle written
+    since the durable chat_id field carries its own association, so this map is
+    a fallback for the same recent window the rest of the snapshot covers.
+    """
     import subprocess
 
     result = subprocess.run(
-        ["git", "log", "--format=%H%x1f%(trailers:key=CrossAudit-Chat,valueonly)"],
+        ["git", "log", f"-{limit}",
+         "--format=%H%x1f%(trailers:key=CrossAudit-Chat,valueonly)"],
         cwd=str(root), capture_output=True, text=True)
     if result.returncode != 0:
         return {}
@@ -144,15 +153,23 @@ def generator_stream(cfg: Config, routing: list[dict],
 
 def auditor_stream(cfg: Config, routing: list[dict],
                    commits: list[dict] | None = None,
-                   commit_chats: dict[str, str] | None = None) -> list[dict]:
-    """Every verdict, every dispute ruling, and the user's words about standards."""
+                   commit_chats: dict[str, str] | None = None,
+                   reports: list[tuple[Path, str]] | None = None) -> list[dict]:
+    """Every verdict, every dispute ruling, and the user's words about standards.
+
+    ``reports`` may carry a pre-read ``*/report.md`` set (see
+    overview.read_report_texts) so a snapshot reads each report once and shares
+    it with read_cycles; when absent the reports are read here as before.
+    """
     stream: list[dict] = []
     ledger = cfg.root / cfg.ledger_dir
     commit_rows = commits if commits is not None else _commits(cfg.root)
     commit_chats = commit_chats or {row["sha"]: row["chat_id"]
                                     for row in commit_rows}
-    for report in ledger.glob("*/report.md"):
-        text = report.read_text(encoding="utf-8")
+    report_pairs = (reports if reports is not None else
+                    [(report, report.read_text(encoding="utf-8"))
+                     for report in ledger.glob("*/report.md")])
+    for report, text in report_pairs:
         verdict = "?"
         m = re.search(r"\|\s*verdict\s*\|\s*\*\*(\w+)\*\*", text)
         if m:
@@ -194,13 +211,18 @@ def auditor_stream(cfg: Config, routing: list[dict],
     return sorted(stream, key=lambda m: (m["t"], m.get("round", 0)))[-40:]
 
 
-def bundle(cfg: Config) -> tuple[list[dict], list[dict], dict[str, str]]:
-    """Build both streams and the commit association map with one Git read."""
+def bundle(cfg: Config, reports: list[tuple[Path, str]] | None = None,
+           ) -> tuple[list[dict], list[dict], dict[str, str]]:
+    """Build both streams and the commit association map with one Git read.
+
+    ``reports`` is forwarded to auditor_stream so a caller (server.snapshot)
+    can share one report read with read_cycles rather than reading twice.
+    """
     routing = routing_history(cfg.root / cfg.ledger_dir / "routing.jsonl", 60)
     commits = _commits(cfg.root)
     chat_map = _chat_map(cfg.root)
     return (generator_stream(cfg, routing, commits),
-            auditor_stream(cfg, routing, commits, chat_map), chat_map)
+            auditor_stream(cfg, routing, commits, chat_map, reports), chat_map)
 
 
 def both(cfg: Config) -> tuple[list[dict], list[dict]]:
