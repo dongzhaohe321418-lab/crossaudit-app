@@ -1155,17 +1155,18 @@ html.js [data-reveal].is-visible {
   border-radius: 10px 0 0 10px;
 }
 
-/* up arrow where the loop rejoins the generator */
+/* solid arrowhead at the top-right of the bracket, pointing back into the
+   generator step: the loop returns there for another round */
 .loop-edge::before {
   content: "";
   position: absolute;
-  left: -4px;
-  top: -2px;
-  width: 8px;
-  height: 8px;
-  border-left: 1.5px solid var(--generator);
-  border-top: 1.5px solid var(--generator);
-  transform: rotate(45deg);
+  right: -5px;
+  top: -3.5px;
+  width: 0;
+  height: 0;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-left: 6px solid var(--generator);
 }
 
 /* the loop's meaning, on its own line under the auditor step so it never
