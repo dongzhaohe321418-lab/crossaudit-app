@@ -7,6 +7,7 @@ import os
 import socket
 import ssl
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -18,7 +19,43 @@ from ..errors import ConfigDenial, ProviderDenial, provider_remediations
 
 CONNECT_TIMEOUT_S = 30.0
 MAX_RESPONSE_BYTES = 4 * 1024 * 1024
+#: One recv's worth of body at a time, so the total-deadline check below runs
+#: often enough to abort a slow trickle promptly without a busy loop.
+_READ_CHUNK_BYTES = 64 * 1024
 LOOPBACK = {"localhost", "127.0.0.1", "::1"}
+
+
+def _read_body_within_deadline(resp, deadline: float) -> bytes:
+    """Read the response body under BOTH the size cap and a TOTAL wall deadline.
+
+    ``timeout`` reaches urllib as a per-recv socket timeout that RESETS on every
+    packet, not a wall-clock budget. A provider that accepts the connection and
+    then trickles bytes (or an adversarial near-zero-throughput stream) can hold
+    one attempt open far past the intended budget — indefinitely for a true
+    trickle — delaying park/escalation. This reads in chunks against a monotonic
+    deadline (the same ``remaining = deadline - time.monotonic()`` shape mcp.py
+    and hpc.py use): once the deadline passes the read is abandoned and raised as
+    a RETRYABLE timeout, exactly like the connect timeout ``_reraise_transport``
+    already raises, so the resilience/park layer backs off and escalates on
+    schedule. ``read1`` returns one recv's bytes at a time, so a normal fast
+    response completes in the first read or two — well inside the deadline —
+    behaving exactly as before. The MAX_RESPONSE_BYTES cap is preserved: at most
+    one byte past the cap is read so the caller can still detect the overflow.
+    """
+    cap = MAX_RESPONSE_BYTES + 1
+    body = bytearray()
+    while len(body) < cap:
+        if time.monotonic() >= deadline:
+            raise ProviderDenial(
+                "provider stopped sending before the response body completed "
+                "within the time budget",
+                category="timeout", retryable=True,
+                remediations=provider_remediations("timeout"))
+        chunk = resp.read1(min(_READ_CHUNK_BYTES, cap - len(body)))
+        if not chunk:
+            break
+        body.extend(chunk)
+    return bytes(body)
 
 
 @dataclass
@@ -136,9 +173,12 @@ def request_json(url: str, payload: dict, headers: dict, *, timeout: float = CON
     req = urllib.request.Request(url, body, {"content-type": "application/json", **headers})
     opener = urllib.request.build_opener(
         urllib.request.HTTPSHandler(context=tls_context()), _NoRedirect)
+    # A true total deadline for the whole attempt (connect + body), not just a
+    # per-recv socket timeout, so a trickled body cannot outrun the budget.
+    deadline = time.monotonic() + timeout
     try:
         with opener.open(req, timeout=timeout) as resp:
-            data = resp.read(MAX_RESPONSE_BYTES + 1)
+            data = _read_body_within_deadline(resp, deadline)
             if len(data) > MAX_RESPONSE_BYTES:
                 raise ProviderDenial("provider response exceeded the size cap")
             rid = resp.headers.get("request-id") or resp.headers.get("x-request-id")
@@ -163,9 +203,11 @@ def get_json(url: str, headers: dict, *, timeout: float = CONNECT_TIMEOUT_S
     req = urllib.request.Request(url, headers=headers, method="GET")
     opener = urllib.request.build_opener(
         urllib.request.HTTPSHandler(context=tls_context()), _NoRedirect)
+    # Same total deadline as the completion path (see request_json).
+    deadline = time.monotonic() + timeout
     try:
         with opener.open(req, timeout=timeout) as resp:
-            data = resp.read(MAX_RESPONSE_BYTES + 1)
+            data = _read_body_within_deadline(resp, deadline)
             if len(data) > MAX_RESPONSE_BYTES:
                 raise ProviderDenial("provider response exceeded the size cap",
                                      category="response")

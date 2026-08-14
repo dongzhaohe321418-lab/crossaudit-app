@@ -8,6 +8,7 @@ auditor at /etc or at a file outside the tree.
 """
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path
 
@@ -15,9 +16,43 @@ from .errors import ConfigDenial, IntegrityDenial
 
 MAX_BLOB_BYTES = 512 * 1024
 
+#: Every build round drives commit + rev-parse through ``git()``, so an
+#: unbounded git is a hang that pins the run in an ACTIVE state forever and the
+#: single-run guard then locks out the whole project. A stale ``.git/index.lock``,
+#: a blocking hook, a credential/GPG prompt, or an NFS/fsevents stall are the
+#: usual culprits. The bound is deliberately generous — a legitimate large-tree
+#: commit must never be cut short — and overridable via ``CROSSAUDIT_GIT_TIMEOUT``
+#: (seconds) for unusually large repositories. Mirrors how mcp.py, hpc.py and
+#: codex_subscription.py already bound their subprocesses.
+GIT_TIMEOUT_S = 240.0
+
+
+def _git_timeout() -> float:
+    raw = os.environ.get("CROSSAUDIT_GIT_TIMEOUT", "").strip()
+    if raw:
+        try:
+            value = float(raw)
+        except ValueError:
+            value = 0.0
+        if value > 0:
+            return value
+    return GIT_TIMEOUT_S
+
 
 def git(*args: str, cwd: Path, check: bool = True) -> str:
-    proc = subprocess.run(["git", *args], cwd=str(cwd), capture_output=True, text=True)
+    timeout = _git_timeout()
+    try:
+        proc = subprocess.run(["git", *args], cwd=str(cwd), capture_output=True,
+                              text=True, timeout=timeout)
+    except subprocess.TimeoutExpired as exc:
+        # A timed-out git reaches a terminal outcome instead of wedging: the
+        # loop treats ConfigDenial from the commit as ``commit_refused`` and
+        # stops cleanly, freeing the run slot.
+        raise ConfigDenial(
+            f"git {' '.join(args)} did not finish within {timeout:.0f}s and was "
+            f"abandoned (a stale index.lock, a blocking hook, or a credential/GPG "
+            f"prompt can hang git); raise CROSSAUDIT_GIT_TIMEOUT if this is a "
+            f"legitimately large operation", cwd=str(cwd)) from exc
     if check and proc.returncode != 0:
         raise ConfigDenial(f"git {' '.join(args)} failed: {proc.stderr.strip()[:200]}",
                            cwd=str(cwd))

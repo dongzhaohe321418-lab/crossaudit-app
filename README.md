@@ -885,6 +885,7 @@ content from it. An already-exported environment variable takes precedence.
 | `CROSSAUDIT_KEYS_FILE` | Use a different credential-file location. |
 | `CROSSAUDIT_SHOW_KEYS` | Show key input during setup when explicitly set to `1`; hidden is the secure default. |
 | `CROSSAUDIT_CA_BUNDLE` | Trust a specific CA bundle without disabling TLS verification. |
+| `CROSSAUDIT_GIT_TIMEOUT` | Seconds a single git operation may run before it is abandoned (default `240`). Raise it only for unusually large repositories. |
 | `CROSSAUDIT_ALLOW_CUSTOM_ENDPOINT` | Explicitly allow sending a configured key to a non-built-in endpoint. |
 | `CROSSAUDIT_MAX_ACTIVE_PROJECTS` | Maximum simultaneous project builds in one workspace (default `4`, range `1`–`32`). |
 | `CROSSAUDIT_WORKSPACE_ROOT` | Advanced override for the app project directory; primarily useful in controlled tests. |

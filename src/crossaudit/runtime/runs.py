@@ -206,6 +206,28 @@ def _heartbeat_advanced(seen: float | None, current: float | None) -> bool:
     return float(current) > float(seen)
 
 
+#: The detail recorded when a CANCELLING run is force-completed because its
+#: worker never acknowledged the user's cancellation (see below).
+_CANCEL_GRACE_WHY = (
+    "the worker did not acknowledge the cancellation within its grace window")
+
+
+def _cancel_grace_elapsed(now: float, lease: float | None) -> bool:
+    """Whether a CANCELLING run's cancel lease has gone stall-silent.
+
+    Measured exactly like the stall scan — ``STALL_AFTER_SECONDS`` of silence
+    since the cancel lease was set (``request_cancel`` renews the lease as it
+    records the request, and a live worker renews it again at every heartbeat,
+    so an actively-progressing cancel keeps resetting this window). A CANCELLING
+    run therefore becomes eligible for force-completion at exactly the moment it
+    would otherwise start being narrated as stalled. A missing lease makes no
+    liveness claim and counts as elapsed.
+    """
+    if lease is None:
+        return True
+    return now >= float(lease) + (STALL_AFTER_SECONDS - LEASE_SECONDS)
+
+
 class RunJournal:
     """SQLite-backed event journal and current-state projection.
 
@@ -646,8 +668,11 @@ class RunJournal:
             # supervisable: if the worker never acknowledges because it is
             # gone (dead pid, recycled pid, or an unverifiable owner past
             # its lease), the watchdog completes the cancellation instead
-            # of absorbing it forever. A verified-alive worker keeps owning
-            # the acknowledgement itself.
+            # of absorbing it forever. A verified-alive worker normally keeps
+            # owning the acknowledgement itself — but if it wedges and stops
+            # heartbeating for the stall grace window, recover_abandoned
+            # force-completes the cancel anyway (the user already asked to
+            # abandon it); see _cancel_grace_elapsed.
             db.execute(
                 "UPDATE runs SET state=?, updated=?, lease_expires_at=? "
                 "WHERE run_id=?",
@@ -687,6 +712,14 @@ class RunJournal:
           reclaimed only once its lease has expired: it cannot be proven
           alive, but neither may it be declared dead, so it gets one lease
           period of grace during which a live owner refreshes its token.
+
+        The single exception to identity authority is CANCELLING: the user has
+        already asked to abandon that run, so a worker (even a verified-alive or
+        own-process one) that wedges and stops heartbeating for the stall grace
+        window has its cancellation force-completed rather than pinning the run
+        (and the single-run guard) forever. This applies to CANCELLING alone;
+        every other ACTIVE state keeps the "never reclaim a verified-alive
+        worker" invariant.
 
         The identity marker is read from the operating system, so this walks
         two phases: it snapshots the rows, then probes and (if needed) waits
@@ -744,13 +777,46 @@ class RunJournal:
                     f"this run's worker")
 
         # Phase 2 — classify, holding no lock.
+        #
+        # A3 — a bounded backstop for CANCELLING ONLY. The user has already
+        # asked to abandon a CANCELLING run, so — unlike any other ACTIVE state
+        # — a verified-alive or own-process owner that wedges must not pin it
+        # (and the single-run guard) forever. Once the cancel lease has gone
+        # stall-silent (_cancel_grace_elapsed: the same STALL_AFTER_SECONDS
+        # threshold the stall scan uses), the watchdog force-completes
+        # CANCELLING -> CANCELLED even for an owner why_reclaim would otherwise
+        # protect. This is strictly additive and scoped to CANCELLING: the
+        # "never reclaim a verified-alive worker" invariant is untouched for
+        # GENERATING/AUDITING/REVISING/etc., which still go through why_reclaim
+        # unchanged. Pair-safe with the bounded git subprocess (gitio) and
+        # provider HTTP deadline (providers/base): those let a wedged worker's
+        # own thread time out and acknowledge the cancel first, so this branch
+        # fires only when a thread is genuinely stuck. Residual risk: the run
+        # row is freed while that worker (a daemon thread in this process, or a
+        # process elsewhere) may still be alive; a leaked wedged thread cannot
+        # be joined from here, but it no longer holds the run slot, and the
+        # bounded subprocess/HTTP layers let it unwind on its own.
         pending: list[tuple[str, str, float | None]] = []
         for row in rows:
             owner = int(row["owner_pid"])
+            state = _state(row["state"])
+            cancel_forced = (state == RunState.CANCELLING and
+                             _cancel_grace_elapsed(now, row["lease_expires_at"]))
             if owner == self_pid:
+                # Own-process runs are otherwise exempt; the one exception is a
+                # CANCELLING run this process's own worker thread wedged on.
+                if cancel_forced:
+                    pending.append((str(row["run_id"]), _CANCEL_GRACE_WHY,
+                                    row["heartbeat_at"]))
                 continue
             why = why_reclaim(owner, row["owner_token"],
                               row["lease_expires_at"], row["heartbeat_at"])
+            # A verified-alive (or lease-live unverifiable) owner returns
+            # why=None; the CANCELLING grace backstop still applies to it, but
+            # for any owner why_reclaim already reclaims we keep its more
+            # specific reason (dead / recycled / unverifiable).
+            if why is None and cancel_forced:
+                why = _CANCEL_GRACE_WHY
             if why is not None:
                 pending.append((str(row["run_id"]), why, row["heartbeat_at"]))
         if not pending:
