@@ -42,6 +42,7 @@ import os
 import re
 import secrets
 import shutil
+import socket
 import sqlite3
 import subprocess
 import threading
@@ -90,6 +91,16 @@ from .transfers import (
 )
 
 IDLE_TIMEOUT_S = 900.0
+#: App-mode per-project daemons (app.py ``project_console``) start detached with
+#: ``start_new_session=True`` and so never receive the app's SIGTERM; without a
+#: finite idle window a daemon left over after the app closes or a project stops
+#: being viewed would live forever (§32 "bounded background concurrency"). This
+#: generous ceiling lets such a daemon self-retire once it has no run in flight,
+#: no connected SSE client, and no request for the window. A daemon doing real
+#: work never reaches it: an active run (``TRACKER.running``) and a live stream
+#: both hold the idle clock open (see ``idle_watch`` / ``_idle_expired``).
+PROJECT_IDLE_TIMEOUT_S = 1200.0     # 20 minutes
+IDLE_POLL_S = 5.0           # how often idle_watch re-evaluates the idle decision
 STREAM_POLL_S = 0.1          # fallback for changes made by another local process
 STREAM_HEARTBEAT_S = 15.0
 MAX_UTTERANCE = 4000
@@ -223,6 +234,52 @@ PROGRESS_CHANGES = _ChangeSignal()
 MODEL_SWITCH_LOCK = threading.Lock()
 
 
+def _enable_keepalive(conn: socket.socket) -> None:
+    """Turn on TCP keepalive for an accepted connection.
+
+    A silently-dead peer (sleep/wake, Wi-Fi drop, a half-open NAT) otherwise
+    leaves its SSE handler thread parked in ``wfile.write`` until the OS default
+    TCP timeout fires, which is minutes. Keepalive makes the kernel probe an
+    idle connection so a dead peer surfaces as an ``OSError`` in the streaming
+    loop within a couple of minutes and the handler exits. It is the safe lever:
+    probes fire only on a connection with no traffic, and a live-but-slow peer's
+    stack answers them, so a legitimately slow client is never dropped. Every
+    option is best-effort and guarded for platforms that lack it.
+    """
+    try:
+        conn.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+    except OSError:
+        return
+    # Seconds idle before the first probe. Linux spells it TCP_KEEPIDLE; macOS
+    # spells the same knob TCP_KEEPALIVE.
+    idle = getattr(socket, "TCP_KEEPIDLE", None) or getattr(
+        socket, "TCP_KEEPALIVE", None)
+    for code, value in ((idle, 60),
+                        (getattr(socket, "TCP_KEEPINTVL", None), 15),
+                        (getattr(socket, "TCP_KEEPCNT", None), 4)):
+        if code is None:
+            continue
+        try:
+            conn.setsockopt(socket.IPPROTO_TCP, code, value)
+        except OSError:
+            pass
+
+
+def _idle_expired(*, running: bool, active_streams: int,
+                  idle_seconds: float, timeout: float) -> bool:
+    """The decision ``idle_watch`` makes each tick, factored out to be tested
+    without a real clock.
+
+    A console self-retires only when nothing is in flight: an active run
+    (``running``) or any connected SSE client (``active_streams``) holds it open
+    no matter how long the last request was, because idleness must never end
+    real work (the hard rule) — correctness beats reclaiming a daemon.
+    """
+    if running or active_streams > 0:
+        return False
+    return idle_seconds > timeout
+
+
 class _ConsoleHTTPServer(ThreadingHTTPServer):
     """HTTP server whose idle watcher has the same lifetime as the socket."""
 
@@ -230,6 +287,20 @@ class _ConsoleHTTPServer(ThreadingHTTPServer):
     # an explicit native-app quit or recovery restart from ending the core.
     daemon_threads = True
     block_on_close = False
+
+    def get_request(self):
+        """Accept a connection and enable keepalive before it is served (E3)."""
+        conn, addr = super().get_request()
+        _enable_keepalive(conn)
+        return conn, addr
+
+    def stream_opened(self) -> None:
+        with self._stream_lock:
+            self.active_streams += 1
+
+    def stream_closed(self) -> None:
+        with self._stream_lock:
+            self.active_streams = max(0, self.active_streams - 1)
 
     def server_bind(self) -> None:
         """Bind loopback without a reverse-DNS lookup.
@@ -247,6 +318,10 @@ class _ConsoleHTTPServer(ThreadingHTTPServer):
         self.stop_event = threading.Event()
         self.idle_thread: threading.Thread | None = None
         self.watchdog_thread: threading.Thread | None = None
+        # A live SSE client counts as real work: the idle watcher must never
+        # retire a daemon that is still streaming to an open project window.
+        self._stream_lock = threading.Lock()
+        self.active_streams = 0
         super().__init__(*args, **kwargs)
 
     def shutdown(self) -> None:
@@ -902,6 +977,7 @@ def make_handler(cfg: Config, token: str, touch) -> type:
             last_digest = ""
             last_beat = time.monotonic()
             change_version = STREAM_CHANGES.current()
+            self.server.stream_opened()
             try:
                 while not self.server.stop_event.is_set():
                     payload = json.dumps(projects.snapshot(self._config()), sort_keys=True)
@@ -920,6 +996,8 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                     change_version = STREAM_CHANGES.wait(change_version, 0.5)
             except (BrokenPipeError, ConnectionResetError, OSError):
                 return
+            finally:
+                self.server.stream_closed()
 
         def _stream_settings(self, touch) -> None:
             self.send_response(200)
@@ -933,6 +1011,7 @@ def make_handler(cfg: Config, token: str, touch) -> type:
             last_digest = ""
             last_beat = time.monotonic()
             change_version = STREAM_CHANGES.current()
+            self.server.stream_opened()
             try:
                 while not self.server.stop_event.is_set():
                     payload = json.dumps(app_settings(self._config()), sort_keys=True)
@@ -951,6 +1030,8 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                     change_version = STREAM_CHANGES.wait(change_version, 1.0)
             except (BrokenPipeError, ConnectionResetError, OSError):
                 return
+            finally:
+                self.server.stream_closed()
 
         def _stream(self, cfg: Config, touch) -> None:
             """Push a snapshot whenever anything changes.
@@ -975,6 +1056,7 @@ def make_handler(cfg: Config, token: str, touch) -> type:
             progress_version = PROGRESS_CHANGES.current()
             last_state = None
             snapshot_cache: dict = {}
+            self.server.stream_opened()
             try:
                 while not self.server.stop_event.is_set():
                     current_progress_version = PROGRESS_CHANGES.current()
@@ -1013,6 +1095,8 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                                                          STREAM_POLL_S)
             except (BrokenPipeError, ConnectionResetError, OSError):
                 return                      # the tab closed; nothing to clean up
+            finally:
+                self.server.stream_closed()
 
         def do_POST(self) -> None:
             parsed = urlparse(self.path)
@@ -1482,13 +1566,19 @@ def serve(cfg: Config, port: int = 0, *,
     httpd = _ConsoleHTTPServer(("127.0.0.1", port), make_handler(cfg, token, touch))
 
     def idle_watch() -> None:
-        while not httpd.stop_event.wait(5):
-            # A closed window must never end a running build: idleness is only
-            # grounds for shutting down when there is nothing in flight.
-            if TRACKER.running:
+        while not httpd.stop_event.wait(IDLE_POLL_S):
+            # A closed window must never end a running build, and a still-open
+            # project window must never be reaped from under a live stream:
+            # idleness is only grounds for shutting down when there is nothing
+            # in flight AND no SSE client connected. Both refresh the clock so a
+            # daemon doing real work never ages toward the timeout.
+            running, streams = TRACKER.running, httpd.active_streams
+            if running or streams > 0:
                 last[0] = time.monotonic()
                 continue
-            if time.monotonic() - last[0] > idle_timeout:
+            if _idle_expired(running=running, active_streams=streams,
+                             idle_seconds=time.monotonic() - last[0],
+                             timeout=idle_timeout):
                 httpd.shutdown()
                 return
 

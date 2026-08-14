@@ -22,6 +22,7 @@ from . import __version__
 from .app_keys import load_into_environment
 from .config import CONFIG_NAME, load
 from .console import daemon, serve
+from .console.server import PROJECT_IDLE_TIMEOUT_S
 from .dcl import describe as describe_checks
 from .scaffold import CONFIG_TEMPLATE, GENERAL_CHECKS, read
 from .workspace import configured_workspace
@@ -211,7 +212,13 @@ def project_console(root: Path, port: int = 0) -> int:
     os.chdir(root)
     load_into_environment()
     cfg = load(root / CONFIG_NAME)
-    _url, httpd = serve(cfg, port=port, register=True, idle_timeout=float("inf"))
+    # E1: a per-project daemon starts detached (start_new_session=True) and never
+    # receives the app's SIGTERM, so an infinite idle timeout let daemons pile up
+    # unbounded after the app closed or a project stopped being viewed. A finite,
+    # generous window lets an idle daemon self-retire, while a run in flight or a
+    # live SSE client holds it open (server.idle_watch never reaps real work).
+    _url, httpd = serve(cfg, port=port, register=True,
+                        idle_timeout=PROJECT_IDLE_TIMEOUT_S)
 
     def stop(_signum=None, _frame=None) -> None:
         threading.Thread(target=httpd.shutdown, daemon=True).start()

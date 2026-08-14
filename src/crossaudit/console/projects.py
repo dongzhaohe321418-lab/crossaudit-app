@@ -19,6 +19,8 @@ import time
 import urllib.error
 import urllib.request
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import TimeoutError as _FutureTimeout
 from pathlib import Path
 
 import yaml
@@ -367,7 +369,93 @@ _GH_CACHE: tuple[float, dict] | None = None
 _RUNTIME_CACHE: dict[str, tuple[float, tuple, dict | None]] = {}
 
 
-def _runtime(cfg: Config, current: Config) -> dict | None:
+#: E2 fan-out. Sibling daemons are probed on one small, process-wide, bounded
+#: pool (never a thread per project — §32 "bounded background concurrency") and
+#: collected under a single wall-clock deadline. Each probe already self-caps at
+#: daemon.fetch_state's 0.5s timeout, so a wedged daemon costs one timeout for
+#: the whole overview instead of one per active project; the deadline is the
+#: backstop for a pathological burst of wedged siblings.
+_FANOUT_WORKERS = 8
+_FANOUT_DEADLINE_S = 1.5
+_FANOUT_POOL: ThreadPoolExecutor | None = None
+_FANOUT_POOL_LOCK = threading.Lock()
+
+
+def _fanout_pool() -> ThreadPoolExecutor:
+    global _FANOUT_POOL
+    with _FANOUT_POOL_LOCK:
+        if _FANOUT_POOL is None:
+            _FANOUT_POOL = ThreadPoolExecutor(
+                max_workers=_FANOUT_WORKERS, thread_name_prefix="ca-overview")
+        return _FANOUT_POOL
+
+
+atexit.register(lambda: _FANOUT_POOL and _FANOUT_POOL.shutdown(wait=False))
+
+
+def _prewarm_siblings(paths: list[Path], current: Config) -> dict[str, dict | None]:
+    """Resolve every running sibling's live state concurrently before snapshot()
+    builds rows serially (E2).
+
+    Only siblings that hold a run record are probed; the rest resolve to None
+    cheaply in ``_runtime`` with no network. A sibling still inside the existing
+    0.35s cache window is reused without a probe. The remaining probes run on the
+    bounded pool and are gathered until the shared deadline. A straggler past the
+    deadline yields its last-known state if one is still held, else None — the
+    exact "unreachable/last-known" fallback the serial path already produces for
+    a wedged daemon, except the whole set costs one timeout rather than N.
+
+    For a reachable daemon the value returned is precisely what a serial
+    ``daemon.fetch_state`` would have returned, so every healthy row is
+    byte-for-byte identical to the pre-parallel behaviour.
+    """
+    resolved: dict[str, dict | None] = {}
+    targets: dict[str, tuple[tuple, dict]] = {}
+    now = time.monotonic()
+    for path in paths:
+        if path == current.root:
+            continue                       # the current project reads in-process
+        try:
+            cfg = load(path / CONFIG_NAME)
+        except (Denial, OSError, KeyError, ValueError):
+            continue
+        info = daemon.read_run(cfg)
+        if not info:
+            continue                       # not running: _runtime returns None
+        key = str(cfg.root)
+        identity = (info.get("pid"), info.get("port"), info.get("started"))
+        cached = _RUNTIME_CACHE.get(key)
+        if cached and cached[1] == identity and now - cached[0] < 0.35:
+            resolved[key] = cached[2]      # honour the existing short cache
+        else:
+            targets[key] = (identity, info)
+    if not targets:
+        return resolved
+    pool = _fanout_pool()
+    futures = {pool.submit(daemon.fetch_state, info): key
+               for key, (_identity, info) in targets.items()}
+    fetched: dict[str, dict | None] = {}
+    try:
+        for future in as_completed(futures, timeout=_FANOUT_DEADLINE_S):
+            fetched[futures[future]] = future.result()
+    except _FutureTimeout:
+        pass    # stragglers fall back below; each probe self-expires at its own
+                # timeout, so nothing is left running for longer than that
+    stamp = time.monotonic()
+    for key, (identity, info) in targets.items():
+        if key in fetched:
+            state = fetched[key]
+            _RUNTIME_CACHE[key] = (stamp, identity, state)
+            resolved[key] = state
+        else:
+            cached = _RUNTIME_CACHE.get(key)
+            resolved[key] = (cached[2] if cached and cached[1] == identity
+                             else None)
+    return resolved
+
+
+def _runtime(cfg: Config, current: Config,
+             prewarmed: dict[str, dict | None] | None = None) -> dict | None:
     """The small live-progress projection used by the workspace menu."""
     if cfg.root == current.root:
         from .. import hpc
@@ -375,19 +463,40 @@ def _runtime(cfg: Config, current: Config) -> dict | None:
         state = {"progress": TRACKER.snapshot(),
                  "compute": hpc.MANAGER.snapshot(cfg)}
     else:
-        info = daemon.read_run(cfg)
-        if not info:
-            return None
-        identity = (info.get("pid"), info.get("port"), info.get("started"))
-        key, now = str(cfg.root), time.monotonic()
-        cached = _RUNTIME_CACHE.get(key)
-        if cached and cached[1] == identity and now - cached[0] < 0.35:
-            state = cached[2]
-        else:
-            state = daemon.fetch_state(info)
-            _RUNTIME_CACHE[key] = (now, identity, state)
-        if not state:
-            return None
+        state = _sibling_state(cfg, prewarmed)
+    if not state:
+        return None
+    return _progress_from_state(state)
+
+
+def _sibling_state(cfg: Config,
+                   prewarmed: dict[str, dict | None] | None) -> dict | None:
+    """A sibling daemon's live state.
+
+    When ``snapshot`` has already fanned the sibling probes out in parallel (E2)
+    the resolved value is handed in via ``prewarmed`` and reused verbatim — the
+    same value ``daemon.fetch_state`` would have returned serially. Otherwise
+    this is the original serial path: a small (0.35s) cache over one
+    0.5s-timeout probe, unchanged, so callers that do not fan out behave exactly
+    as before.
+    """
+    key = str(cfg.root)
+    if prewarmed is not None and key in prewarmed:
+        return prewarmed[key]
+    info = daemon.read_run(cfg)
+    if not info:
+        return None
+    identity = (info.get("pid"), info.get("port"), info.get("started"))
+    now = time.monotonic()
+    cached = _RUNTIME_CACHE.get(key)
+    if cached and cached[1] == identity and now - cached[0] < 0.35:
+        return cached[2]
+    state = daemon.fetch_state(info)
+    _RUNTIME_CACHE[key] = (now, identity, state)
+    return state
+
+
+def _progress_from_state(state: dict) -> dict | None:
     progress = state.get("progress")
     if isinstance(progress, dict) and not progress.get("finished"):
         steps = progress.get("steps") if isinstance(progress.get("steps"), list) else []
@@ -1190,13 +1299,14 @@ def update_runtime(current: Config, payload: dict) -> dict:
         return {**runtime_options(updated), "changed": True, "commit": commit}
 
 
-def _project_row(path: Path, current: Config) -> dict | None:
+def _project_row(path: Path, current: Config,
+                 prewarmed: dict[str, dict | None] | None = None) -> dict | None:
     try:
         cfg = load(path / CONFIG_NAME)
         cycles = StateStore(cfg.root / cfg.state_dir / "state.json").snapshot().get(
             "cycles", {})
         latest = list(cycles.values())[-1] if cycles else None
-        progress = _runtime(cfg, current)
+        progress = _runtime(cfg, current, prewarmed)
         interrupted = daemon.interrupted(cfg)
         setup = _read_setup(cfg.root)
         setup_running = bool(setup and setup.get("status") == "running")
@@ -1252,13 +1362,19 @@ def snapshot(current: Config) -> dict:
     app_home = os.environ.get("CROSSAUDIT_APP_MODE") == "1"
     if current.root not in candidates and not (app_home and current.root.name == ".crossaudit-home"):
         candidates.append(current.root)
-    for path in candidates:
-        if app_home and path.name == ".crossaudit-home":
-            continue
-        if (path / CONFIG_NAME).is_file():
-            row = _project_row(path, current)
-            if row:
-                rows.append(row)
+    project_paths = [
+        path for path in candidates
+        if not (app_home and path.name == ".crossaudit-home")
+        and (path / CONFIG_NAME).is_file()]
+    # E2: probe every running sibling's live state concurrently under one
+    # deadline before building rows serially, so the overview wall-clock is
+    # bounded by a single daemon timeout instead of the serial sum over active
+    # projects. Healthy rows are identical to the serial path (§32).
+    prewarmed = _prewarm_siblings(project_paths, current)
+    for path in project_paths:
+        row = _project_row(path, current, prewarmed)
+        if row:
+            rows.append(row)
     rows.sort(key=lambda p: (not p["pinned"], not p["current"],
                              -p["updated"], p["name"].lower()))
     return {"workspace": str(base), "items": rows, "jobs": JOBS.snapshot(current),
