@@ -1413,10 +1413,40 @@ details.credential-card[open]>.credential-head:after{transform:rotate(180deg)}
   -webkit-mask:var(--settings-icon) center/contain no-repeat;mask:var(--settings-icon) center/contain no-repeat}
 .settings-nav-icon.general{--settings-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round'%3E%3Cpath d='M4 6h10M18 6h2M4 12h2M10 12h10M4 18h7M15 18h5'/%3E%3Ccircle cx='16' cy='6' r='2'/%3E%3Ccircle cx='8' cy='12' r='2'/%3E%3Ccircle cx='13' cy='18' r='2'/%3E%3C/svg%3E")}
 .settings-nav-icon.providers{--settings-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='4' y='3' width='16' height='7' rx='2'/%3E%3Crect x='4' y='14' width='16' height='7' rx='2'/%3E%3Cpath d='M8 6.5h.01M8 17.5h.01M12 6.5h4M12 17.5h4'/%3E%3C/svg%3E")}
+.settings-nav-icon.agent{--settings-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='5' y='8' width='14' height='11' rx='2'/%3E%3Cpath d='M12 4v4'/%3E%3Ccircle cx='12' cy='3.5' r='1'/%3E%3Cpath d='M9 13h.01M15 13h.01'/%3E%3C/svg%3E")}
+.settings-nav-icon.audit{--settings-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3l7 3v5c0 4-3 7-7 8-4-1-7-4-7-8V6z'/%3E%3Cpath d='M9 12l2 2 4-4'/%3E%3C/svg%3E")}
+.settings-nav-icon.files{--settings-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'/%3E%3C/svg%3E")}
+.settings-nav-icon.github{--settings-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='6' cy='6' r='2'/%3E%3Ccircle cx='6' cy='18' r='2'/%3E%3Ccircle cx='18' cy='9' r='2'/%3E%3Cpath d='M6 8v8M18 11c0 4-6 1-6 5'/%3E%3C/svg%3E")}
+.settings-nav-icon.compute{--settings-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='4' y='5' width='16' height='6' rx='1.5'/%3E%3Crect x='4' y='13' width='16' height='6' rx='1.5'/%3E%3Cpath d='M8 8h.01M8 16h.01'/%3E%3C/svg%3E")}
+.settings-nav-icon.integrations{--settings-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='7' y='7' width='10' height='10' rx='2'/%3E%3Cpath d='M9 3v4M15 3v4M9 21v-4M15 21v-4M3 9h4M3 15h4M21 9h-4M21 15h-4'/%3E%3C/svg%3E")}
+.settings-nav-icon.usage{--settings-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 19V11M9 19V5M14 19v-6M19 19V8M3 20h18'/%3E%3C/svg%3E")}
+.settings-nav-icon.security{--settings-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='5' y='11' width='14' height='9' rx='2'/%3E%3Cpath d='M8 11V8a4 4 0 0 1 8 0v3'/%3E%3C/svg%3E")}
+.settings-nav-icon.diagnostics{--settings-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 12h4l2-6 4 12 2-6h6'/%3E%3C/svg%3E")}
+.settings-nav-icon.advanced{--settings-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='16' rx='2'/%3E%3Cpath d='M7 9l3 3-3 3M13 15h4'/%3E%3C/svg%3E")}
+.settings-nav-button.dim{opacity:.4}
 .settings-content{min-width:0;overflow:auto;padding:24px 25px}
 .settings-pane{margin:0}
 .settings-pane[hidden]{display:none}
 .settings-heading{margin-bottom:20px}
+.settings-nav{overflow-y:auto}
+.settings-search-bar{margin-bottom:18px}
+.settings-search-bar input{width:100%;height:36px;padding:0 12px;border:1px solid var(--line);
+  border-radius:var(--r-md);background:var(--surface-2);color:var(--text);font-size:var(--fs-label)}
+.settings-search-bar input:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.settings-search-results{display:flex;flex-direction:column;gap:2px}
+.settings-search-results[hidden]{display:none}
+.settings-result{display:flex;align-items:baseline;justify-content:space-between;gap:12px;
+  width:100%;padding:9px 11px;border:0;border-radius:var(--r-sm);background:transparent;
+  color:var(--text);text-align:left;cursor:pointer}
+.settings-result:hover{background:var(--hover)}
+.settings-result:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.settings-result-label{font-size:var(--fs-label);font-weight:500}
+.settings-result-group{color:var(--text-3);font-size:var(--fs-caption);white-space:nowrap}
+.settings-result-empty{padding:9px 11px;color:var(--text-3);font-size:var(--fs-label)}
+.settings-empty{margin:14px 0 0;color:var(--text-3);font-size:var(--fs-caption);line-height:1.55}
+.settings-hint{margin:12px 0 0;color:var(--text-2);font-size:var(--fs-caption);line-height:1.55}
+.settings-jump{display:flex;align-items:center;flex-wrap:wrap;gap:9px;margin-top:14px}
+.settings-jump .settings-empty,.settings-jump .settings-scope{margin:0}
 
 /* Remote compute host wizard and job submission. */
 .hpc-host-wizard{width:min(820px,100%);overflow:hidden;display:flex;flex-direction:column}
@@ -2306,10 +2336,55 @@ body.first-run [data-fr-step="1"]:not([hidden]) .fr-choice:nth-of-type(3){animat
     <p>Manage this Mac and model connections without using Terminal.</p></div>
     <span class="spacer"></span><button type="button" class="icon-button" id="close-settings" aria-label="Close settings">×</button></div>
     <div class="wizard-body settings-shell"><nav class="settings-nav" aria-label="Settings sections">
-      <button type="button" class="settings-nav-button active" data-settings-panel="general" aria-pressed="true"><span class="settings-nav-icon general" aria-hidden="true"></span><span><b>General</b><small>Workspace and this Mac</small></span><i id="settings-general-state">…</i></button>
-      <button type="button" class="settings-nav-button" data-settings-panel="providers" aria-pressed="false"><span class="settings-nav-icon providers" aria-hidden="true"></span><span><b>Model providers</b><small>Subscriptions and API keys</small></span><i id="settings-provider-count">0</i></button>
-    </nav><div class="settings-content">
-    <section class="form-section settings-pane" data-settings-pane="general" tabindex="-1"><div class="step-heading settings-heading"><span>General</span><h3>Workspace and application readiness</h3><p>CrossAudit checks required software and offers a direct recovery action when something needs attention.</p></div>
+      <button type="button" class="settings-nav-button active" data-settings-panel="general" aria-pressed="true"><span class="settings-nav-icon general" aria-hidden="true"></span><span><b>General</b><small>Language and appearance</small></span></button>
+      <button type="button" class="settings-nav-button" data-settings-panel="providers" aria-pressed="false"><span class="settings-nav-icon providers" aria-hidden="true"></span><span><b>Providers</b><small>Accounts and credentials</small></span><i id="settings-provider-count">0</i></button>
+      <button type="button" class="settings-nav-button" data-settings-panel="agent" aria-pressed="false"><span class="settings-nav-icon agent" aria-hidden="true"></span><span><b>Agent behavior</b><small>Roles and rounds</small></span></button>
+      <button type="button" class="settings-nav-button" data-settings-panel="audit" aria-pressed="false"><span class="settings-nav-icon audit" aria-hidden="true"></span><span><b>Audit</b><small>Constitution and rules</small></span></button>
+      <button type="button" class="settings-nav-button" data-settings-panel="files" aria-pressed="false"><span class="settings-nav-icon files" aria-hidden="true"></span><span><b>Files</b><small>Storage on this Mac</small></span></button>
+      <button type="button" class="settings-nav-button" data-settings-panel="github" aria-pressed="false"><span class="settings-nav-icon github" aria-hidden="true"></span><span><b>GitHub</b><small>Delivery connection</small></span></button>
+      <button type="button" class="settings-nav-button" data-settings-panel="compute" aria-pressed="false"><span class="settings-nav-icon compute" aria-hidden="true"></span><span><b>Compute</b><small>Remote hosts</small></span></button>
+      <button type="button" class="settings-nav-button" data-settings-panel="integrations" aria-pressed="false"><span class="settings-nav-icon integrations" aria-hidden="true"></span><span><b>Integrations</b><small>MCP, skills, tools</small></span></button>
+      <button type="button" class="settings-nav-button" data-settings-panel="usage" aria-pressed="false"><span class="settings-nav-icon usage" aria-hidden="true"></span><span><b>Usage</b><small>Budgets and estimates</small></span></button>
+      <button type="button" class="settings-nav-button" data-settings-panel="security" aria-pressed="false"><span class="settings-nav-icon security" aria-hidden="true"></span><span><b>Security &amp; privacy</b><small>Keychain and data</small></span></button>
+      <button type="button" class="settings-nav-button" data-settings-panel="diagnostics" aria-pressed="false"><span class="settings-nav-icon diagnostics" aria-hidden="true"></span><span><b>Diagnostics</b><small>Doctor and versions</small></span><i id="settings-diagnostics-state">…</i></button>
+      <button type="button" class="settings-nav-button" data-settings-panel="advanced" aria-pressed="false"><span class="settings-nav-icon advanced" aria-hidden="true"></span><span><b>Advanced</b><small>Developer options</small></span></button>
+    </nav><div class="settings-content" id="settings-content">
+    <div class="settings-search-bar"><input type="search" id="settings-search" role="searchbox" aria-label="Search settings" placeholder="Search settings…" autocomplete="off" aria-controls="settings-search-results"></div>
+    <div class="settings-search-results" id="settings-search-results" role="listbox" aria-label="Search results" hidden></div>
+    <section class="form-section settings-pane" data-settings-pane="general" tabindex="-1"><div class="step-heading settings-heading"><span>General</span><h3>Language and appearance</h3><p>Choose how CrossAudit looks and reads on this Mac.</p></div>
+      <label class="field"><span>Appearance</span><select id="settings-appearance"><option value="light">Light</option><option value="dark">Dark</option></select></label>
+      <div class="settings-jump"><button type="button" class="secondary" id="settings-appearance-system">Match system</button><small class="settings-hint">Follow this Mac's light or dark setting.</small></div>
+      <label class="field" style="margin-top:14px"><span>Language</span><select id="settings-language"><option value="en">English</option><option value="zh">中文</option></select></label>
+      <p class="settings-empty">Startup, updates, and notifications follow the macOS app and aren't configurable here yet.</p>
+    </section><section class="form-section settings-pane" data-settings-pane="providers" tabindex="-1" hidden><div class="step-heading settings-heading"><span>Providers</span><h3>Connect the services you use</h3><p>Open only the provider you want to configure. Existing secrets are never displayed again.</p></div>
+      <div class="provider-note"><b>Developer access and consumer subscriptions are different products.</b> CrossAudit only offers web sign-in where the provider publishes a supported third-party inference flow. It never imports browser cookies or CLI session files.</div>
+      <div id="provider-credentials"></div>
+      <p class="settings-empty">Which models each role uses, and fallback routes, are chosen per project.</p>
+    </section><section class="form-section settings-pane" data-settings-pane="agent" tabindex="-1" hidden><div class="step-heading settings-heading"><span>Agent behavior</span><h3>Default roles and revision rounds</h3><p>How the generator and independent auditor are set up, and how many rounds run before CrossAudit pauses.</p></div>
+      <p class="settings-empty">Roles, reasoning effort, and the revision limit are set per project, not as global defaults yet.</p>
+      <div class="settings-jump"><button type="button" class="secondary" data-settings-open="runtime">Open project controls</button><small class="settings-empty" data-scope-note hidden></small></div>
+    </section><section class="form-section settings-pane" data-settings-pane="audit" tabindex="-1" hidden><div class="step-heading settings-heading"><span>Audit</span><h3>Constitution and audit rules</h3><p>The rules that govern every audit, and the guarantees CrossAudit always enforces.</p></div>
+      <p class="settings-hint">Admission and source independence are always-on guarantees, not adjustable settings.</p>
+      <p class="settings-empty">The constitution is edited inside each project. Evidence retention isn't configurable here yet.</p>
+    </section><section class="form-section settings-pane" data-settings-pane="files" tabindex="-1" hidden><div class="step-heading settings-heading"><span>Files</span><h3>Local storage</h3><p>Where CrossAudit keeps projects on this Mac.</p></div>
+      <label class="field"><span>Project workspace</span><div class="path-picker"><input id="settings-workspace" readonly><button type="button" class="secondary" id="choose-settings-workspace">Choose folder…</button></div></label>
+      <p class="settings-empty">Indexing, preview, temporary files, and large-file handling use built-in defaults and aren't configurable here yet.</p>
+    </section><section class="form-section settings-pane" data-settings-pane="github" tabindex="-1" hidden><div class="step-heading settings-heading"><span>GitHub</span><h3>GitHub delivery</h3><p>The GitHub connection used to deliver and audit work.</p></div>
+      <div class="settings-readiness"><div class="readiness-item">GitHub connection tool<span id="settings-github-status">…</span></div></div>
+      <p class="settings-empty">Repository owner and defaults are chosen per project, when you create it.</p>
+    </section><section class="form-section settings-pane" data-settings-pane="compute" tabindex="-1" hidden><div class="step-heading settings-heading"><span>Compute</span><h3>Remote compute</h3><p>SSH hosts and the limits on how the generator may use them.</p></div>
+      <p class="settings-empty">SSH hosts and scheduler limits are configured inside the active project. Transfer limits use built-in defaults.</p>
+      <div class="settings-jump"><button type="button" class="secondary" data-settings-open="compute">Open remote compute</button><small class="settings-empty" data-scope-note hidden></small></div>
+    </section><section class="form-section settings-pane" data-settings-pane="integrations" tabindex="-1" hidden><div class="step-heading settings-heading"><span>Integrations</span><h3>MCP, skills, and tools</h3><p>Capabilities the generator can call while it works.</p></div>
+      <p class="settings-empty">MCP servers and generator skills are configured inside the active project.</p>
+      <div class="settings-jump"><button type="button" class="secondary" data-settings-open="tools">Open tools &amp; skills</button><small class="settings-empty" data-scope-note hidden></small></div>
+    </section><section class="form-section settings-pane" data-settings-pane="usage" tabindex="-1" hidden><div class="step-heading settings-heading"><span>Usage</span><h3>Usage and budgets</h3><p>Token and cost estimates, and the limits that pause a run.</p></div>
+      <p class="settings-empty">Usage and budgets are tracked per project. Export isn't available here yet.</p>
+      <div class="settings-jump"><button type="button" class="secondary" data-settings-open="usage">Open usage</button><button type="button" class="secondary" data-settings-open="runtime-budgets">Set budgets</button><small class="settings-empty" data-scope-note hidden></small></div>
+    </section><section class="form-section settings-pane" data-settings-pane="security" tabindex="-1" hidden><div class="step-heading settings-heading"><span>Security &amp; privacy</span><h3>Security and privacy</h3><p>How credentials are stored and where your data goes.</p></div>
+      <p class="settings-hint">API keys are stored as write-only macOS Keychain items and are never shown again.</p>
+      <p class="settings-empty">Provider routing is set per project. Retention, redaction, and log controls aren't configurable here yet.</p>
+    </section><section class="form-section settings-pane" data-settings-pane="diagnostics" tabindex="-1" hidden><div class="step-heading settings-heading"><span>Diagnostics</span><h3>Diagnostics</h3><p>Check this Mac's setup and versions, and repair problems.</p></div>
       <div class="settings-readiness"><div class="readiness-item">Git<span id="git-state">…</span></div>
         <div class="readiness-item">GitHub connection tool<span id="ghcli-state">…</span></div>
         <div class="readiness-item">Application build<span id="runtime-state">…</span></div>
@@ -2320,10 +2395,9 @@ body.first-run [data-fr-step="1"]:not([hidden]) .fr-choice:nth-of-type(3){animat
         <button type="button" class="secondary" id="run-doctor">Run check</button></div>
         <div class="doctor-list" id="doctor-checks"><div class="doctor-empty">Checking required software…</div></div>
         <div class="doctor-message" id="doctor-message"></div></div>
-      <label class="field" style="margin-top:12px"><span>Project workspace</span><div class="path-picker"><input id="settings-workspace" readonly><button type="button" class="secondary" id="choose-settings-workspace">Choose folder…</button></div></label>
-    </section><section class="form-section settings-pane" data-settings-pane="providers" tabindex="-1" hidden><div class="step-heading settings-heading"><span>Model providers</span><h3>Connect the services you use</h3><p>Open only the provider you want to configure. Existing secrets are never displayed again.</p></div>
-      <div class="provider-note"><b>Developer access and consumer subscriptions are different products.</b> CrossAudit only offers web sign-in where the provider publishes a supported third-party inference flow. It never imports browser cookies or CLI session files.</div>
-      <div id="provider-credentials"></div>
+      <p class="settings-empty">Logs, support bundles, and per-subsystem reset aren't available here yet.</p>
+    </section><section class="form-section settings-pane" data-settings-pane="advanced" tabindex="-1" hidden><div class="step-heading settings-heading"><span>Advanced</span><h3>Advanced</h3><p>Developer and experimental options.</p></div>
+      <p class="settings-empty">No developer settings, experiments, local endpoints, or debug logging are configurable here yet.</p>
     </section><div class="wizard-error" id="settings-error" role="alert"></div></div></div>
     <div class="wizard-foot"><span id="settings-foot-note">API keys are write-only macOS Keychain items. Subscription credentials stay with the official provider runtime.</span>
       <button type="button" class="secondary" id="cancel-settings">Cancel</button><button class="primary" id="save-settings">Save settings</button></div>
@@ -2534,6 +2608,45 @@ const T = new URLSearchParams(location.search).get('t') || '';
 const LOCALE_KEY='crossaudit-locale';
 const LOCALE_COOKIE='crossaudit_v4_locale';
 const ZH={
+  "Agent behavior":"智能体行为","Diagnostics":"诊断","Advanced":"高级","Security & privacy":"安全与隐私","Integrations":"集成",
+  "Language and appearance":"语言与外观","Accounts and credentials":"账户与凭据","Roles and rounds":"角色与轮数",
+  "Constitution and rules":"章程与规则","Storage on this Mac":"此 Mac 上的存储","Delivery connection":"交付连接",
+  "Remote hosts":"远程主机","MCP, skills, tools":"MCP、技能、工具","Budgets and estimates":"预算与估算",
+  "Keychain and data":"钥匙串与数据","Doctor and versions":"诊断与版本","Developer options":"开发者选项",
+  "Default roles and revision rounds":"默认角色与修订轮数","Constitution and audit rules":"章程与审计规则",
+  "Local storage":"本地存储","GitHub delivery":"GitHub 交付","Remote compute":"远程计算","MCP, skills, and tools":"MCP、技能与工具",
+  "Usage and budgets":"用量与预算","Security and privacy":"安全与隐私",
+  "Choose how CrossAudit looks and reads on this Mac.":"选择 CrossAudit 在此 Mac 上的外观与阅读方式。",
+  "How the generator and independent auditor are set up, and how many rounds run before CrossAudit pauses.":"生成者与独立审计者的配置方式，以及在 CrossAudit 暂停前运行多少轮。",
+  "The rules that govern every audit, and the guarantees CrossAudit always enforces.":"约束每一次审计的规则，以及 CrossAudit 始终强制执行的保证。",
+  "Where CrossAudit keeps projects on this Mac.":"CrossAudit 在此 Mac 上保存项目的位置。",
+  "The GitHub connection used to deliver and audit work.":"用于交付与审计工作的 GitHub 连接。",
+  "SSH hosts and the limits on how the generator may use them.":"SSH 主机，以及生成者使用它们的限制。",
+  "Capabilities the generator can call while it works.":"生成者在工作时可以调用的能力。",
+  "Token and cost estimates, and the limits that pause a run.":"Token 与成本估算，以及会使运行暂停的上限。",
+  "How credentials are stored and where your data goes.":"凭据的存储方式，以及你的数据流向何处。",
+  "Check this Mac's setup and versions, and repair problems.":"检查此 Mac 的配置与版本，并修复问题。",
+  "Developer and experimental options.":"开发者与实验性选项。",
+  "Startup, updates, and notifications follow the macOS app and aren't configurable here yet.":"启动、更新与通知随 macOS 应用一同管理，此处暂不可配置。",
+  "Which models each role uses, and fallback routes, are chosen per project.":"每个角色使用的模型以及备用路由按项目分别选择。",
+  "Roles, reasoning effort, and the revision limit are set per project, not as global defaults yet.":"角色、推理强度与修订上限按项目设置，暂不作为全局默认值。",
+  "Admission and source independence are always-on guarantees, not adjustable settings.":"准入与来源独立性是始终启用的保证，而非可调设置。",
+  "The constitution is edited inside each project. Evidence retention isn't configurable here yet.":"章程在每个项目内部编辑。证据留存此处暂不可配置。",
+  "Indexing, preview, temporary files, and large-file handling use built-in defaults and aren't configurable here yet.":"索引、预览、临时文件与大文件处理使用内置默认值，此处暂不可配置。",
+  "Repository owner and defaults are chosen per project, when you create it.":"仓库所有者与默认值在创建项目时按项目选择。",
+  "SSH hosts and scheduler limits are configured inside the active project. Transfer limits use built-in defaults.":"SSH 主机与调度器限制在当前项目内部配置。传输限制使用内置默认值。",
+  "MCP servers and generator skills are configured inside the active project.":"MCP 服务器与生成者技能在当前项目内部配置。",
+  "Usage and budgets are tracked per project. Export isn't available here yet.":"用量与预算按项目跟踪。此处暂不支持导出。",
+  "API keys are stored as write-only macOS Keychain items and are never shown again.":"API 密钥以只写方式存入 macOS 钥匙串，且不会再次显示。",
+  "Provider routing is set per project. Retention, redaction, and log controls aren't configurable here yet.":"供应商路由按项目设置。留存、脱敏与日志控制此处暂不可配置。",
+  "Logs, support bundles, and per-subsystem reset aren't available here yet.":"日志、支持包与分子系统重置此处暂不可用。",
+  "No developer settings, experiments, local endpoints, or debug logging are configurable here yet.":"暂无可配置的开发者设置、实验、本地端点或调试日志。",
+  "Follow this Mac's light or dark setting.":"跟随此 Mac 的浅色或深色设置。",
+  "Appearance":"外观","Light":"浅色","Dark":"深色","Match system":"跟随系统","Language":"语言",
+  "Open project controls":"打开项目控制","Open remote compute":"打开远程计算","Open tools & skills":"打开工具与技能",
+  "Open usage":"打开用量","Set budgets":"设置预算",
+  "Search settings…":"搜索设置…","Search settings":"搜索设置","No matching settings.":"没有匹配的设置。",
+  "Credentials":"凭据","Revision rounds":"修订轮数","SSH hosts":"SSH 主机","Keychain":"钥匙串",
   "Projects":"项目","Local project folders, each with its own files and individual chats.":"本地项目文件夹，每个项目都有自己的文件和独立对话。",
   "Discovering workspace…":"正在发现工作区…","Creating project":"正在创建项目","Validating settings…":"正在验证设置…",
   "Open project":"打开项目","Search projects…":"搜索项目…","New project":"新建项目","＋ New project":"＋ 新建项目",
@@ -3023,20 +3136,104 @@ const settingsModal=document.getElementById('settings-modal');
 const settingsForm=document.getElementById('settings-form');
 let settingsSource=null;let settingsState=null;
 let activeSettingsPanel='general';
+const SETTINGS_PANELS=['general','providers','agent','audit','files','github','compute','integrations','usage','security','diagnostics','advanced'];
+const SETTINGS_INDEX=[
+  {panel:'general',group:'General',label:'General',heading:'Language and appearance',purpose:'Choose how CrossAudit looks and reads on this Mac.'},
+  {panel:'general',group:'General',label:'Appearance',anchor:'settings-appearance',keywords:'theme light dark'},
+  {panel:'general',group:'General',label:'Language',anchor:'settings-language',keywords:'locale english chinese'},
+  {panel:'providers',group:'Providers',label:'Providers',heading:'Connect the services you use',purpose:'Open only the provider you want to configure. Existing secrets are never displayed again.'},
+  {panel:'providers',group:'Providers',label:'Credentials',anchor:'provider-credentials',keywords:'api key openai anthropic keychain validation fallbacks models'},
+  {panel:'agent',group:'Agent behavior',label:'Agent behavior',heading:'Default roles and revision rounds',purpose:'How the generator and independent auditor are set up, and how many rounds run before CrossAudit pauses.'},
+  {panel:'agent',group:'Agent behavior',label:'Revision rounds',keywords:'reasoning effort roles max rounds clarification'},
+  {panel:'audit',group:'Audit',label:'Audit',heading:'Constitution and audit rules',purpose:'The rules that govern every audit, and the guarantees CrossAudit always enforces.'},
+  {panel:'files',group:'Files',label:'Files',heading:'Local storage',purpose:'Where CrossAudit keeps projects on this Mac.'},
+  {panel:'files',group:'Files',label:'Project workspace',anchor:'settings-workspace',keywords:'storage folder indexing preview temp large file'},
+  {panel:'github',group:'GitHub',label:'GitHub',heading:'GitHub delivery',purpose:'The GitHub connection used to deliver and audit work.'},
+  {panel:'compute',group:'Compute',label:'Compute',heading:'Remote compute',purpose:'SSH hosts and the limits on how the generator may use them.'},
+  {panel:'compute',group:'Compute',label:'SSH hosts',keywords:'scheduler slurm transfer policy'},
+  {panel:'integrations',group:'Integrations',label:'Integrations',heading:'MCP, skills, and tools',purpose:'Capabilities the generator can call while it works.'},
+  {panel:'integrations',group:'Integrations',label:'MCP servers',keywords:'skills tools'},
+  {panel:'usage',group:'Usage',label:'Usage',heading:'Usage and budgets',purpose:'Token and cost estimates, and the limits that pause a run.'},
+  {panel:'usage',group:'Usage',label:'Budgets',keywords:'estimate cost tokens export'},
+  {panel:'security',group:'Security & privacy',label:'Security & privacy',heading:'Security and privacy',purpose:'How credentials are stored and where your data goes.'},
+  {panel:'security',group:'Security & privacy',label:'Keychain',keywords:'retention redaction logs provider routing privacy'},
+  {panel:'diagnostics',group:'Diagnostics',label:'Diagnostics',heading:'Diagnostics',purpose:"Check this Mac's setup and versions, and repair problems."},
+  {panel:'diagnostics',group:'Diagnostics',label:'Environment Doctor',anchor:'run-doctor',keywords:'versions repair support bundle reset logs'},
+  {panel:'advanced',group:'Advanced',label:'Advanced',heading:'Advanced',purpose:'Developer and experimental options.'}
+];
+function settingsSearchMatch(entry,q){
+  const n=String(q||'').trim().toLowerCase();if(!n)return true;
+  return [entry.group,entry.heading,entry.purpose,entry.label,entry.keywords]
+    .some(v=>String(v||'').toLowerCase().indexOf(n)>=0);
+}
+function filterSettings(){
+  const input=document.getElementById('settings-search');const q=input?input.value:'';
+  const results=document.getElementById('settings-search-results');
+  const content=document.getElementById('settings-content');
+  const buttons=document.querySelectorAll('[data-settings-panel]');
+  if(!String(q||'').trim()){
+    results.hidden=true;results.innerHTML='';content.classList.remove('searching');
+    buttons.forEach(b=>b.classList.remove('dim'));
+    document.querySelectorAll('[data-settings-pane]').forEach(p=>p.hidden=p.dataset.settingsPane!==activeSettingsPanel);
+    return;
+  }
+  content.classList.add('searching');
+  document.querySelectorAll('[data-settings-pane]').forEach(p=>p.hidden=true);
+  const matches=SETTINGS_INDEX.filter(e=>settingsSearchMatch(e,q));
+  const groups=new Set(matches.map(e=>e.panel));
+  buttons.forEach(b=>b.classList.toggle('dim',!groups.has(b.dataset.settingsPanel)));
+  results.innerHTML=matches.length?matches.map(e=>
+    '<button type="button" class="settings-result" data-result-panel="'+esc(e.panel)+'" data-result-anchor="'+esc(e.anchor||'')+'">'
+    +'<span class="settings-result-label">'+esc(e.label)+'</span>'
+    +'<span class="settings-result-group">'+esc(e.group)+'</span></button>').join('')
+    :'<div class="settings-result-empty">No matching settings.</div>';
+  results.hidden=false;
+}
 function showSettingsPanel(name,focus=true){
-  const next=name==='providers'?'providers':'general';activeSettingsPanel=next;
+  const next=SETTINGS_PANELS.includes(name)?name:'general';activeSettingsPanel=next;
+  const search=document.getElementById('settings-search');if(search)search.value='';
+  const results=document.getElementById('settings-search-results');if(results){results.hidden=true;results.innerHTML='';}
+  const content=document.getElementById('settings-content');if(content)content.classList.remove('searching');
   document.querySelectorAll('[data-settings-panel]').forEach(button=>{const active=button.dataset.settingsPanel===next;
-    button.classList.toggle('active',active);button.setAttribute('aria-pressed',String(active));});
+    button.classList.toggle('active',active);button.setAttribute('aria-pressed',String(active));button.classList.remove('dim');});
   document.querySelectorAll('[data-settings-pane]').forEach(pane=>pane.hidden=pane.dataset.settingsPane!==next);
   const save=document.getElementById('save-settings');save.hidden=next!=='providers';
   document.getElementById('cancel-settings').textContent=currentLocale==='zh'?(next==='providers'?'取消':'完成'):(next==='providers'?'Cancel':'Done');
   document.getElementById('settings-foot-note').textContent=currentLocale==='zh'
-    ?(next==='providers'?'API key 以只写方式存入 macOS 钥匙串；订阅凭据始终由官方供应商运行时持有。':'工作区修改会立即生效；迁移或更新此 Mac 后请再次运行环境诊断。')
-    :(next==='providers'?'API keys are write-only macOS Keychain items. Subscription credentials stay with the official provider runtime.':'Workspace changes apply immediately. Run Doctor after moving or updating this Mac.');
+    ?(next==='providers'?'API key 以只写方式存入 macOS 钥匙串；订阅凭据始终由官方供应商运行时持有。':'更改会立即生效；在“诊断”中可随时运行环境诊断。')
+    :(next==='providers'?'API keys are write-only macOS Keychain items. Subscription credentials stay with the official provider runtime.':'Changes apply immediately. Run Doctor from Diagnostics after moving or updating this Mac.');
   if(focus)requestAnimationFrame(()=>document.querySelector('[data-settings-pane="'+next+'"]')?.focus());
 }
 document.querySelector('.settings-nav').onclick=ev=>{const button=ev.target.closest('[data-settings-panel]');
   if(button)showSettingsPanel(button.dataset.settingsPanel,false);};
+document.getElementById('settings-search').addEventListener('input',filterSettings);
+document.getElementById('settings-search-results').addEventListener('click',ev=>{
+  const row=ev.target.closest('[data-result-panel]');if(!row)return;
+  const panel=row.getAttribute('data-result-panel'),anchor=row.getAttribute('data-result-anchor');
+  showSettingsPanel(panel,false);
+  if(anchor){const el=document.getElementById(anchor);if(el){el.scrollIntoView({block:'center'});
+    if(typeof el.focus==='function'){try{el.focus({preventScroll:true});}catch(e){el.focus();}}}}});
+const settingsAppearance=document.getElementById('settings-appearance');
+const settingsLanguage=document.getElementById('settings-language');
+function syncSettingsControls(){settingsAppearance.value=document.documentElement.getAttribute('data-theme')==='dark'?'dark':'light';
+  settingsLanguage.value=currentLocale==='zh'?'zh':'en';}
+settingsAppearance.onchange=()=>applyTheme(settingsAppearance.value==='dark'?'dark':'light',true);
+settingsLanguage.onchange=()=>applyLocale(settingsLanguage.value==='zh'?'zh':'en');
+document.getElementById('settings-appearance-system').onclick=()=>{try{localStorage.removeItem(THEME_KEY);}catch(e){}
+  applyTheme((window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light',false);syncSettingsControls();};
+document.getElementById('settings-content').addEventListener('click',ev=>{
+  const b=ev.target.closest('[data-settings-open]');if(!b)return;
+  const target=b.getAttribute('data-settings-open');
+  if(!(lastState&&lastState.runtime_config)){
+    const note=b.parentElement.querySelector('[data-scope-note]');
+    if(note){note.textContent=currentLocale==='zh'?'请先打开一个项目再进行配置。':'Open a project to configure this.';note.hidden=false;}
+    return;}
+  closeSettings();
+  if(target==='runtime')openRuntime();
+  else if(target==='runtime-budgets'){openRuntime();showRuntimePanel('budgets',false);}
+  else if(target==='compute')openPanelTab('compute');
+  else if(target==='tools')openPanelTab('tools');
+  else if(target==='usage')openPanelTab('usage');});
 function renderProviderCards(d){
   const host=document.getElementById('provider-credentials');
   const vendors=Object.keys(d.providers||{}).sort((a,b)=>{const rank=vendor=>vendor==='openai'?0:(d.providers[vendor]||{}).configured?1:2;
@@ -3109,7 +3306,7 @@ function renderSettings(d){
     button.textContent=login.status==='failed'?'Try again':'Connect';button.disabled=!chatgpt.available;
   }
   const deps=d.dependencies||{};const doctorRows=Object.fromEntries(((d.doctor&&d.doctor.checks)||[]).map(row=>[row.id,row]));
-  for(const [id,key,value] of [['git-state','git',deps.git],['ghcli-state','github_cli',deps.github_cli]]){
+  for(const [id,key,value] of [['git-state','git',deps.git],['ghcli-state','github_cli',deps.github_cli],['settings-github-status','github_cli',deps.github_cli]]){
     const el=document.getElementById(id),row=doctorRows[key];const status=row&&row.status;
     el.textContent=status==='outdated'?'Outdated':status==='missing'?'Missing':status==='ready'?'Ready':value?'Ready':'Checking';
     el.className=status==='outdated'||status==='missing'||(!status&&!value)?'bad':'';
@@ -3119,13 +3316,13 @@ function renderSettings(d){
   document.getElementById('digest-state').textContent=runtime.code_digest||'unavailable';
   const providerRows=Object.values(d.providers||{}),connected=providerRows.filter(row=>row.configured).length;
   document.getElementById('settings-provider-count').textContent=connected+'/'+providerRows.length;
-  const doctorStatus=d.doctor&&d.doctor.status||'idle';const generalState=document.getElementById('settings-general-state');
-  generalState.textContent=['blocked','failed'].includes(doctorStatus)?'!':doctorStatus==='attention'?'1':doctorStatus==='ready'?'✓':'…';
-  generalState.className=['blocked','failed'].includes(doctorStatus)?'bad':doctorStatus==='attention'?'attention':doctorStatus==='ready'?'ok':'';
+  const doctorStatus=d.doctor&&d.doctor.status||'idle';const diagnosticsState=document.getElementById('settings-diagnostics-state');
+  diagnosticsState.textContent=['blocked','failed'].includes(doctorStatus)?'!':doctorStatus==='attention'?'1':doctorStatus==='ready'?'✓':'…';
+  diagnosticsState.className=['blocked','failed'].includes(doctorStatus)?'bad':doctorStatus==='attention'?'attention':doctorStatus==='ready'?'ok':'';
   renderDoctor(d.doctor);
 }
 async function openSettings(panel){
-  const requested=typeof panel==='string'?panel:'general';showSettingsPanel(requested,false);
+  const requested=typeof panel==='string'?panel:'general';showSettingsPanel(requested,false);syncSettingsControls();
   settingsModal.className='project-modal on';document.getElementById('settings-error').className='wizard-error';
   try{renderSettings(await api('/api/settings'));if(!settingsSource){
     settingsSource=new EventSource('/api/settings/stream?t='+encodeURIComponent(T));
@@ -3843,7 +4040,7 @@ function validateProjectStep(step){document.getElementById('wizard-error').class
   return true;}
 function openProjectModal(){projectForm.reset();document.getElementById('wizard-error').className='wizard-error';
   if(settingsState&&settingsState.doctor&&settingsState.doctor.status==='blocked'){
-    openSettings('general');doctorMessage('Fix the required Environment Doctor items before creating a project.',true);return;}
+    openSettings('diagnostics');doctorMessage('Fix the required Environment Doctor items before creating a project.',true);return;}
   repoNameTouched={science:false,audit:false};selectedProjectFolder='';resetRepositoryCheck();
   configureProjectForm();const vendors=Object.keys((projectState&&projectState.models)||{});
   auditorVendor.value=vendors.includes('openai')?'openai':vendors[0];
@@ -5183,7 +5380,7 @@ function paletteCommands(){
   }
   items.push({title:'All projects',run:showProjects});
   items.push({title:'Open settings',run:()=>openSettings('general')});
-  items.push({title:'Run Doctor',run:async()=>{await openSettings('general');
+  items.push({title:'Run Doctor',run:async()=>{await openSettings('diagnostics');
     document.getElementById('run-doctor').click();}});
   items.push({title:'Switch theme',run:()=>themeButton.onclick()});
   items.push({title:'Switch language',run:()=>document.getElementById('locale-toggle').onclick()});
@@ -5629,7 +5826,7 @@ document.getElementById('fr-demo').onclick=async()=>{
 document.getElementById('fr-groups').onclick=async ev=>{
   const btn=ev.target.closest('[data-fr-fix]');if(!btn)return;
   const action=btn.getAttribute('data-fr-fix');
-  if(btn.getAttribute('data-fr-inputs')==='1'||action==='choose_workspace'){hideFirstRun();openSettings('general');return;}
+  if(btn.getAttribute('data-fr-inputs')==='1'||action==='choose_workspace'){hideFirstRun();openSettings('files');return;}
   const before=btn.textContent;btn.disabled=true;btn.textContent='Working…';
   try{const d=await api('/api/doctor',{action});frScanning=false;renderFirstRunReadiness(d);if(settingsState)settingsState.doctor=d;}
   catch(e){btn.disabled=false;btn.textContent=before;document.getElementById('fr-rail-status').textContent=e.message;}};
@@ -5644,7 +5841,7 @@ async function initialReadiness(){
       const providers=Object.values(s.providers||{}).filter(p=>p.configured).length;
       const blocked=s.doctor&&s.doctor.status==='blocked';
       if(s.app_mode&&location.hash==='#projects'&&(providers<2||blocked)){
-        await openSettings(blocked?'general':'providers');if(blocked)doctorMessage('Required setup needs attention before creating a project.',true);return;}
+        await openSettings(blocked?'diagnostics':'providers');if(blocked)doctorMessage('Required setup needs attention before creating a project.',true);return;}
       if(!s.doctor||s.doctor.status!=='running')return;
     }catch(e){return;}
     await new Promise(resolve=>setTimeout(resolve,500));
