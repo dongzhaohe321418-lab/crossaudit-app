@@ -285,6 +285,46 @@ a:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--accent);outline
 .task:hover .task-delete,.task.active .task-delete,.task:focus-within .task-delete{opacity:1}
 .pin-button:hover{background:var(--hover);color:var(--text)}
 .task-delete:hover{background:var(--blocked-bg);color:var(--blocked)}
+.task-act{width:28px;height:28px;border:0;border-radius:var(--r-xs);background:transparent;
+  color:var(--text-3);opacity:0;flex:none;display:grid;place-items:center;font-size:0;cursor:pointer}
+.task-act:before{content:"";display:block;width:14px;height:14px;background:currentColor;
+  -webkit-mask:var(--ui-icon) center/contain no-repeat;mask:var(--ui-icon) center/contain no-repeat}
+.task:hover .task-act,.task.active .task-act,.task:focus-within .task-act{opacity:1}
+.task-act:hover{background:var(--hover);color:var(--text)}
+.task-act[aria-expanded="true"]{opacity:1;background:var(--hover);color:var(--text)}
+.task-act.more{--ui-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'%3E%3Ccircle cx='5' cy='12' r='2'/%3E%3Ccircle cx='12' cy='12' r='2'/%3E%3Ccircle cx='19' cy='12' r='2'/%3E%3C/svg%3E")}
+.task-act.unarchive{--ui-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='4' rx='1'/%3E%3Cpath d='M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8'/%3E%3Cpath d='M12 17v-5M9.5 14 12 11.5 14.5 14'/%3E%3C/svg%3E")}
+.chat-menu{position:fixed;z-index:var(--z-overlay);min-width:180px;padding:var(--sp-1);
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);
+  box-shadow:var(--shadow-2);display:flex;flex-direction:column;gap:1px;
+  animation:chatmenu-in var(--dur-fast) ease}
+.chat-menu[hidden]{display:none}
+.chat-menu button{display:flex;align-items:center;gap:9px;width:100%;border:0;background:transparent;
+  color:var(--text);font-size:var(--fs-body);text-align:left;padding:7px 10px;border-radius:var(--r-xs);cursor:pointer}
+.chat-menu button:before{content:"";display:block;width:15px;height:15px;flex:none;background:currentColor;
+  -webkit-mask:var(--ui-icon) center/contain no-repeat;mask:var(--ui-icon) center/contain no-repeat}
+.chat-menu button:hover,.chat-menu button:focus-visible{background:var(--hover);outline:0}
+.chat-menu .chat-menu-sep{height:1px;margin:var(--sp-1) 6px;background:var(--line)}
+.chat-menu button.danger{color:var(--blocked)}
+.chat-menu button.danger:hover,.chat-menu button.danger:focus-visible{background:var(--blocked-bg)}
+.chat-menu button[data-chat-menu="rename"]{--ui-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 20h9'/%3E%3Cpath d='M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z'/%3E%3C/svg%3E")}
+.chat-menu button[data-chat-menu="duplicate"]{--ui-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='9' y='9' width='11' height='11' rx='2'/%3E%3Cpath d='M5 15V5a2 2 0 0 1 2-2h10'/%3E%3C/svg%3E")}
+.chat-menu button[data-chat-menu="pin"]{--ui-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m14 4 6 6-3 1-4 4-1 5-3-3-3-3 5-1 4-4 1-3Z'/%3E%3Cpath d='m5 19 4-4'/%3E%3C/svg%3E")}
+.chat-menu button[data-chat-menu="archive"]{--ui-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='4' rx='1'/%3E%3Cpath d='M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8'/%3E%3Cpath d='M10 12h4'/%3E%3C/svg%3E")}
+.chat-menu button[data-chat-menu="delete"]{--ui-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6'/%3E%3C/svg%3E")}
+@keyframes chatmenu-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+.archived-toggle{display:flex;align-items:center;gap:6px;width:100%;border:0;background:transparent;
+  cursor:pointer;padding:var(--sp-5) 10px var(--sp-1);font-size:var(--fs-caption);font-weight:600;
+  color:var(--text-3);text-align:left}
+.archived-toggle:hover{color:var(--text-2)}
+.archived-count{margin-left:auto;font-family:var(--font-mono);color:var(--text-3)}
+.archived-chevron{width:12px;height:12px;flex:none;color:var(--text-3);font-size:0;
+  transition:transform var(--dur-base) ease}
+.archived-chevron:before{content:"";display:block;width:12px;height:12px;background:currentColor;
+  -webkit-mask:var(--ui-icon) center/contain no-repeat;mask:var(--ui-icon) center/contain no-repeat;
+  --ui-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 6 6 6-6 6'/%3E%3C/svg%3E")}
+.archived-toggle[aria-expanded="true"] .archived-chevron{transform:rotate(90deg)}
+.task.is-archived .task-title{color:var(--text-2)}
 .state-dot{width:6px;height:6px;border-radius:50%;background:transparent;flex:none;
   transition:background var(--dur-base) ease}
 .state-dot.understand{background:var(--state-understand)}
@@ -2137,6 +2177,26 @@ body.first-run [data-fr-step="1"]:not([hidden]) .fr-choice:nth-of-type(3){animat
       <button class="danger-button" id="confirm-delete-chat">Delete chat</button></div>
   </form>
 </div>
+<div class="project-modal" id="rename-chat-modal" role="dialog" aria-modal="true" aria-labelledby="rename-chat-title">
+  <form class="wizard" id="rename-chat-form"><div class="wizard-head"><div><h2 id="rename-chat-title">Rename chat</h2>
+    <p>Give this chat a title that is independent of its first message.</p></div><span class="spacer"></span>
+    <button type="button" class="icon-button" id="close-rename-chat" aria-label="Close">×</button></div>
+    <div class="wizard-body"><input type="hidden" id="rename-chat-id">
+      <label class="field full"><span>Chat title</span><input id="rename-chat-input" maxlength="120" required placeholder="Quarterly analysis"></label>
+      <div class="wizard-error" id="rename-chat-error"></div></div>
+    <div class="wizard-foot"><span>The title is navigation only; audit evidence is unchanged.</span>
+      <button type="button" class="secondary" id="cancel-rename-chat">Cancel</button>
+      <button class="primary" id="confirm-rename-chat">Save name</button></div>
+  </form>
+</div>
+<div class="chat-menu" id="chat-menu" role="menu" aria-label="Chat actions" hidden>
+  <button type="button" role="menuitem" data-chat-menu="rename">Rename chat</button>
+  <button type="button" role="menuitem" data-chat-menu="duplicate">Duplicate chat</button>
+  <button type="button" role="menuitem" data-chat-menu="pin" id="chat-menu-pin">Pin chat</button>
+  <button type="button" role="menuitem" data-chat-menu="archive">Archive chat</button>
+  <div class="chat-menu-sep" role="separator"></div>
+  <button type="button" role="menuitem" class="danger" data-chat-menu="delete">Delete chat</button>
+</div>
 
 <div class="project-modal" id="file-preview-modal" role="dialog" aria-modal="true" aria-labelledby="file-preview-title">
   <section class="wizard preview-wizard"><div class="wizard-head"><div><h2 id="file-preview-title">File preview</h2>
@@ -2636,6 +2696,10 @@ const ZH={
   "Move project to Trash":"将项目移到废纸篓","Delete chat?":"删除对话？","This chat will disappear from the project sidebar.":"此对话将从项目侧栏消失。",
   "Audit reports, receipts, commits and delivered files are preserved in the project ledger. Deleting a chat never rewrites evidence that may already have admitted a result.":"审计报告、收据、提交和交付文件会保留在项目账本中。删除对话绝不会重写可能已经准入结果的证据。",
   "This only removes the individual chat from navigation.":"此操作只会从导航中移除该独立对话。","Delete chat":"删除对话","Delete chat from project":"从项目中删除对话","Delete project from CrossAudit":"从 CrossAudit 删除项目",
+  "Rename chat":"重命名对话","Duplicate chat":"复制对话","Archive chat":"归档对话","Unarchive chat":"取消归档对话","Archived":"已归档",
+  "More chat actions":"更多对话操作","Chat actions":"对话操作","Pin chat":"置顶对话","Unpin chat":"取消置顶对话",
+  "Give this chat a title that is independent of its first message.":"为该对话设置一个独立于首条消息的标题。","Chat title":"对话标题","Quarterly analysis":"季度分析",
+  "The title is navigation only; audit evidence is unchanged.":"标题仅用于导航；审计证据保持不变。","Save name":"保存名称",
   "Return to the main Projects window to delete this open project":"请返回主项目窗口后删除当前打开的项目","Move to Trash & delete selected GitHub repositories":"移到废纸篓并删除所选 GitHub 仓库","Deleting…":"正在删除…","Project moved to Trash":"项目已移到废纸篓",
   "ChatGPT subscription":"ChatGPT 订阅","Default":"默认","Enter a custom model ID…":"输入自定义模型 ID…",
   "highest capability":"最高能力","balanced · recommended":"均衡 · 推荐","fastest, lowest cost":"最快、成本最低",
@@ -2857,6 +2921,7 @@ let transferBusy = false;
 let activeView = 'artifacts';
 let newTaskMode = false;
 let activeChatId = '';
+let archivedExpanded = false;
 const expandedGroups = new Set();
 const expandedReviews = new Set();
 let lastPillKey = '';
@@ -4518,7 +4583,9 @@ function openPanelTab(view){
 }
 function renderTasks(d){
   const query=String(document.getElementById('rail-search').value||'').trim().toLowerCase();
-  const rows=((d.chats&&d.chats.items)||[]).filter(c=>!query||String(c.title).toLowerCase().includes(query));
+  const matches=c=>!query||String(c.title).toLowerCase().includes(query);
+  const rows=((d.chats&&d.chats.items)||[]).filter(matches);
+  const archivedRows=((d.chats&&d.chats.archived)||[]).filter(matches);
   const chatRow=c=>{
     const status=String(c.status||'').toLowerCase();
     const dot=(!status||status==='ready')?'':'<span class="state-dot '+esc(status)+'" title="'+esc(status)+'"></span>';
@@ -4527,12 +4594,29 @@ function renderTasks(d){
     +'<span class="task-meta"><span>'+esc(ago(c.updated))+'</span></span></div>'
     +'<button type="button" class="pin-button'+(c.pinned?' pinned':'')+'" data-pin-chat="'+esc(c.id)+'" '
     +'aria-label="'+(c.pinned?'Unpin':'Pin')+' chat" title="'+(c.pinned?'Unpin':'Pin')+' chat">'+(c.pinned?'★':'☆')+'</button>'
+    +'<button type="button" class="task-act more" data-chat-menu-open="'+esc(c.id)+'" '
+    +'aria-haspopup="menu" aria-expanded="false" aria-label="More chat actions" title="More chat actions">⋯</button></div>';};
+  const archivedRow=c=>
+    '<div class="task is-archived">'
+    +'<div class="task-copy"><span class="task-title">'+esc(c.title)+'</span>'
+    +'<span class="task-meta"><span>'+esc(ago(c.updated))+'</span></span></div>'
+    +'<button type="button" class="task-act unarchive" data-unarchive-chat="'+esc(c.id)+'" '
+    +'aria-label="Unarchive chat" title="Unarchive chat"></button>'
     +'<button type="button" class="task-delete" data-delete-chat="'+esc(c.id)+'" '
-    +'aria-label="Delete chat from project" title="Delete chat from project">⌫</button></div>';};
+    +'aria-label="Delete chat from project" title="Delete chat from project">⌫</button></div>';
   const pinned=rows.filter(c=>c.pinned),recent=rows.filter(c=>!c.pinned);
   let html='';if(pinned.length)html+='<div class="side-label">Pinned</div>'+pinned.map(chatRow).join('');
   if(recent.length)html+='<div class="side-label">Recent</div>'+recent.map(chatRow).join('');
-  document.getElementById('task-list').innerHTML=html||'<div class="empty">No chats yet</div>';
+  if(!rows.length&&!archivedRows.length)html='<div class="empty">No chats yet</div>';
+  if(archivedRows.length){
+    html+='<button type="button" class="archived-toggle" data-archived-toggle '
+      +'aria-expanded="'+(archivedExpanded?'true':'false')+'" aria-controls="archived-list">'
+      +'<span class="archived-chevron" aria-hidden="true"></span><span>Archived</span>'
+      +'<span class="archived-count">'+archivedRows.length+'</span></button>'
+      +'<div id="archived-list" class="archived-list"'+(archivedExpanded?'':' hidden')+'>'
+      +archivedRows.map(archivedRow).join('')+'</div>';
+  }
+  document.getElementById('task-list').innerHTML=html;
 }
 function renderDecisionBanner(d){
   const banner=document.getElementById('decision-banner');
@@ -4890,7 +4974,10 @@ const deleteChatModal=document.getElementById('delete-chat-modal');
 const deleteChatForm=document.getElementById('delete-chat-form');
 function closeDeleteChat(){deleteChatModal.className='project-modal';deleteChatForm.reset();
   document.getElementById('delete-chat-error').className='wizard-error';}
-function openDeleteChat(id){const chat=lastState&&lastState.chats.items.find(row=>row.id===id);if(!chat)return;
+function findChat(id){if(!lastState||!lastState.chats)return null;
+  return (lastState.chats.items||[]).find(row=>row.id===id)
+    ||(lastState.chats.archived||[]).find(row=>row.id===id)||null;}
+function openDeleteChat(id){const chat=findChat(id);if(!chat)return;
   document.getElementById('delete-chat-id').value=id;document.getElementById('delete-chat-name').textContent=chat.title;
   document.getElementById('delete-chat-impact').textContent=chat.cycles
     ?(currentLocale==='zh'?'此对话有 '+chat.cycles+' 个审计循环；导航会删除，但审计证据会保留。':'This chat has '+chat.cycles+' audit cycle'+(chat.cycles===1?'':'s')+'; navigation is removed while audit evidence remains.')
@@ -4903,16 +4990,104 @@ deleteChatForm.onsubmit=async ev=>{ev.preventDefault();const id=document.getElem
   const button=document.getElementById('confirm-delete-chat');button.disabled=true;button.textContent=currentLocale==='zh'?'正在删除…':'Deleting…';
   try{await api('/api/chats/delete',{chat_id:id});closeDeleteChat();
     if(lastState){lastState.chats.items=lastState.chats.items.filter(row=>row.id!==id);
+      lastState.chats.archived=(lastState.chats.archived||[]).filter(row=>row.id!==id);
       if(activeChatId===id){activeChatId=lastState.chats.items[0]&&lastState.chats.items[0].id||'';newTaskMode=!activeChatId;}
       render(lastState);}}
   catch(e){showInlineError('delete-chat-error',e);}finally{button.disabled=false;button.textContent=currentLocale==='zh'?'删除对话':'Delete chat';}};
+const renameChatModal=document.getElementById('rename-chat-modal');
+const renameChatForm=document.getElementById('rename-chat-form');
+function closeRenameChat(){renameChatModal.className='project-modal';renameChatForm.reset();
+  document.getElementById('rename-chat-error').className='wizard-error';}
+function openRenameChat(id){const chat=findChat(id);if(!chat)return;
+  document.getElementById('rename-chat-id').value=id;
+  const input=document.getElementById('rename-chat-input');input.value=chat.title||'';
+  document.getElementById('rename-chat-error').className='wizard-error';renameChatModal.className='project-modal on';
+  setTimeout(()=>{input.focus();input.select();},0);}
+document.getElementById('close-rename-chat').onclick=closeRenameChat;
+document.getElementById('cancel-rename-chat').onclick=closeRenameChat;
+renameChatModal.addEventListener('click',ev=>{if(ev.target===renameChatModal)closeRenameChat();});
+renameChatForm.onsubmit=async ev=>{ev.preventDefault();const id=document.getElementById('rename-chat-id').value;
+  const title=String(document.getElementById('rename-chat-input').value||'').trim();
+  if(!title){showInlineError('rename-chat-error',currentLocale==='zh'?'请输入对话标题。':'Enter a chat title.');return;}
+  const button=document.getElementById('confirm-rename-chat');button.disabled=true;button.textContent=currentLocale==='zh'?'正在保存…':'Saving…';
+  try{const r=await api('/api/chats/rename',{chat_id:id,title});
+    if(lastState){const target=findChat(id);if(target)Object.assign(target,r.chat);render(lastState);}
+    closeRenameChat();}
+  catch(e){showInlineError('rename-chat-error',e);}finally{button.disabled=false;button.textContent=currentLocale==='zh'?'保存名称':'Save name';}};
+function chatActionError(message,error){route.className='route on';
+  route.innerHTML='<b>'+esc(message)+'</b> '+esc(error&&error.message?error.message:String(error||''));}
+async function archiveChat(id){const chat=lastState&&lastState.chats.items.find(c=>c.id===id);if(!chat)return;
+  try{const r=await api('/api/chats/archive',{chat_id:id});
+    lastState.chats.items=lastState.chats.items.filter(c=>c.id!==id);
+    lastState.chats.archived=[Object.assign(chat,r.chat),...(lastState.chats.archived||[])];
+    if(activeChatId===id){activeChatId=lastState.chats.items[0]&&lastState.chats.items[0].id||'';newTaskMode=!activeChatId;}
+    render(lastState);}
+  catch(e){chatActionError(currentLocale==='zh'?'无法归档对话。':'Could not archive chat.',e);}}
+async function unarchiveChat(id){const chat=lastState&&(lastState.chats.archived||[]).find(c=>c.id===id);if(!chat)return;
+  try{const r=await api('/api/chats/unarchive',{chat_id:id});
+    lastState.chats.archived=(lastState.chats.archived||[]).filter(c=>c.id!==id);
+    lastState.chats.items=[Object.assign(chat,r.chat),...lastState.chats.items];
+    render(lastState);}
+  catch(e){chatActionError(currentLocale==='zh'?'无法取消归档对话。':'Could not unarchive chat.',e);}}
+async function duplicateChat(id){try{const r=await api('/api/chats/duplicate',{chat_id:id});
+    if(lastState){lastState.chats.items=[Object.assign({cycles:0,status:'ready'},r.chat),...lastState.chats.items];
+      activeChatId=r.chat.id;newTaskMode=false;render(lastState);document.getElementById('thread').scrollTop=0;closeRail();}}
+  catch(e){chatActionError(currentLocale==='zh'?'无法复制对话。':'Could not duplicate chat.',e);}}
+async function togglePinChat(id){const chat=findChat(id);if(!chat)return;
+  try{await api('/api/chats/pin',{chat_id:id,pinned:!chat.pinned});chat.pinned=!chat.pinned;render(lastState);}
+  catch(e){chatActionError(currentLocale==='zh'?'无法更新置顶状态。':'Could not update pin.',e);}}
+// One compact per-row overflow menu keeps the row clean: the secondary
+// actions (rename/duplicate/pin/archive/delete) live behind a single ⋯ button
+// instead of crowding the title. A shared, repositioned popover avoids the
+// duplicate-id trap a per-row menu would create.
+const chatMenu=document.getElementById('chat-menu');
+let chatMenuTrigger=null;
+function positionChatMenu(trigger){chatMenu.hidden=false;
+  const rect=trigger.getBoundingClientRect(),mw=chatMenu.offsetWidth,mh=chatMenu.offsetHeight,gap=4;
+  let left=rect.right-mw;if(left<8)left=8;
+  let top=rect.bottom+gap;if(top+mh>window.innerHeight-8)top=Math.max(8,rect.top-mh-gap);
+  chatMenu.style.left=left+'px';chatMenu.style.top=top+'px';}
+function closeChatMenu(focusTrigger){if(chatMenu.hidden)return;chatMenu.hidden=true;
+  const trigger=chatMenuTrigger;chatMenuTrigger=null;
+  if(trigger){trigger.setAttribute('aria-expanded','false');if(focusTrigger&&trigger.isConnected)trigger.focus();}}
+function openChatMenu(id,trigger){const chat=findChat(id);if(!chat)return;
+  chatMenu.setAttribute('data-chat',id);
+  document.getElementById('chat-menu-pin').textContent=chat.pinned?'Unpin chat':'Pin chat';
+  chatMenuTrigger=trigger;trigger.setAttribute('aria-expanded','true');
+  positionChatMenu(trigger);
+  const first=chatMenu.querySelector('button');if(first)setTimeout(()=>first.focus(),0);}
+chatMenu.addEventListener('click',async ev=>{const item=ev.target.closest('[data-chat-menu]');if(!item)return;
+  ev.preventDefault();ev.stopPropagation();const id=chatMenu.getAttribute('data-chat'),action=item.getAttribute('data-chat-menu');
+  closeChatMenu(false);if(!id)return;
+  if(action==='rename')openRenameChat(id);
+  else if(action==='duplicate')await duplicateChat(id);
+  else if(action==='pin')await togglePinChat(id);
+  else if(action==='archive')await archiveChat(id);
+  else if(action==='delete')openDeleteChat(id);});
+chatMenu.addEventListener('keydown',ev=>{
+  if(ev.key==='Escape'){ev.preventDefault();ev.stopPropagation();closeChatMenu(true);return;}
+  const items=[...chatMenu.querySelectorAll('button')];if(!items.length)return;const i=items.indexOf(document.activeElement);
+  if(ev.key==='ArrowDown'){ev.preventDefault();items[(i+1+items.length)%items.length].focus();}
+  else if(ev.key==='ArrowUp'){ev.preventDefault();items[(i-1+items.length)%items.length].focus();}
+  else if(ev.key==='Home'){ev.preventDefault();items[0].focus();}
+  else if(ev.key==='End'){ev.preventDefault();items[items.length-1].focus();}
+  else if(ev.key==='Tab'){ev.preventDefault();closeChatMenu(true);}});
+document.addEventListener('click',ev=>{if(chatMenu.hidden)return;
+  if(chatMenu.contains(ev.target)||(chatMenuTrigger&&chatMenuTrigger.contains(ev.target)))return;closeChatMenu(false);});
+window.addEventListener('resize',()=>closeChatMenu(false));
+document.getElementById('task-list').addEventListener('scroll',()=>closeChatMenu(false),{passive:true});
 document.getElementById('task-list').onclick=async ev=>{
-  const pin=ev.target.closest('[data-pin-chat]'),remove=ev.target.closest('[data-delete-chat]'),row=ev.target.closest('[data-chat-id]');
+  const toggle=ev.target.closest('[data-archived-toggle]');
+  if(toggle){ev.preventDefault();ev.stopPropagation();archivedExpanded=!archivedExpanded;if(lastState)renderTasks(lastState);return;}
+  const menuBtn=ev.target.closest('[data-chat-menu-open]');
+  if(menuBtn){ev.preventDefault();ev.stopPropagation();const id=menuBtn.getAttribute('data-chat-menu-open');
+    if(!chatMenu.hidden&&chatMenuTrigger===menuBtn)closeChatMenu(true);else{closeChatMenu(false);openChatMenu(id,menuBtn);}return;}
+  const unarchive=ev.target.closest('[data-unarchive-chat]'),pin=ev.target.closest('[data-pin-chat]'),
+    remove=ev.target.closest('[data-delete-chat]'),row=ev.target.closest('[data-chat-id]');
+  if(unarchive){ev.preventDefault();ev.stopPropagation();unarchive.disabled=true;
+    try{await unarchiveChat(unarchive.getAttribute('data-unarchive-chat'));}finally{unarchive.disabled=false;}return;}
   if(remove){ev.preventDefault();ev.stopPropagation();openDeleteChat(remove.getAttribute('data-delete-chat'));return;}
-  if(pin){ev.preventDefault();ev.stopPropagation();const id=pin.getAttribute('data-pin-chat');
-    const chat=lastState&&lastState.chats.items.find(c=>c.id===id);if(!chat)return;
-    pin.disabled=true;try{await api('/api/chats/pin',{chat_id:id,pinned:!chat.pinned});chat.pinned=!chat.pinned;
-      render(lastState);}catch(e){pin.disabled=false;}return;}
+  if(pin){ev.preventDefault();ev.stopPropagation();await togglePinChat(pin.getAttribute('data-pin-chat'));return;}
   if(row){activeChatId=row.getAttribute('data-chat-id');newTaskMode=false;
     if(pendingContinuation.chat&&pendingContinuation.chat!==activeChatId)pendingContinuation={cycle:'',chat:''};
     if(resolutionModal.classList.contains('on'))closeResolution();
@@ -4958,6 +5133,7 @@ function closeActiveModal(modal){
   if(modal===filePreviewModal)closeFilePreview();
   else if(modal===projectModal)closeProjectModal();else if(modal===recoveryModal)closeRecovery();
   else if(modal===deleteProjectModal)closeDeleteProject();else if(modal===deleteChatModal)closeDeleteChat();
+  else if(modal===renameChatModal)closeRenameChat();
   else if(modal===runtimeModal)closeRuntime();else if(modal===paletteModal)closePalette();
   else if(modal===settingsModal)closeSettings();else if(modal===computeHostModal)closeComputeHost();
   else if(modal===computeJobModal)closeComputeJob();else if(modal===mcpModal)closeMcp();

@@ -561,6 +561,16 @@ def snapshot(cfg: Config) -> dict:
                          related[-1]["status"].lower() if related else "ready")
         if related:
             row["updated"] = max(row["updated"], related[-1]["updated"])
+    # Archived threads are hidden from active navigation.  They carry a cycle
+    # count so a delete from the archive can still explain what evidence stays,
+    # but they are deliberately never marked "running": an archived thread must
+    # not surface a live badge, so its status is only a settled ledger value.
+    for row in chat_state["archived"]:
+        related = [cycle for cycle in cycles if cycle["chat_id"] == row["id"]]
+        row["cycles"] = len(related)
+        row["status"] = related[-1]["status"].lower() if related else "ready"
+        if related:
+            row["updated"] = max(row["updated"], related[-1]["updated"])
     audits = overview.read_cycles(cfg, reports=report_texts)
     escalation_rows = overview.escalations(cfg)
     cycle_chats = {row["id"]: row["chat_id"] for row in cycles}
@@ -1114,6 +1124,8 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                                    "/api/projects/pin", "/api/projects/delete",
                                    "/api/chats/new", "/api/chats/pin",
                                    "/api/chats/delete",
+                                   "/api/chats/rename", "/api/chats/archive",
+                                   "/api/chats/unarchive", "/api/chats/duplicate",
                                    "/api/github/connect", "/api/github/check",
                                    "/api/workspace/select", "/api/models/refresh",
                                    "/api/runtime/options", "/api/runtime",
@@ -1207,6 +1219,40 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                     chats.ensure_deletable(chat_id, active_compute_chat_ids=active_compute,
                                            **guard)
                     result = chats.delete(current, chat_id)
+                    STREAM_CHANGES.notify()
+                    self._send(json.dumps({"chat": result}).encode(),
+                               "application/json")
+                    return
+                if parsed.path == "/api/chats/rename":
+                    # The service owns the tombstone/identity invariants; the
+                    # handler only carries title and id across the boundary and
+                    # lets a ConfigDenial surface as a clean 400 below.
+                    result = chats.rename(
+                        self._config(), str(payload.get("chat_id", "")),
+                        str(payload.get("title", "")))
+                    STREAM_CHANGES.notify()
+                    self._send(json.dumps({"chat": result}).encode(),
+                               "application/json")
+                    return
+                if parsed.path == "/api/chats/archive":
+                    result = chats.archive(
+                        self._config(), str(payload.get("chat_id", "")))
+                    STREAM_CHANGES.notify()
+                    self._send(json.dumps({"chat": result}).encode(),
+                               "application/json")
+                    return
+                if parsed.path == "/api/chats/unarchive":
+                    result = chats.unarchive(
+                        self._config(), str(payload.get("chat_id", "")))
+                    STREAM_CHANGES.notify()
+                    self._send(json.dumps({"chat": result}).encode(),
+                               "application/json")
+                    return
+                if parsed.path == "/api/chats/duplicate":
+                    # Duplication forks navigation identity only; the service
+                    # never copies Git history (audit ledger stays single).
+                    result = chats.duplicate(
+                        self._config(), str(payload.get("chat_id", "")))
                     STREAM_CHANGES.notify()
                     self._send(json.dumps({"chat": result}).encode(),
                                "application/json")
