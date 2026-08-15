@@ -359,9 +359,11 @@ def test_the_readme_documents_every_user_facing_environment_variable():
     found: set[str] = set()
     for py in src.rglob("*.py"):
         found |= set(re.findall(r"CROSSAUDIT_[A-Z_]+", py.read_text()))
-    # Internal plumbing a user never sets by hand.
+    # Internal plumbing a user never sets by hand. CROSSAUDIT_DEMO_KEY is a
+    # placeholder in the seeded local-demo config that is never read: the demo
+    # calls no provider, so no key is ever looked up under it.
     internal = {"CROSSAUDIT_CONSOLE_CHILD", "CROSSAUDIT_LOCKFILE",
-                "CROSSAUDIT_REPLAY_DIR"}
+                "CROSSAUDIT_REPLAY_DIR", "CROSSAUDIT_DEMO_KEY"}
     readme = (Path(__file__).resolve().parents[1] / "README.md").read_text()
     documented = set(re.findall(r"CROSSAUDIT_[A-Z_]+", readme))
     assert not ((found - internal) - documented), \

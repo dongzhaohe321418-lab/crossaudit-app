@@ -9,6 +9,7 @@ accepts an arbitrary output path from the browser.
 from __future__ import annotations
 
 import atexit
+import hashlib
 import json
 import os
 import re
@@ -849,6 +850,19 @@ def _runtime_role(current: Config, role: str, model: str | None = None, *,
                 "model": "", "reasoning_effort": "", "models": [], "efforts": [],
                 "adjustable": False, "detail": "A human generator has no model settings."}
     if vendor not in SPECS:
+        if provider == "replay":
+            # The credential-free local sample records both roles as the replay
+            # provider and never calls a model, so its vendor is a demonstration
+            # label with no live catalogue. Render a static, non-adjustable
+            # descriptor instead of failing the whole project view — nothing here
+            # implies a real vendor or a real request. A genuinely misconfigured
+            # project (an unknown vendor on a real provider) still raises below.
+            return {"role": role, "vendor": vendor, "label": vendor,
+                    "provider": provider, "connection": "replay", "endpoint": "",
+                    "model": selected_model, "reasoning_effort": "",
+                    "models": [], "efforts": [], "adjustable": False,
+                    "detail": "Sample role — no model runs in the local demo.",
+                    "fallbacks": []}
         raise ConfigDenial(f"{vendor!r} has no supported runtime catalogue")
     rows = [{"id": item, "hint": hint} for item, hint in SPECS[vendor].models]
     if selected_model and selected_model not in {row["id"] for row in rows}:
@@ -1718,6 +1732,339 @@ def open_project(current: Config, root: str) -> dict:
     cfg = load(path / CONFIG_NAME)
     info = daemon.reusable_for_launch(cfg) or daemon.spawn(cfg, 0)
     return {"url": daemon.url_for(info), "project": cfg.science_repo}
+
+
+# ------------------------------------------------------------------ local demo
+# A credential-free, read-only SAMPLE the first-launch flow can open with zero
+# API keys. It is seeded on disk as an ordinary CrossAudit project so the REAL
+# overview rendering shows a completed cycle — but it is illustrative content,
+# not evidence:
+#   * No provider is ever contacted. Both roles are recorded as the
+#     credential-free `replay` provider (registry.NON_EVIDENTIAL) and no model
+#     is run, so nothing here can be mistaken for an audit.
+#   * No cryptographic receipt is minted. A replay PASS can never be admitted,
+#     and hand-crafting a receipt that verified as a real independent audit is
+#     exactly what honesty forbids — so the demo ships the sample report and
+#     omits the receipt entirely.
+#   * A committed root marker (DEMO_MARKER) plus a persistent UI banner label
+#     every demo surface "not a real audit".
+DEMO_DIRNAME = "crossaudit-demo"
+DEMO_MARKER = ".crossaudit-demo"
+DEMO_LABEL = "crossaudit-demo"
+# One chat carries the whole seeded story. The legacy id keeps it the single
+# thread on open (a committed ledger already makes the project's history
+# recoverable, so any other id would leave a second, empty chat beside it).
+DEMO_CHAT_ID = "history"
+DEMO_CHAT_TITLE = "Sample: peer review of the cache-warming paper"
+
+_DEMO_SAMPLE_NOTICE = (
+    "Sample demonstration — not a real audit. No models were run and no API "
+    "keys were used; this content is illustrative.")
+
+# The illustrative user request that opens the seeded conversation.
+_DEMO_REQUEST = ("Review work/paper.md and deliver a concise peer review as "
+                 "work/review.md — state the central claim, list each reported "
+                 "result, and flag anything the numbers don't support.")
+
+# Subject of the generator's seeded delivery commit; the "(round 1)" suffix is
+# how the stream reconstructs the round, matching a real generator commit.
+_DEMO_DELIVERY_SUBJECT = "Deliver the peer review of the cache-warming paper (round 1)"
+
+_DEMO_CONFIG = """\
+version: 1
+
+# CrossAudit local sample — NOT a real audit.
+# Seeded to demonstrate the product UI with illustrative content. No provider is
+# ever contacted: both roles are recorded as the credential-free `replay`
+# provider and no model is run. No API key is read.
+science_repo: crossaudit-demo
+constitution: AUDIT_RULES.md
+max_rounds: 3
+
+auditor:
+  # Recorded as the credential-free replay provider; no model is ever called.
+  vendor: demo-auditor
+  provider: replay
+  model: sample-auditor
+  key_env: CROSSAUDIT_DEMO_KEY
+
+generator:
+  # A different label from the auditor so the sample reads as cross-vendor.
+  vendor: demo-generator
+  provider: replay
+  model: sample-generator
+  key_env: CROSSAUDIT_DEMO_KEY
+
+state:
+  dir: .crossaudit
+
+scope:
+  dirs: [work]
+
+checks: [parseable, declared, internal, complete]
+"""
+
+_DEMO_MARKER_BODY = json.dumps({
+    "demo": True,
+    "kind": "local-sample",
+    "note": ("Illustrative CrossAudit demo project. No models were run, no "
+             "provider was contacted, and no audit occurred."),
+}, indent=2) + "\n"
+
+_DEMO_README = """\
+# CrossAudit — local sample (not a real audit)
+
+This folder is a **sample demonstration** created by CrossAudit's "Explore a
+local demo" action. It shows what a completed audit cycle looks like inside the
+real product, using entirely illustrative content.
+
+- **No models were run.** Both roles are recorded as the credential-free
+  `replay` provider and were never invoked.
+- **No API keys were used**, and no provider was contacted.
+- **No cryptographic receipt was minted.** Nothing here verifies as a real,
+  independent cross-vendor audit, because none occurred.
+
+The audit report under `cycles/` and the files under `work/` are seeded content,
+not evidence. You can delete this project at any time.
+"""
+
+_DEMO_CYCLES_README = """\
+# cycles/ — the audit ledger (append-only)
+
+The single cycle below was **seeded on disk** for the local demo. It is
+illustrative: no generator or auditor model ran, and no receipt binds it. In a
+real project this directory is written only by `crossaudit`.
+"""
+
+_DEMO_TASK = """\
+<!-- SAMPLE — illustrative content shipped with CrossAudit. No audit ran. -->
+# Task
+
+Write a concise, faithful peer review of `work/paper.md`. The review must:
+
+1. State the paper's central claim in one sentence.
+2. List each result the paper reports, with its stated magnitude.
+3. Flag any claim in the prose that the reported numbers do not support.
+
+Deliver the review as `work/review.md`. Do not add unrequested files.
+"""
+
+_DEMO_PAPER = """\
+<!-- SAMPLE — illustrative content. Not a real paper; no real data. -->
+# A Toy Study of Cache Warming (sample)
+
+**Claim.** Pre-warming the cache before the benchmark reduces median request
+latency without changing throughput.
+
+## Method
+The synthetic benchmark was run 100 times, cold and warm, on one machine.
+
+## Results
+- Median latency, cold start: 42 ms.
+- Median latency, warm start: 31 ms.
+- Throughput: 1,000 req/s in both conditions (unchanged).
+
+## Discussion
+Warming removes first-touch misses, so the steady-state path is unaffected.
+"""
+
+_DEMO_REVIEW = """\
+<!-- SAMPLE — illustrative deliverable produced for the demo. No model ran. -->
+# Peer review of "A Toy Study of Cache Warming"
+
+**Central claim.** Pre-warming the cache lowers median latency while leaving
+throughput unchanged.
+
+**Reported results.**
+- Median latency falls from 42 ms (cold) to 31 ms (warm) — a 26% reduction.
+- Throughput is 1,000 req/s in both conditions.
+
+**Assessment.** The prose claim is consistent with the reported numbers: the
+latency reduction is stated and quantified, and the throughput figures are
+identical across conditions, matching the "without changing throughput" claim.
+No unsupported factual claim was found in the sample.
+"""
+
+
+def _demo_report(*, science_repo: str, sha: str, const_commit: str) -> str:
+    """The seeded, unmistakably-illustrative audit report.
+
+    The table rows match the shape overview.read_cycles parses (verdict, round,
+    constitution, auditor), so the real dashboard renders a completed PASS
+    cycle. Everything else states plainly that no audit happened.
+    """
+    return (
+        f"> SAMPLE DEMONSTRATION — not a real audit. No models were run and no\n"
+        f"> API keys were used to produce this report; it is illustrative content\n"
+        f"> shipped with CrossAudit to show what a completed audit looks like.\n"
+        f"\n"
+        f"# Audit Report — {science_repo}@{sha[:12]}\n"
+        f"\n"
+        f"| | |\n"
+        f"|---|---|\n"
+        f"| verdict | **PASS** |\n"
+        f"| round | 1 |\n"
+        f"| constitution | `{const_commit[:12]}` |\n"
+        f"| auditor | `replay:sample-auditor` (vendor demo-auditor; illustrative "
+        f"sample — no model ran) |\n"
+        f"| deterministic layer | 0 hard failure(s) |\n"
+        f"\n"
+        f"## Deterministic findings\n"
+        f"\n"
+        f"None.\n"
+        f"\n"
+        f"## Model findings\n"
+        f"\n"
+        f"None.\n"
+        f"\n"
+        f"Rules applied: CA-TASK-001, CA-CONTENT-001, CA-CONTENT-002 (illustrative)\n"
+        f"\n"
+        f"## About this sample\n"
+        f"\n"
+        f"This cycle was seeded on disk to demonstrate the CrossAudit ledger. No\n"
+        f"generator or auditor model was invoked, no provider was contacted, and\n"
+        f"no cryptographic receipt was minted. Nothing here is evidence that a\n"
+        f"real, independent cross-vendor audit occurred.\n"
+    )
+
+
+def is_demo_project(cfg: Config) -> bool:
+    """Whether this project is the seeded local sample (drives the UI banner)."""
+    try:
+        return (cfg.root / DEMO_MARKER).is_file()
+    except OSError:
+        return False
+
+
+def _demo_git_commit(target: Path, paths: list[str], message: str) -> str:
+    """Commit exactly ``paths`` under the demo's local automation identity."""
+    git("add", "--", *paths, cwd=target)
+    git("-c", "user.name=CrossAudit", "-c", "user.email=crossaudit@local.invalid",
+        "commit", "-q", "--only", "-m", message, "--", *paths, cwd=target)
+    return git("rev-parse", "HEAD", cwd=target)
+
+
+def _seed_demo_conversation(target: Path, *, science_repo: str,
+                            delivery_sha: str) -> None:
+    """Seed the operational state the conversation view reads back.
+
+    The dashboard reads the committed ledger, but the main thread is
+    reconstructed from controller state, the routing ledger, and the chat
+    index. None of these is a receipt or cryptographic claim — they are the
+    illustrative operational trace of the seeded cycle, and the persistent
+    "sample" banner labels every surface that renders them. Written through the
+    real StateStore/router/chats APIs so the demo state is exactly the shape a
+    real run leaves behind, minus the model call that never happened.
+    """
+    base = int(time.time()) - 3600
+    # Controller state: one cycle, opened on the delivery commit and recorded
+    # PASSED. receipt_hash is empty — no receipt was minted, and admission would
+    # honestly fail for want of one.
+    store = StateStore(target / ".crossaudit" / "state.json")
+    opened = store.open_or_advance(science_repo, delivery_sha, None)
+    store.record_verdict(opened["cycle_id"], delivery_sha, "PASS",
+                         receipt_hash="", max_rounds=3)
+
+    # Routing ledger: the user's illustrative request, routed to the generator
+    # lane, so it appears as the opening "you" turn in the same thread.
+    routing = target / "cycles" / "routing.jsonl"
+    routing.parent.mkdir(parents=True, exist_ok=True)
+    routing.write_text(json.dumps({
+        "utterance": _DEMO_REQUEST, "lane": "generator", "confidence": 1.0,
+        "reasoning": "sample request seeded for the local demo",
+        "restated": _DEMO_REQUEST, "clarify": "",
+        "executed": "generator loop (illustrative sample)", "t": base,
+        "addressed_to": "auto", "routing_mode": "automatic",
+        "chat_id": DEMO_CHAT_ID,
+    }, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8", newline="\n")
+
+    # Chat index: title the single thread so it reads as the story, not
+    # "Project history". Written through the same 0600 state file the UI uses.
+    ui_state = target / ".crossaudit" / chats.STATE_FILE
+    ui_state.write_text(json.dumps({
+        "version": 2, "project_pinned": False, "deleted": [],
+        "chats": [{"id": DEMO_CHAT_ID, "title": DEMO_CHAT_TITLE,
+                   "pinned": False, "archived": False,
+                   "created": base, "updated": int(time.time())}],
+    }, ensure_ascii=False, sort_keys=True, indent=1) + "\n",
+        encoding="utf-8", newline="\n")
+
+
+def materialize_demo(target: Path) -> Path:
+    """Create the local sample project at ``target``, idempotently.
+
+    Reuses an existing demo (never duplicates it) and calls no provider. Returns
+    the project root. Three commits tell the story the way a real project does:
+    the setup + paper (setup), the generator's delivered review (the audited
+    commit), then the seeded cycle whose report cites that delivery. Controller
+    state, routing and the chat index are then seeded so the main conversation
+    lands on the generator→auditor→PASS story — never on an empty composer.
+    """
+    target = target.resolve()
+    if (target / CONFIG_NAME).is_file() and (target / DEMO_MARKER).is_file():
+        cycles = target / "cycles"
+        if cycles.is_dir() and any(cycles.glob("*/report.md")):
+            return target                     # already a complete demo — reuse it
+
+    wizard.prepare(target)                    # mkdir + git init + ignore local state
+
+    const_body = read("GENERAL_AUDIT_RULES.md").replace("<PROJECT>", DEMO_LABEL)
+    # The paper + task are the inputs (setup); the review is the generator's
+    # delivered deliverable, committed separately so it reads as its work.
+    setup_tree = {
+        CONFIG_NAME: _DEMO_CONFIG,
+        "AUDIT_RULES.md": const_body,
+        "DETERMINISTIC_CHECKS.md": (
+            "# Deterministic checks\n\nGenerated from `checks:` in "
+            "`crossaudit.yml`.\n\n```text\n"
+            + describe_checks(["parseable", "declared", "internal", "complete"])
+            + "\n```\n"),
+        DEMO_MARKER: _DEMO_MARKER_BODY,
+        "README.md": _DEMO_README,
+        "cycles/README.md": _DEMO_CYCLES_README,
+        "work/TASK.md": _DEMO_TASK,
+        "work/paper.md": _DEMO_PAPER,
+    }
+    write_tree(target, setup_tree)            # never overwrites existing files
+    wizard.commit_setup(target, [".gitignore", *setup_tree])
+
+    # The generator's delivery: this is the commit the audit is about.
+    write_tree(target, {"work/review.md": _DEMO_REVIEW})
+    delivery_sha = _demo_git_commit(target, ["work/review.md"],
+                                    _DEMO_DELIVERY_SUBJECT)
+
+    const_commit = hashlib.sha256(
+        (target / "AUDIT_RULES.md").read_bytes()).hexdigest()
+    cycle_dir = target / "cycles" / f"{delivery_sha[:12]}-r1"
+    cycle_dir.mkdir(parents=True, exist_ok=True)
+    report = cycle_dir / "report.md"
+    if not report.is_file():
+        report.write_text(
+            _demo_report(science_repo=DEMO_LABEL, sha=delivery_sha,
+                         const_commit=const_commit),
+            encoding="utf-8", newline="\n")
+    report_rel = report.relative_to(target).as_posix()
+    routing_rel = "cycles/routing.jsonl"
+    _seed_demo_conversation(target, science_repo=DEMO_LABEL,
+                            delivery_sha=delivery_sha)
+    _demo_git_commit(target, [report_rel, routing_rel],
+                     "crossaudit: seed illustrative sample cycle (no audit ran)")
+    return target
+
+
+def demo_project(current: Config) -> dict:
+    """Materialize-or-reuse the local sample and return its console URL.
+
+    Credential-free: this contacts no provider and reads no key. It is safe with
+    zero providers configured.
+    """
+    base = workspace_base(current)
+    base.mkdir(parents=True, exist_ok=True)
+    target = materialize_demo(base / DEMO_DIRNAME)
+    cfg = load(target / CONFIG_NAME)
+    info = daemon.reusable_for_launch(cfg) or daemon.spawn(cfg, 0)
+    return {"url": daemon.url_for(info), "project": cfg.science_repo,
+            "root": str(target), "demo": True}
 
 
 def _deletion_target(current: Config, root: str) -> tuple[Path, Config]:

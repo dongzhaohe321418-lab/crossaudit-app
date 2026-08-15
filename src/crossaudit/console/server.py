@@ -578,6 +578,9 @@ def snapshot(cfg: Config) -> dict:
         "version": __version__,
         "project": cfg.science_repo,
         "root": str(cfg.root),
+        # The seeded local sample flags every surface as illustrative; the UI
+        # shows a persistent "not a real audit" banner whenever this is true.
+        "demo": projects.is_demo_project(cfg),
         "rules": const.read_text(encoding="utf-8").count("\n### ") if const.is_file() else 0,
         "skills": house,
         "auditor": (f"{cfg.auditor.vendor} · "
@@ -1106,6 +1109,7 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                 return
             if parsed.path not in {"/api/say", "/api/upload", "/api/projects/create",
                                    "/api/projects/open", "/api/projects/resume",
+                                   "/api/projects/demo",
                                    "/api/projects/job",
                                    "/api/projects/pin", "/api/projects/delete",
                                    "/api/chats/new", "/api/chats/pin",
@@ -1210,6 +1214,12 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                 if parsed.path == "/api/projects/open":
                     result = projects.open_project(self._config(),
                                                    str(payload.get("root", "")))
+                    self._send(json.dumps(result).encode(), "application/json")
+                    return
+                if parsed.path == "/api/projects/demo":
+                    # Credential-free local sample. Materialize-or-reuse the demo
+                    # project and hand back its console URL; contacts no provider.
+                    result = projects.demo_project(self._config())
                     self._send(json.dumps(result).encode(), "application/json")
                     return
                 if parsed.path == "/api/projects/resume":

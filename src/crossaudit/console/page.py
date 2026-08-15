@@ -229,6 +229,22 @@ a:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--accent);outline
 .decision-banner button{margin-left:auto}
 .app:has(.decision-banner:not([hidden])){grid-template-rows:var(--topbar-h) auto minmax(0,1fr)}
 
+/* Sample-demo banner: honesty is never hidden. Shown on every surface of the
+   seeded local demo so it can't be mistaken for a real audit. */
+.sample-banner{grid-column:1/-1;display:flex;align-items:center;gap:var(--sp-3);flex-wrap:wrap;
+  margin:6px 8px 0;padding:var(--sp-2) var(--sp-4);min-height:40px;
+  background:var(--state-decide-bg);border:1px solid var(--state-decide);
+  border-left:3px solid var(--state-decide);
+  border-radius:var(--r-md);box-shadow:var(--shadow-1);color:var(--text);z-index:var(--z-chrome)}
+.sample-banner .sample-badge{flex:none;padding:2px 8px;border-radius:var(--r-pill);
+  font-size:var(--fs-caption);font-weight:700;letter-spacing:.06em;
+  background:var(--state-decide);color:var(--surface)}
+.sample-banner b{font-weight:600}
+.sample-banner span.sample-detail{color:var(--text-2)}
+.app:has(#sample-banner:not([hidden])){grid-template-rows:var(--topbar-h) auto minmax(0,1fr)}
+.app:has(#sample-banner:not([hidden])):has(.decision-banner:not([hidden])){
+  grid-template-rows:var(--topbar-h) auto auto minmax(0,1fr)}
+
 /* Left rail: projects, pins, recent chats, search. Nav glass shell. */
 .sidebar,.inspector{min-width:0;display:flex;flex-direction:column;overflow:hidden}
 .sidebar{grid-row:-2;margin:8px 0 8px 8px;padding:var(--sp-3) 10px var(--sp-3);
@@ -2375,6 +2391,11 @@ body.first-run [data-fr-step="1"]:not([hidden]) .fr-choice:nth-of-type(3){animat
       aria-controls="inspector" aria-expanded="false">☷</button>
   </header>
 
+  <div class="sample-banner" id="sample-banner" role="note" aria-label="Sample demonstration notice" hidden>
+    <span class="sample-badge" aria-hidden="true">SAMPLE</span>
+    <b>Sample demonstration — not a real audit.</b>
+    <span class="sample-detail">No models were run and no API keys were used; this content is illustrative.</span></div>
+
   <div class="decision-banner" id="decision-banner" hidden><span class="banner-glyph" aria-hidden="true"></span>
     <b id="decision-banner-text">1 task needs your decision</b>
     <button type="button" class="secondary" id="decision-banner-review">Review</button></div>
@@ -2715,7 +2736,8 @@ const ZH={
   "Ready":"就绪","Needs attention":"需要处理","Optional enhancement":"可选增强","Optional":"可选",
   "Fix automatically":"自动修复","Learn how →":"了解方法 →","Technical detail":"技术细节","Working…":"处理中…",
   "Preflight — probing environment":"预检——正在探测环境","You can re-run these checks any time from Settings.":"你可以随时在设置中重新运行这些检查。",
-  "The guided local demo is not available yet. You are in CrossAudit with no credentials connected — create or import a project to begin.":"引导式本地演示尚未提供。你已进入 CrossAudit，但尚未连接任何凭据——创建或导入一个项目即可开始。",
+  "SAMPLE":"示例","Sample demonstration — not a real audit.":"示例演示——并非真实审计。",
+  "No models were run and no API keys were used; this content is illustrative.":"未运行任何模型，也未使用任何 API 密钥；此内容仅供演示说明。",
   "Provider setup":"供应商设置","Connect the providers you'll build and verify with.":"连接你将用来构建和验证的供应商。",
   "You need at least two different providers — one to do the work, a different one to check it.":"你至少需要两家不同的供应商——一家负责完成工作，另一家负责检查。",
   "Keys are stored in your macOS Keychain and never shown again.":"密钥仅存入你的 macOS 钥匙串，之后不再显示。","Loading providers…":"正在加载供应商…",
@@ -2792,6 +2814,7 @@ const ZH_PATTERNS=[
   ,[/^last heartbeat (\d+)s ago$/i,m=>'最后心跳 '+m[1]+' 秒前']
   ,[/^no heartbeat for (\d+)s$/i,m=>'已 '+m[1]+' 秒无心跳']
   ,[/^(\d+)([mhd])$/,m=>m[1]+({m:' 分钟前',h:' 小时前',d:' 天前'})[m[2]]]
+  ,[/^The local demo could not be prepared: (.+)$/i,m=>'无法准备本地演示：'+m[1]]
 ];
 let currentLocale='en';
 const textSources=new WeakMap(),attributeSources=new WeakMap();
@@ -4571,6 +4594,8 @@ function render(d){
   document.getElementById('hub-version').textContent = 'V' + d.version;
   document.getElementById('proj').textContent = d.project;
   document.getElementById('side-project').textContent = d.project;
+  const sampleBanner=document.getElementById('sample-banner');if(sampleBanner)sampleBanner.hidden=!d.demo;
+  document.body.classList.toggle('is-demo',Boolean(d.demo));
   document.getElementById('tier-label').textContent = d.tier.tier + ' · local controller';
   document.getElementById('thread-title').textContent = newTaskMode ? 'New chat' : titleOf(d);
   setStatePill(d);
@@ -5412,12 +5437,19 @@ document.getElementById('fr-open').onclick=async()=>{try{await completeOnboardin
 document.getElementById('fr-import').onclick=async()=>{
   try{await completeOnboarding('complete');hideFirstRun();showProjects();await refreshProjects();openProjectModal();}catch(e){}};
 document.getElementById('fr-demo').onclick=async()=>{
-  // TODO(first-launch slice 2): build a credential-free local demo on the 'replay'
-  // provider (registry.NEEDS_KEY excludes it). Until then, do NOT fabricate a demo
-  // that implies real audits ran — honestly complete onboarding and enter the hub.
-  try{await completeOnboarding('complete');}catch(e){}hideFirstRun();showProjects();
-  const note=document.getElementById('hub-note');if(note){note.hidden=false;
-    note.textContent='The guided local demo is not available yet. You are in CrossAudit with no credentials connected — create or import a project to begin.';}};
+  // Credential-free local SAMPLE: mark onboarding complete, materialize-or-reuse
+  // the seeded demo project (no provider, no key), and open it. The demo project
+  // carries a persistent "not a real audit" banner on every surface.
+  const btn=document.getElementById('fr-demo');btn.disabled=true;
+  try{
+    await completeOnboarding('complete');
+    const r=await api('/api/projects/demo',{});
+    window.name=location.origin+location.pathname+'?t='+encodeURIComponent(T)+'#projects';
+    location.href=r.url;
+  }catch(e){
+    btn.disabled=false;hideFirstRun();showProjects();
+    const note=document.getElementById('hub-note');if(note){note.hidden=false;
+      note.textContent='The local demo could not be prepared: '+e.message+' — you can still create or import a project.';}}};
 document.getElementById('fr-groups').onclick=async ev=>{
   const btn=ev.target.closest('[data-fr-fix]');if(!btn)return;
   const action=btn.getAttribute('data-fr-fix');
