@@ -952,7 +952,8 @@ def make_handler(cfg: Config, token: str, touch) -> type:
                 except TransferError as exc:
                     self._deny(exc.status, exc.reason)
                     return
-                inline_types = (".pdf", ".png", ".jpg", ".jpeg", ".gif", ".webp")
+                inline_types = (".pdf", ".png", ".jpg", ".jpeg", ".gif",
+                                ".webp", ".svg")
                 inline = ((query.get("view") or [""])[0] == "1"
                           and filename.lower().endswith(inline_types))
                 self._send_download(path, filename, size, inline=inline)

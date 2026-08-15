@@ -711,6 +711,65 @@ def extract_document(path: str, data: bytes) -> DocumentView:
                             str(exc)[:300])
 
 
+def docx_outline(data: bytes) -> list[dict]:
+    """Heading/title outline recovered from a DOCX for the Console preview.
+
+    Best-effort and bounded: only paragraphs carrying a Title or ``Heading N``
+    style contribute, at most 500 entries, each clamped. Never used by the audit
+    path, and only ever called on bytes ``extract_document`` already validated as
+    a safe, non-bomb archive, so it re-opens a known-good document.
+    """
+    from docx import Document
+    outline: list[dict] = []
+    document = Document(io.BytesIO(data))
+    for paragraph in document.paragraphs:
+        text = paragraph.text.strip()
+        if not text:
+            continue
+        style = (paragraph.style.name if paragraph.style else "") or ""
+        if style == "Title":
+            outline.append({"level": 0, "text": text[:200]})
+        else:
+            match = re.fullmatch(r"Heading (\d)", style)
+            if match:
+                outline.append({"level": int(match.group(1)), "text": text[:200]})
+        if len(outline) >= 500:
+            break
+    return outline
+
+
+def pdf_structure(data: bytes) -> dict:
+    """Page count and bookmark outline for the Console PDF preview, best-effort.
+
+    Runs under the same document ceiling the caller enforces and is wrapped by
+    the caller in try/except so any parse failure degrades to no metadata rather
+    than breaking the sandboxed iframe render.
+    """
+    from pypdf import PdfReader
+    reader = PdfReader(io.BytesIO(data), strict=False)
+    if reader.is_encrypted:
+        return {}
+    pages = len(reader.pages)
+    outline: list[dict] = []
+
+    def walk(items, level: int = 1) -> None:
+        for item in items:
+            if len(outline) >= 500:
+                return
+            if isinstance(item, list):
+                walk(item, level + 1)
+                continue
+            title = getattr(item, "title", None)
+            if title:
+                outline.append({"level": level, "text": str(title)[:200]})
+
+    try:
+        walk(reader.outline)
+    except Exception:
+        outline = []
+    return {"pages": pages, "outline": outline}
+
+
 def render_export(root: Path, written: list[str], task: str) -> list[str]:
     """Replace the temporary source with one validated binary, atomically."""
     request = parse_export_task(task)

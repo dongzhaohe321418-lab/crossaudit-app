@@ -38,6 +38,39 @@ MAX_PREVIEW_TEXT_BYTES = 1_000_000
 #: decompression-bomb guard inside ``extract_document``. Kept at the auditor's
 #: own document ceiling so the Console and the auditor agree on what is too big.
 MAX_PREVIEW_DOCX_BYTES = 64 * 1024 * 1024
+#: Table (CSV/TSV) preview caps. The file is read only to a bounded prefix,
+#: parsed server-side, and only a bounded window of rows/columns/cell text is
+#: returned so a multi-million-row sheet cannot inflate the JSON payload or the
+#: browser DOM. The bytes actually returned are bounded by MAX_PREVIEW_CSV_BYTES
+#: (the parser cannot emit more cell text than it read); the row/column/cell
+#: caps bound structure. The download is always the complete file.
+MAX_PREVIEW_CSV_BYTES = 4 * 1024 * 1024
+MAX_PREVIEW_TABLE_ROWS = 2000
+MAX_PREVIEW_TABLE_COLS = 256
+MAX_PREVIEW_CELL_CHARS = 500
+#: Bytes read to sniff image geometry. Raster headers sit in the first few KB;
+#: an SVG's root element is text near the top. Never the whole image is read.
+MAX_PREVIEW_IMAGE_META_BYTES = 512 * 1024
+#: Bytes shown in the binary/unknown hex sample. The sha256 still covers the
+#: whole file (streamed a block at a time), only the sample is bounded.
+HEX_SAMPLE_BYTES = 512
+
+IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"}
+TABLE_SUFFIXES = {".csv", ".tsv"}
+TEXT_SUFFIXES = {
+    ".md", ".markdown", ".txt", ".html", ".htm", ".css", ".js",
+    ".jsx", ".ts", ".tsx", ".py", ".json", ".yaml", ".yml",
+    ".xml", ".toml", ".sh", ".sql", ".log", ".ini",
+}
+#: Light syntax-highlight hint handed to the client. An unlisted language is
+#: rendered as plain text rather than mis-highlighted.
+LANGUAGE_BY_SUFFIX = {
+    ".py": "python", ".js": "javascript", ".jsx": "javascript",
+    ".ts": "typescript", ".tsx": "typescript", ".json": "json",
+    ".css": "css", ".html": "html", ".htm": "html", ".xml": "xml",
+    ".yaml": "yaml", ".yml": "yaml", ".toml": "toml", ".sh": "bash",
+    ".sql": "sql", ".md": "markdown", ".markdown": "markdown",
+}
 UPLOAD_ID = re.compile(r"[a-f0-9]{32}")
 UPLOAD_BATCH = re.compile(r"[a-f0-9]{32}")
 
@@ -465,13 +498,221 @@ def read_artifact(cfg: Config, relative: str) -> tuple[bytes, str]:
     return resolved.read_bytes(), name
 
 
-def preview_artifact(cfg: Config, relative: str) -> dict:
-    """Return a safe preview description for one generator-recorded output.
+def _raster_dimensions(head: bytes) -> tuple[int, int] | None:
+    """Pixel width/height read from a raster header, never by decoding pixels."""
+    if head[:8] == b"\x89PNG\r\n\x1a\n" and head[12:16] == b"IHDR":
+        return (int.from_bytes(head[16:20], "big"),
+                int.from_bytes(head[20:24], "big"))
+    if head[:6] in (b"GIF87a", b"GIF89a") and len(head) >= 10:
+        return (int.from_bytes(head[6:8], "little"),
+                int.from_bytes(head[8:10], "little"))
+    if head[:4] == b"RIFF" and head[8:12] == b"WEBP":
+        return _webp_dimensions(head)
+    if head[:2] == b"\xff\xd8":
+        return _jpeg_dimensions(head)
+    return None
 
-    Binary PDF/image bytes are streamed by the file endpoint. Text and office
-    documents are returned as escaped-by-the-client data, never executable
-    markup. Very large text previews are clipped for UI responsiveness without
-    changing or limiting the downloadable file.
+
+def _jpeg_dimensions(data: bytes) -> tuple[int, int] | None:
+    frame = {0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7,
+             0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF}
+    index, length = 2, len(data)
+    while index + 9 < length:
+        if data[index] != 0xFF:
+            index += 1
+            continue
+        marker = data[index + 1]
+        if marker == 0xFF:
+            index += 1
+            continue
+        if marker in (0xD8, 0xD9) or 0xD0 <= marker <= 0xD7:
+            index += 2
+            continue
+        segment = int.from_bytes(data[index + 2:index + 4], "big")
+        if segment < 2:
+            return None
+        if marker in frame:
+            return (int.from_bytes(data[index + 7:index + 9], "big"),
+                    int.from_bytes(data[index + 5:index + 7], "big"))
+        index += 2 + segment
+    return None
+
+
+def _webp_dimensions(data: bytes) -> tuple[int, int] | None:
+    fmt = data[12:16]
+    try:
+        if fmt == b"VP8 " and len(data) >= 30:
+            return (int.from_bytes(data[26:28], "little") & 0x3FFF,
+                    int.from_bytes(data[28:30], "little") & 0x3FFF)
+        if fmt == b"VP8L" and len(data) >= 25:
+            bits = int.from_bytes(data[21:25], "little")
+            return ((bits & 0x3FFF) + 1, ((bits >> 14) & 0x3FFF) + 1)
+        if fmt == b"VP8X" and len(data) >= 30:
+            return (int.from_bytes(data[24:27], "little") + 1,
+                    int.from_bytes(data[27:30], "little") + 1)
+    except (ValueError, IndexError):
+        return None
+    return None
+
+
+_SVG_ROOT = re.compile(rb"<svg\b[^>]*>", re.IGNORECASE | re.DOTALL)
+_SVG_ATTR = re.compile(r'(width|height|viewBox)\s*=\s*"([^"]*)"', re.IGNORECASE)
+
+
+def _svg_dimensions(head: bytes) -> tuple[int, int] | None:
+    match = _SVG_ROOT.search(head)
+    if not match:
+        return None
+    attrs = {key.lower(): value
+             for key, value in _SVG_ATTR.findall(
+                 match.group(0).decode("utf-8", errors="ignore"))}
+
+    def number(value: str) -> float | None:
+        found = re.match(r"\s*([0-9]*\.?[0-9]+)", value or "")
+        return float(found.group(1)) if found else None
+
+    width, height = number(attrs.get("width", "")), number(attrs.get("height", ""))
+    if (width is None or height is None) and attrs.get("viewbox"):
+        parts = re.split(r"[\s,]+", attrs["viewbox"].strip())
+        if len(parts) == 4:
+            try:
+                width = width or float(parts[2])
+                height = height or float(parts[3])
+            except ValueError:
+                pass
+    if width and height:
+        return (round(width), round(height))
+    return None
+
+
+def _image_metadata(resolved: Path, suffix: str) -> dict:
+    """Type + geometry for the image preview; the bytes stream via /api/file."""
+    kind = "svg" if suffix == ".svg" else (suffix.lstrip(".") or "image")
+    info: dict = {"image_type": kind}
+    try:
+        with open(resolved, "rb") as handle:
+            head = handle.read(MAX_PREVIEW_IMAGE_META_BYTES)
+    except OSError:
+        return info
+    dims = _svg_dimensions(head) if kind == "svg" else _raster_dimensions(head)
+    if dims and dims[0] > 0 and dims[1] > 0:
+        info["width"], info["height"] = dims
+    return info
+
+
+def _hex_dump(data: bytes) -> str:
+    lines = []
+    for offset in range(0, len(data), 16):
+        chunk = data[offset:offset + 16]
+        hex_part = " ".join(f"{byte:02x}" for byte in chunk)
+        ascii_part = "".join(chr(b) if 32 <= b < 127 else "." for b in chunk)
+        lines.append(f"{offset:08x}  {hex_part:<47}  {ascii_part}")
+    return "\n".join(lines)
+
+
+def _binary_preview(resolved: Path, base: dict) -> dict:
+    """Honest metadata for anything we cannot render: type, size, sha256, a
+    bounded hex/ASCII sample. Nothing is executed and nothing is guessed."""
+    digest = hashlib.sha256()
+    sample = b""
+    try:
+        with open(resolved, "rb") as handle:
+            first = True
+            for block in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(block)
+                if first:
+                    sample = block[:HEX_SAMPLE_BYTES]
+                    first = False
+    except OSError as exc:
+        raise TransferError("preview could not read the file", 500) from exc
+    return {**base, "kind": "binary", "sha256": digest.hexdigest(),
+            "hex": _hex_dump(sample), "sample_bytes": len(sample)}
+
+
+def _text_like_preview(resolved: Path, base: dict, suffix: str) -> dict:
+    with open(resolved, "rb") as handle:
+        raw = handle.read(MAX_PREVIEW_TEXT_BYTES + 1)
+    truncated = len(raw) > MAX_PREVIEW_TEXT_BYTES
+    raw = raw[:MAX_PREVIEW_TEXT_BYTES]
+    if b"\0" in raw:
+        return _binary_preview(resolved, base)
+    text = raw.decode("utf-8", errors="replace")
+    kind = ("markdown" if suffix in {".md", ".markdown"} else
+            "html" if suffix in {".html", ".htm"} else "text")
+    return {**base, "kind": kind, "text": text, "truncated": truncated,
+            "language": LANGUAGE_BY_SUFFIX.get(suffix, "")}
+
+
+def _sniff_delimiter(sample: str, default: str) -> str:
+    import csv
+    try:
+        return csv.Sniffer().sniff(sample, delimiters=",\t;|").delimiter
+    except csv.Error:
+        return default
+
+
+def _table_preview(resolved: Path, base: dict, suffix: str) -> dict:
+    """Parse a CSV/TSV server-side into a bounded rows/columns grid."""
+    import csv
+    import io as _io
+    try:
+        with open(resolved, "rb") as handle:
+            raw = handle.read(MAX_PREVIEW_CSV_BYTES + 1)
+    except OSError as exc:
+        raise TransferError("preview could not read the file", 500) from exc
+    over = len(raw) > MAX_PREVIEW_CSV_BYTES
+    raw = raw[:MAX_PREVIEW_CSV_BYTES]
+    if b"\0" in raw:
+        return _binary_preview(resolved, base)
+    text = raw.decode("utf-8", errors="replace")
+    delimiter = "\t" if suffix == ".tsv" else _sniff_delimiter(text[:8192], ",")
+    rows: list[list[str]] = []
+    truncated = over
+    try:
+        for record in csv.reader(_io.StringIO(text), delimiter=delimiter):
+            if len(rows) > MAX_PREVIEW_TABLE_ROWS:
+                truncated = True
+                break
+            if len(record) > MAX_PREVIEW_TABLE_COLS:
+                record = record[:MAX_PREVIEW_TABLE_COLS]
+                truncated = True
+            rows.append([cell[:MAX_PREVIEW_CELL_CHARS] for cell in record])
+    except csv.Error:
+        # An unparseable "CSV" is shown honestly as text, not a broken grid.
+        return _text_like_preview(resolved, base, suffix)
+    columns = rows[0] if rows else []
+    body = rows[1:]
+    return {**base, "kind": "table", "columns": columns, "rows": body,
+            "delimiter": ("\\t" if delimiter == "\t" else delimiter),
+            "row_count": len(body),
+            "col_count": max((len(r) for r in rows), default=0),
+            "truncated": truncated}
+
+
+def _pdf_preview_meta(resolved: Path, size: int) -> dict:
+    """Best-effort page count + bookmark outline. Never breaks the iframe view:
+    any parse failure (or an oversize file) degrades to no extra metadata."""
+    if size > MAX_PREVIEW_DOCX_BYTES:
+        return {}
+    try:
+        from ..document_export import pdf_structure
+        return pdf_structure(resolved.read_bytes())
+    except Exception:
+        return {}
+
+
+def preview_artifact(cfg: Config, relative: str) -> dict:
+    """Return a safe, type-dispatched preview description for one
+    generator-recorded output.
+
+    This is a dispatcher, not a renderer: it classifies the file and returns
+    escaped-by-the-client data plus bounded metadata. Binary PDF/image bytes are
+    streamed separately by the tokened, path-scoped ``/api/file`` endpoint; the
+    client renders images with ``<img>`` (SVG in the browser's secure static
+    mode, so no embedded script runs) and PDFs in a sandboxed iframe. No preview
+    path executes any previewed file, and every path is capped so a hostile or
+    huge output cannot exhaust memory or inflate the payload. The downloadable
+    file is never changed or limited by any clip applied here.
     """
     resolved, name, size = resolve_artifact(cfg, relative)
     suffix = resolved.suffix.lower()
@@ -479,16 +720,17 @@ def preview_artifact(cfg: Config, relative: str) -> dict:
     base = {"path": relative, "name": name, "bytes": size, "mime": mime,
             "truncated": False}
     if suffix == ".pdf":
-        return {**base, "kind": "pdf"}
-    if mime.startswith("image/"):
-        return {**base, "kind": "image"}
+        return {**base, "kind": "pdf", **_pdf_preview_meta(resolved, size)}
+    if suffix in IMAGE_SUFFIXES or mime.startswith("image/"):
+        return {**base, "kind": "image", **_image_metadata(resolved, suffix)}
     if suffix == ".docx":
-        from ..document_export import extract_document
+        from ..document_export import docx_outline, extract_document
         if size > MAX_PREVIEW_DOCX_BYTES:
             raise TransferError(
                 f"Word preview is unavailable: document exceeds "
                 f"{MAX_PREVIEW_DOCX_BYTES} bytes", 413)
-        view = extract_document(relative, resolved.read_bytes())
+        data = resolved.read_bytes()
+        view = extract_document(relative, data)
         if not view.valid:
             raise TransferError(f"Word preview is unavailable: {view.reason}", 422)
         text = view.text
@@ -496,22 +738,14 @@ def preview_artifact(cfg: Config, relative: str) -> dict:
         if truncated:
             text = text.encode("utf-8")[:MAX_PREVIEW_TEXT_BYTES].decode(
                 "utf-8", errors="ignore")
+        try:
+            outline = docx_outline(data)
+        except Exception:
+            outline = []
         return {**base, "kind": "document", "text": text,
-                "truncated": truncated, "units": view.units}
-    text_suffixes = {
-        ".md", ".markdown", ".txt", ".html", ".htm", ".css", ".js",
-        ".jsx", ".ts", ".tsx", ".py", ".json", ".yaml", ".yml",
-        ".csv", ".xml", ".toml", ".sh", ".sql", ".log", ".ini",
-    }
-    if suffix in text_suffixes or mime.startswith("text/"):
-        with open(resolved, "rb") as handle:
-            raw = handle.read(MAX_PREVIEW_TEXT_BYTES + 1)
-        truncated = len(raw) > MAX_PREVIEW_TEXT_BYTES
-        raw = raw[:MAX_PREVIEW_TEXT_BYTES]
-        if b"\0" in raw:
-            return {**base, "kind": "binary"}
-        text = raw.decode("utf-8", errors="replace")
-        kind = ("markdown" if suffix in {".md", ".markdown"} else
-                "html" if suffix in {".html", ".htm"} else "text")
-        return {**base, "kind": kind, "text": text, "truncated": truncated}
-    return {**base, "kind": "binary"}
+                "truncated": truncated, "units": view.units, "outline": outline}
+    if suffix in TABLE_SUFFIXES:
+        return _table_preview(resolved, base, suffix)
+    if suffix in TEXT_SUFFIXES or mime.startswith("text/"):
+        return _text_like_preview(resolved, base, suffix)
+    return _binary_preview(resolved, base)
