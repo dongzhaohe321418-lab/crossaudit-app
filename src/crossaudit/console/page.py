@@ -2954,6 +2954,7 @@ const ZH={
   "The automatic audit loop stopped.":"自动审计循环已停止。","Review why the loop stopped, then decide whether to revise or stop.":"检查循环停止原因，再决定修订或停止。",
   "The audit controller paused this task.":"审计控制器已暂停此任务。","No explanation was recorded.":"未记录说明。","A human decision is required.":"需要人工决定。",
   "Tell the generator how to correct the remaining blockers, or stop the task without admitting its output.":"请告诉生成者如何修复剩余阻断问题，或停止任务且不准入其输出。",
+  "Review the proposed blocker and its evidence. Dispute a misreading, reopen with a recorded reason, or stop without admission.":"请审查这项阻断建议及其证据。若属于误读可提出争议，也可记录理由后重开，或停止且不准入。",
   "Fix the provider, model, or credential setting before allowing another round, or stop the task.":"再给一轮前，请先修复供应商、模型或凭据设置；否则停止任务。",
   "Review why the loop stopped, then either give concrete guidance for one more round or stop the task.":"检查循环停止原因，然后提供具体指导再进行一轮，或停止任务。",
   "no model audit ran, so the result cannot pass":"没有运行模型审计，因此结果无法通过","the automatic audit loop stopped":"自动审计循环已停止"

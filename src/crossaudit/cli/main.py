@@ -385,11 +385,15 @@ def _provider_stop_reason(outcome) -> str:
     before the field existed still classifies. Content rounds keep their
     default reasons.
     """
-    if outcome.integrity != "PROVIDER_FAILURE":
-        return ""
-    detail = str(outcome.exchange.get("error", "")).strip()
-    return ("provider failure: the model audit could not run"
-            + (f" — {detail[:300]}" if detail else ""))
+    if outcome.integrity == "PROVIDER_FAILURE":
+        detail = str(outcome.exchange.get("error", "")).strip()
+        return ("provider failure: the model audit could not run"
+                + (f" — {detail[:300]}" if detail else ""))
+    if outcome.authority.get("status") == "ESCALATE":
+        reasons = outcome.authority.get("rationale") or []
+        if reasons:
+            return f"evidence authority: {str(reasons[0])[:380]}"
+    return ""
 
 
 def _provider_stop_kind(outcome) -> str:
@@ -492,7 +496,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
         retention=args.retention, report_bytes=report_path.read_bytes(),
         report_commit=report_commit, cycle_path=ledger.relative_to(cfg.root).as_posix(),
         audit_repo=cfg.audit_repo or "local", mode=args.mode,
-        integrity=outcome.integrity)
+        integrity=outcome.integrity, authority=outcome.authority)
     (ledger / "receipt.json").write_text(json.dumps(receipt, indent=2, sort_keys=True),
                                            encoding="utf-8", newline="\n")
 
@@ -514,9 +518,14 @@ def cmd_audit(args: argparse.Namespace) -> int:
               "cycle_id": cycle["cycle_id"], "round": cycle["round"],
               "integrity": outcome.integrity, "receipt": str(ledger / "receipt.json"),
               "report": str(report_path),
-              "invalid_reason": outcome.invalid_reason}
+              "invalid_reason": outcome.invalid_reason,
+              "authority": {"status": outcome.authority["status"],
+                            "route": outcome.authority["route"],
+                            "policy_version": outcome.authority["policy_version"]}}
     human = (f"{outcome.verdict}  (cycle {cycle['cycle_id']} round {cycle['round']}"
              f" -> {status})\n  report:  {report_path}\n  receipt: {ledger}/receipt.json")
+    human += (f"\n  authority: {outcome.authority['status']} -> "
+              f"{outcome.authority['route']}")
     if outcome.invalid_reason:
         human += f"\n  audit rejected: {outcome.invalid_reason}"
     _emit(result, args.json, human)
@@ -1051,7 +1060,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         retention="sealed", report_bytes=outcome.report.encode(),
         report_commit=report_commit, cycle_path=str(rel),
         audit_repo=cfg.audit_repo or "local", mode="local",
-        integrity=outcome.integrity)
+        integrity=outcome.integrity, authority=outcome.authority)
     (ledger / "receipt.json").write_text(json.dumps(receipt, indent=2, sort_keys=True),
                                            encoding="utf-8", newline="\n")
     git("add", "--", str(rel / "receipt.json"), cwd=cfg.root)
@@ -1066,6 +1075,8 @@ def cmd_run(args: argparse.Namespace) -> int:
     print()
     print(f"  VERDICT: {outcome.verdict}   (cycle {cycle['cycle_id'][:8]}, "
           f"round {cycle['round']} of {cfg.max_rounds})")
+    print(f"  AUTHORITY: {outcome.authority['status']} -> "
+          f"{outcome.authority['route']}")
     print()
     if outcome.verdict == "BLOCKED":
         blockers = [f for f in outcome.dcl["findings"] if f["severity"] == "BLOCKER"]

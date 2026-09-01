@@ -17,14 +17,15 @@ You describe the work once. CrossAudit runs the loop:
 your task
    |
    v
-generator model --> committed files --> deterministic checks
-                                            |
-                                            v
-                                      auditor model
-                                       /         \
-                                  BLOCKED        PASS
-                                     |             |
-                                     +--> fix      +--> receipt
+generator model --> committed files --> deterministic checks --> auditor proposal
+                                            |                         |
+                                            +------ evidence gate ----+
+                                                       |
+                                   +-------------------+-------------------+
+                                   |                   |                   |
+                              verified BLOCK       clean PASS       uncertain claim
+                                   |                   |                   |
+                           guarded minimal fix       receipt         Git governance
 ```
 
 The browser console shows this process live. It uses event-driven updates, so a
@@ -41,7 +42,10 @@ CrossAudit makes the separation explicit:
 - The generator and auditor must use different vendors.
 - The auditor reads committed files, not the generator's private reasoning.
 - Objective checks run before the model review.
-- A BLOCKED result goes back to the generator for a bounded number of rounds.
+- A reproduced deterministic failure can go back to the generator for a bounded
+  number of guarded repair rounds.
+- A model-only blocker is a proposal, not authority: it enters bounded dispute
+  and human governance instead of silently becoming a patch instruction.
 - Every round is committed, so the final result has a replayable history.
 - PASS creates a cryptographically bound receipt that can be verified later.
 - Ambiguous or unresolved cases escalate to a human instead of looping forever.
@@ -120,6 +124,12 @@ structured content.
   receipt IDs and Terminal commands stay out of the user flow.
 - Correct OpenAI `max_completion_tokens` handling.
 - Deterministic schema, units, convergence, and provenance checks.
+- Evidence-before-authority routing: model confidence and vendor identity never
+  grant blocking power by themselves; every receipt binds the normalized
+  evidence set, policy version, authority decision, and governance route.
+- A repair guard that refuses out-of-scope or oversized revisions and flags
+  broad exception handling, silent fallbacks/retries, suppressions, skipped
+  tests, and relaxed assertions before an automatic repair can be committed.
 - Git-backed reports and receipt verification.
 - Stable exit codes and JSON output for automation.
 - Local and two-repository deployment modes.
@@ -693,19 +703,27 @@ audit report commit
 receipt commit
 ```
 
-A cycle can end in four meaningful states:
+A cycle can end in four workflow states. The receipt additionally records the
+authority status (`PASS`, `ADVISORY`, `BLOCK`, or `ESCALATE`) and its route:
 
 | State | Meaning |
 |---|---|
 | `PASS` | Deterministic checks passed and the independent auditor found no blocker. |
-| `BLOCKED` | At least one objective check or auditor finding prevents acceptance. |
-| `ESCALATED` | The loop cannot make a safe decision and needs a person. |
+| `BLOCKED` | Reproduced machine evidence prevents acceptance and may enter a guarded repair round. |
+| `ESCALATED` | Evidence is insufficient for automatic authority, or the loop needs a person. |
 | `DCL_ONLY` | Deterministic checks ran without a model audit; this can never count as PASS. |
 
 The generator cannot edit the rule file, configuration, state, or audit ledger.
 It may write only inside the configured scope, which defaults to `experiments/`.
 The auditor receives the committed files and rules, not the generator's hidden
 chain of thought or narrative.
+
+Only verified machine blockers are returned to the Generator automatically.
+The repair candidate is checked against the affected files and a change-size
+budget before commit. A semantic model blocker instead pauses at the Git-backed
+governance lane, where the principal may dispute the finding once, reopen the
+cycle with a recorded reason, or close it without admission. See
+[`docs/EVIDENCE_GOVERNANCE_FUSION.md`](docs/EVIDENCE_GOVERNANCE_FUSION.md).
 
 ## Rules and amendments
 
@@ -795,6 +813,10 @@ budgets:
   daily_token_limit: 1000000
   monthly_cost_warning_usd: 50
   monthly_cost_limit_usd: 100
+
+repair:
+  enabled: true
+  max_changed_lines: 200
 
 isolation:
   minimum:

@@ -415,10 +415,13 @@ digest moves — with polling as the fallback.
 │   router · narrator · confirmation            │     the only surface
 ├───────────────────────────────────────────────┤
 │ 两个 agent Two agents                          │  ← 自动分配角色
-│   generator (writes) │ auditor (judges)       │
+│   generator (writes) │ auditor (proposes)     │
 ├───────────────────────────────────────────────┤
-│ CrossAudit 引擎 Engine (v1, 已建成 built)      │  ← 不变量在这里执行
-│   loop · DCL · receipts · controller · ledger │     invariants enforced here
+│ 证据准入 + CrossAudit 治理 Evidence + governance│  ← 权限在这里分配
+│   DCL · authority · repair guard · disputes   │     authority assigned here
+├───────────────────────────────────────────────┤
+│ CrossAudit 引擎 Engine                         │  ← 不变量在这里执行
+│   loop · receipts · controller · ledger       │     invariants enforced here
 └───────────────────────────────────────────────┘
 ```
 
@@ -429,6 +432,27 @@ digest moves — with polling as the fallback.
 **EN** — v1's CLI becomes the engine interface, still present and still usable
 on its own; the conversation box is the product surface. **The engine relaxes
 nothing for the box**: the box cannot do what the CLI could not.
+
+### 7.1 证据先于权限 · Evidence before authority
+
+**中文** — 审计端负责提出开放式语义 finding，但不再凭模型置信度或“跨厂商”
+身份直接获得阻断权。注册检查器产生的可复现失败可以自动 BLOCK；同一个 finding
+若要靠非确定性证据 BLOCK，必须同时有不同 producer 与不同 mechanism family
+的支持。单一模型 BLOCKER 自动进入 Git 治理：一次有界争议、带理由的人工重开，
+或关闭且不准入。只有经过验证的 machine blocker 会自动返回 Generator。
+
+**EN** — The Auditor proposes open-ended semantic findings but receives no
+blocking authority from confidence or vendor identity alone. A registered,
+reproduced failure may block automatically. Non-deterministic corroboration
+must span both distinct producers and distinct mechanism families. A lone model
+BLOCKER routes to Git governance: one bounded dispute, a reasoned human reopen,
+or closure without admission. Only verified machine blockers are returned to
+the Generator automatically.
+
+The repair boundary then rejects scope expansion, oversized diffs, untrusted
+binary patches, broad exception handling, silent retry/fallback behavior,
+suppressions and disabled tests. It is a review trigger, not a theorem that
+every flagged construct is wrong.
 
 ---
 

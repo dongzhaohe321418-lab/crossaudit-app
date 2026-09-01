@@ -35,9 +35,13 @@ How to work:
 - Return whole file contents, never diffs or fragments. A file you return \
 replaces what is there; a file you omit is left untouched.
 - Write only inside the working directories you are told about.
-- When findings are shown to you, address every BLOCKER. Do not argue with a \
-finding in your output: fix the artefact, or state in `notes` why the finding \
-rests on a misreading, so a human can route it as a dispute.
+- Findings returned automatically are verified mechanical failures. Address \
+every BLOCKER with the smallest causal change. A model-only blocker is never \
+silently turned into your repair instruction; it goes to human governance.
+- Do not make a check disappear by adding broad exception handling, silent \
+fallbacks, retries, suppressions, skipped tests, or relaxed assertions. If a \
+finding cannot be fixed without one of those changes, stop in `notes` so a \
+human can judge the tradeoff.
 - Keep claims and data consistent with each other. Most blocked rounds are prose \
 that disagrees with the file it summarises.
 - Prefer editing what exists over adding new files.
@@ -224,13 +228,22 @@ def parse_work_reply(text: str) -> Work:
     return Work(summary=summary or "work", files=files, notes=notes)
 
 
-def render_findings(report: str) -> str:
+def render_findings(report: str, *, verified_only: bool = False) -> str:
     """The auditor's findings, as the generator should see them.
 
     Only the findings travel: the report's headers and provenance are the
     ledger's business, and a generator shown its own past reasoning would drift
     toward defending it rather than fixing the artefact.
     """
+    if verified_only:
+        from .dispute import parse_findings
+
+        verified = [item for item in parse_findings(report)
+                    if item.severity == "BLOCKER" and item.rule.startswith("DCL:")]
+        return ("\n\n".join(
+            f"### [{item.severity}] {item.rule} — {item.artifact}\n{item.observation}"
+            for item in verified) or "(no verified automatic-repair finding)")
+
     keep, capture = [], False
     for line in report.splitlines():
         if line.startswith("### ["):
@@ -299,9 +312,11 @@ def build_prompt(*, task: str, constitution: str, current: dict[str, str],
     else:
         parts.append("\nTHE WORK AS IT STANDS\n(nothing yet; this is the first round)")
     if findings:
-        parts.append(f"\nTHE AUDITOR BLOCKED THE LAST ROUND WITH THESE FINDINGS\n"
+        parts.append(f"\nVERIFIED FAILURES FROM THE LAST ROUND\n"
                      f"<<<FINDINGS\n{findings}\nFINDINGS\n\n"
-                     f"Address every BLOCKER. Return the whole of each file you change.")
+                     f"Address every BLOCKER with a minimal causal repair. Do not add "
+                     f"broad catches, fallbacks, retries, suppressions or disabled tests. "
+                     f"Return the whole of each file you change.")
     return "\n".join(parts)
 
 

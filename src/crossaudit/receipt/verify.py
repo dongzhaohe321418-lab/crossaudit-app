@@ -97,6 +97,19 @@ def verify(receipt: dict, *, science_root: Path, audit_root: Path,
         raise IntegrityDenial(
             f"receipt verdict {receipt['audit']['verdict']} differs from bound "
             f"report verdict {reported.group(1)}")
+    authority = receipt.get("authority")
+    if authority is not None:
+        authority_row = re.search(
+            r"^\| evidence authority \| \*\*([A-Z]+)\*\* via `([^`]+)` \|$",
+            report_text, re.MULTILINE)
+        if authority_row is None:
+            raise IntegrityDenial("bound report has no evidence-authority row")
+        if authority_row.group(1) != authority["status"]:
+            raise IntegrityDenial(
+                "receipt authority status differs from the bound report")
+        if authority_row.group(2) != authority["route"]:
+            raise IntegrityDenial(
+                "receipt authority route differs from the bound report")
     if not cycle_dir.name.startswith(subject["sha"][:12]):
         raise IntegrityDenial(f"cycle directory {cycle_dir.name} does not belong to "
                               f"{subject['sha'][:12]}")
@@ -117,6 +130,10 @@ def verify(receipt: dict, *, science_root: Path, audit_root: Path,
     if receipt["audit"]["audit_integrity"] != "OK":
         admission_shortfalls.append(
             f"audit integrity is {receipt['audit']['audit_integrity']}")
+    if authority is not None and authority["status"] not in ("PASS", "ADVISORY"):
+        admission_shortfalls.append(
+            f"evidence authority is {authority['status']}, routed to "
+            f"{authority['route']}")
     if cfg is not None:
         short = schema.isolation_shortfall(receipt, cfg.isolation_minimum)
         if short:
@@ -145,6 +162,12 @@ def admit(receipt: dict, store: StateStore, evidence: dict,
                               f"nothing to admit", verdict=receipt["audit"]["verdict"])
     if receipt["audit"]["audit_integrity"] != "OK":
         raise IntegrityDenial(f"audit integrity: {receipt['audit']['audit_integrity']}")
+    authority = receipt.get("authority")
+    if authority is not None and authority["status"] not in ("PASS", "ADVISORY"):
+        raise IntegrityDenial(
+            f"evidence authority is {authority['status']}, not admissible — "
+            f"route is {authority['route']}",
+            authority=authority["status"], route=authority["route"])
     if cfg is not None:
         short = schema.isolation_shortfall(receipt, cfg.isolation_minimum)
         if short:

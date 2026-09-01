@@ -22,7 +22,7 @@ ISOLATION_DIMS = ("parametric", "contextual", "permissive")
 
 _ALLOWED_TOP = {"version", "science_repo", "audit_repo", "constitution", "max_rounds",
                 "auditor", "generator", "isolation", "state", "ledger", "scope",
-                "checks", "plugins", "resilience", "budgets"}
+                "checks", "plugins", "resilience", "budgets", "repair"}
 _ALLOWED_ROLE = {"provider", "model", "base_url", "key_env", "vendor",
                  "reasoning_effort", "fallbacks"}
 #: Valid ``reasoning_effort`` strings for YAML validation, derived from the one
@@ -69,6 +69,14 @@ class Budgets:
 
 
 @dataclass(frozen=True)
+class RepairPolicy:
+    """Bounds for automatic revisions after verified failures."""
+
+    enabled: bool = True
+    max_changed_lines: int = 200
+
+
+@dataclass(frozen=True)
 class Config:
     path: Path
     science_repo: str
@@ -91,6 +99,7 @@ class Config:
     generator_fallbacks: tuple[Role, ...] = ()
     resilience: Resilience = field(default_factory=Resilience)
     budgets: Budgets = field(default_factory=Budgets)
+    repair: RepairPolicy = field(default_factory=RepairPolicy)
 
     @property
     def root(self) -> Path:
@@ -281,6 +290,23 @@ def load(path: Path | None = None) -> Config:
             budgets.monthly_cost_warning_usd > budgets.monthly_cost_limit_usd):
         raise ConfigDenial("monthly cost warning cannot exceed the hard limit", file=str(p))
 
+    repair_raw = raw.get("repair") or {}
+    if not isinstance(repair_raw, dict):
+        raise ConfigDenial("repair must be a mapping", file=str(p))
+    if set(repair_raw) - {"enabled", "max_changed_lines"}:
+        raise ConfigDenial(
+            f"repair: unknown keys {sorted(set(repair_raw) - {'enabled', 'max_changed_lines'})}",
+            file=str(p))
+    repair_enabled = repair_raw.get("enabled", True)
+    if not isinstance(repair_enabled, bool):
+        raise ConfigDenial("repair.enabled must be boolean", file=str(p))
+    repair_lines = repair_raw.get("max_changed_lines", 200)
+    if (isinstance(repair_lines, bool) or not isinstance(repair_lines, int)
+            or not 1 <= repair_lines <= 10000):
+        raise ConfigDenial(
+            "repair.max_changed_lines must be an integer from 1 to 10000", file=str(p))
+    repair = RepairPolicy(enabled=repair_enabled, max_changed_lines=repair_lines)
+
     return Config(
         path=p,
         science_repo=raw["science_repo"],
@@ -303,6 +329,7 @@ def load(path: Path | None = None) -> Config:
         generator_fallbacks=generator_fallbacks,
         resilience=resilience,
         budgets=budgets,
+        repair=repair,
     )
 
 

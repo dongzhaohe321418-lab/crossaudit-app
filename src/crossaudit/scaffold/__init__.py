@@ -60,6 +60,12 @@ scope:
 # Machine-enforced contracts are independent of AUDIT_RULES.md. Their exact
 # live definitions are shown in DETERMINISTIC_CHECKS.md and to the generator.
 checks: [{checks}]
+
+# Automatic repair is available only for verified machine failures. The guard
+# refuses broad defensive patterns, out-of-scope edits and oversized patches.
+repair:
+  enabled: true
+  max_changed_lines: 200
 """
 
 

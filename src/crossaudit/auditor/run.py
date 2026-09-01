@@ -1,4 +1,4 @@
-"""One audit cycle: DCL, model audit, verdict synthesis, report, receipt.
+"""One audit cycle: DCL, model proposals, evidence authority, report, receipt.
 
 Verdict synthesis is code, never model output (I4), and every path that is not
 a clean, valid, model-backed PASS lands somewhere other than PASS (I8):
@@ -8,7 +8,8 @@ a clean, valid, model-backed PASS lands somewhere other than PASS (I8):
     invalid or failed audit    -> ESCALATE
     prompt bound exceeded      -> ESCALATE   (the model did not see everything)
     no model ran               -> DCL_ONLY   (never a conforming PASS)
-    otherwise                  -> the model's own verdict
+    lone model BLOCKER         -> ESCALATE   (proposal, not blocking authority)
+    otherwise                  -> PASS with any advisory findings preserved
 """
 from __future__ import annotations
 
@@ -19,6 +20,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
+from ..authority import decide as decide_authority
+from ..authority import records_from_audit
 from ..config import Config, Role, heterogeneity
 from ..dcl import run_checks
 from ..errors import ConfigDenial, Denial, ProviderDenial
@@ -40,6 +43,7 @@ class AuditOutcome:
     exchange: dict
     prompt_sha256: str
     report: str
+    authority: dict
 
 
 def dcl_source_digest() -> str:
@@ -94,7 +98,9 @@ def render_report(*, cfg: Config, sha: str, round_: int, verdict: str, dcl: dict
                   reply: dict | None, invalid: str | None, constitution_commit: str,
                   provider: str, model: str, vendor: str | None = None,
                   reasoning_effort: str | None = None,
-                  provider_failure: str | None = None) -> str:
+                  provider_failure: str | None = None,
+                  authority: dict | None = None) -> str:
+    authority = authority or {}
     lines = [
         f"# Audit Report — {cfg.science_repo}@{sha[:12]}",
         "",
@@ -106,6 +112,9 @@ def render_report(*, cfg: Config, sha: str, round_: int, verdict: str, dcl: dict
         (f"| auditor | `{provider}:{model}` (vendor {vendor or cfg.auditor.vendor}; effort "
          f"{reasoning_effort or 'provider-default'}) |"),
         f"| deterministic layer | {dcl['total_hard_failures']} hard failure(s) |",
+        (f"| evidence authority | **{authority.get('status', '?')}** via "
+         f"`{authority.get('route', 'legacy')}` |"),
+        f"| evidence policy | `{authority.get('policy_version', 'legacy')}` |",
         "",
         "## Deterministic findings",
         "",
@@ -149,6 +158,14 @@ def render_report(*, cfg: Config, sha: str, round_: int, verdict: str, dcl: dict
         lines += [f"Rules applied: {', '.join(reply.get('sections_applied', []))}", ""]
     else:
         lines += ["No model audit ran; this is a deterministic-tier result only.", ""]
+    if authority:
+        lines += ["## Authority routing", "",
+                  ("The Auditor proposes semantic findings. Only reproduced evidence "
+                   "or independent producer-and-mechanism consensus receives automatic "
+                   "blocking authority."), "",
+                  f"Route: **{authority['route']}**.", ""]
+        lines.extend(f"- {reason}" for reason in authority.get("rationale", []))
+        lines.append("")
     return "\n".join(lines)
 
 
@@ -225,27 +242,36 @@ def run_audit(*, cfg: Config, sha: str, round_: int, files: Mapping[str, bytes],
         except Denial:
             raise
 
-    if escalation_lock:
-        verdict = "ESCALATE"
-    elif dcl["total_hard_failures"] > 0:
-        verdict = "BLOCKED"
-    elif invalid:
-        verdict = "ESCALATE"
-        integrity = integrity if integrity != "OK" else "INVALID_REPLY"
-    elif bounded:
-        verdict = "ESCALATE"
+    if invalid and integrity == "OK":
+        integrity = "INVALID_REPLY"
+    if bounded:
         integrity = "BOUNDS_EXCEEDED"
-    elif reply:
-        verdict = reply["verdict"]
-    else:
-        # No model opinion exists (offline, or the provider failed with the
-        # deterministic tier already decisive): a deterministic-tier result,
-        # explicitly marked as such, never a synthesized model verdict.
-        verdict = "DCL_ONLY"
-
-    if actual.provider in NON_EVIDENTIAL and verdict == "PASS":
+    non_evidential = bool(actual.provider in NON_EVIDENTIAL and reply)
+    if non_evidential and reply and reply.get("verdict") == "PASS":
         # A fixture is not an audit; it may exercise the loop, never bless a commit.
         integrity = "NON_EVIDENTIAL_PROVIDER"
+
+    records = records_from_audit(
+        dcl, reply, provider=actual.provider, model=actual.model,
+        vendor=actual.vendor)
+    integrity_errors: list[str] = []
+    if invalid:
+        integrity_errors.append(f"invalid Auditor reply: {invalid}")
+    if bounded:
+        integrity_errors.append("the audit prompt exceeded its committed input bound")
+    if provider_failure and dcl["total_hard_failures"] == 0:
+        integrity_errors.append(f"Auditor unavailable: {provider_failure}")
+    authority_decision = decide_authority(
+        records,
+        coverage_complete=bool(reply is not None and not invalid and not bounded),
+        integrity_errors=integrity_errors,
+        escalation_lock=escalation_lock,
+        no_model=bool(reply is None and not invalid and not provider_failure),
+        auditor_requested_escalation=bool(
+            reply is not None and reply.get("verdict") == "ESCALATE"),
+        non_evidential_provider=non_evidential)
+    verdict = authority_decision.workflow_verdict
+    authority = authority_decision.as_dict()
 
     report = render_report(cfg=cfg, sha=sha, round_=round_, verdict=verdict, dcl=dcl,
                            reply=reply, invalid=invalid,
@@ -253,7 +279,9 @@ def run_audit(*, cfg: Config, sha: str, round_: int, files: Mapping[str, bytes],
                            provider=actual.provider, model=actual.model,
                            vendor=actual.vendor,
                            reasoning_effort=actual.reasoning_effort,
-                           provider_failure=provider_failure)
+                           provider_failure=provider_failure,
+                           authority=authority)
     return AuditOutcome(verdict=verdict, dcl=dcl, model_reply=reply,
                         invalid_reason=invalid, integrity=integrity, exchange=exchange,
-                        prompt_sha256=prompt_sha, report=report)
+                        prompt_sha256=prompt_sha, report=report,
+                        authority=authority)

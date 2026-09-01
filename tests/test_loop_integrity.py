@@ -74,7 +74,7 @@ def _receipt_for(cfg, sha, cycle, outcome, mode="local"):
                  report_bytes=(ledger / "report.md").read_bytes(), report_commit="",
                  cycle_path=str(ledger.relative_to(cfg.root)),
                  audit_repo=cfg.audit_repo or "local", mode=mode,
-                 integrity=outcome.integrity), ledger
+                 integrity=outcome.integrity, authority=outcome.authority), ledger
 
 
 # ---------------------------------------------------------------- happy path
@@ -184,8 +184,25 @@ def test_replay_provider_pass_is_marked_non_evidential(science, cfg, transcripts
     """A fixture may exercise the loop; it may never look like an audit."""
     sha = write_increment(science, GOOD_RESULTS, "Fine.", "clean")
     outcome, _c, _s = _audit(cfg, sha, transcripts, PASS_REPLY)
-    assert outcome.verdict == "PASS"
+    assert outcome.verdict == "ESCALATE"
     assert outcome.integrity == "NON_EVIDENTIAL_PROVIDER"
+    assert outcome.authority["route"] == "git-governance"
+
+
+def test_single_model_blocker_routes_to_governance(
+        science, cfg, transcripts, evidential):
+    """A semantic proposal cannot silently become a Generator patch request."""
+    sha = write_increment(science, GOOD_RESULTS, "Fine.", "clean")
+    reply = {"verdict": "BLOCKED", "sections_applied": ["CA-DATA-001"],
+             "findings": [{"severity": "BLOCKER", "rule": "CA-DATA-001",
+                           "artifact": "experiments/demo/SUMMARY.md",
+                           "observation": "the claim may overstate the table"}]}
+    outcome, _cycle, _store = _audit(cfg, sha, transcripts, reply)
+    assert outcome.dcl["total_hard_failures"] == 0
+    assert outcome.verdict == "ESCALATE"
+    assert outcome.authority["status"] == "ESCALATE"
+    assert outcome.authority["route"] == "git-governance"
+    assert "lack reproduced evidence" in " ".join(outcome.authority["rationale"])
 
 
 def test_tampered_artifact_after_the_audit_is_refused(science, cfg, transcripts):
@@ -252,12 +269,12 @@ def test_a_human_reopened_escalation_accepts_exactly_the_next_build_revision(
     assert "human_reopened" not in advanced
 
 
-def test_three_cli_build_revisions_remain_one_cycle_and_end_escalated(
+def test_model_blocker_stops_before_defensive_revision_loop(
         science, cfg, transcripts, monkeypatch):
     from types import SimpleNamespace
 
     from crossaudit.cli.main import cmd_run
-    from crossaudit.errors import EXIT_BLOCKED, EXIT_ESCALATED
+    from crossaudit.errors import EXIT_ESCALATED
 
     blocked = {
         "verdict": "BLOCKED",
@@ -268,22 +285,16 @@ def test_three_cli_build_revisions_remain_one_cycle_and_end_escalated(
     }
     monkeypatch.chdir(science)
     store = StateStore(cfg.root / cfg.state_dir / "state.json")
-    cycle_id = None
-
-    for round_no in (1, 2, 3):
-        sha = write_increment(science, GOOD_RESULTS, f"attempt {round_no}",
-                              f"generator round {round_no}")
-        record_reply(transcripts, cfg, sha, blocked)
-        args = SimpleNamespace(sha=sha, json=False, allow_custom_endpoint=False,
-                               continue_cycle=cycle_id)
-        code = cmd_run(args)
-        cycles = store.snapshot()["cycles"]
-        assert len(cycles) == 1
-        cycle_id = cycle_id or next(iter(cycles))
-        assert cycles[cycle_id]["round"] == round_no
-        assert code == (EXIT_ESCALATED if round_no == 3 else EXIT_BLOCKED)
-
-    assert store.cycle(cycle_id)["status"] == "ESCALATED"
+    sha = write_increment(science, GOOD_RESULTS, "attempt one", "generator round 1")
+    record_reply(transcripts, cfg, sha, blocked)
+    args = SimpleNamespace(sha=sha, json=False, allow_custom_endpoint=False,
+                           continue_cycle=None)
+    assert cmd_run(args) == EXIT_ESCALATED
+    cycles = store.snapshot()["cycles"]
+    assert len(cycles) == 1
+    cycle_id = next(iter(cycles))
+    assert cycles[cycle_id]["round"] == 1
+    assert cycles[cycle_id]["status"] == "ESCALATED"
 
 
 def test_build_loop_itself_passes_the_cycle_through_all_three_rounds(
