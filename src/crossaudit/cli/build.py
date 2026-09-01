@@ -35,6 +35,7 @@ from ..errors import (EXIT_ESCALATED, EXIT_OK, ConfigDenial, Denial,
                       ProviderDenial, park_escalation_kind)
 from ..gitio import git, is_repo
 from ..providers import resilience as provider_resilience
+from ..repair_guard import RepairGuard
 from ..runtime import (
     PROVIDER_WAIT_CATEGORIES,
     PreparedRun,
@@ -199,6 +200,9 @@ def run_loop(cfg, task: str, *, on_event=None, attachments: str = "",
     termination_reason = f"build round budget spent ({cfg.max_rounds})"
     last_round = 0
     provider_wait: ProviderDenial | None = None
+    # None means this is not a repair round. An empty set means the prior DCL
+    # failure named the whole increment; otherwise only named artifacts may move.
+    repair_scope: set[str] | None = None
 
     for round_no in range(1, cfg.max_rounds + 1):
         current_round = round_no
@@ -317,10 +321,12 @@ def run_loop(cfg, task: str, *, on_event=None, attachments: str = "",
         try:
             document_export.validate_export_work(cfg.root, work.files, task)
             written = gen_mod.apply(work, cfg.root)
+            model_written = set(written)
             if document_export.parse_export_task(task) is not None:
                 emit("document_rendering", "generator",
                      "rendering final document locally", state=RunState.GENERATING)
             written = document_export.render_export(cfg.root, written, task)
+            locally_rendered = set(written) - model_written
         except ProviderDenial as exc:
             emit("document_refused", "generator", "document export refused",
                  exc.reason, state=RunState.GENERATING)
@@ -349,6 +355,34 @@ def run_loop(cfg, task: str, *, on_event=None, attachments: str = "",
             termination_reason = (
                 f"generator produced no new auditable revision in round {round_no}")
             break
+        if repair_scope is not None and cfg.repair.enabled:
+            allowed = set(repair_scope) or set(staged)
+            diff = git("diff", "--cached", "--binary", "--no-ext-diff", cwd=cfg.root,
+                       check=False)
+            repair = RepairGuard(cfg.repair.max_changed_lines).assess(
+                diff, allowed, locally_rendered_files=locally_rendered)
+            if not repair.allowed:
+                # Keep the bytes visible in the working tree so the next
+                # Generator turn can correct them, but remove them from the
+                # admission candidate. No user file is discarded.
+                git("restore", "--staged", "--", *staged, cwd=cfg.root,
+                    check=False)
+                detail = "; ".join(repair.reasons)
+                emit("repair_refused", "evidence gate",
+                     "automatic repair refused", detail,
+                     state=RunState.REVISING)
+                patterns = ", ".join(repair.defensive_patterns)
+                findings = (
+                    "[BLOCKER] The evidence-bound repair guard refused the last "
+                    f"revision: {detail}."
+                    + (f" Flagged patterns: {patterns}." if patterns else "")
+                    + " Make a smaller change limited to the verified failure; if "
+                      "the broader behavior is necessary, leave it for human governance.")
+                if round_no == cfg.max_rounds:
+                    termination_reason = (
+                        f"repair guard refused round {round_no}: {detail[:300]}")
+                    break
+                continue
         try:
             commit_args = ["commit", "-q", "-m",
                            f"{work.summary} (round {round_no})"]
@@ -428,7 +462,14 @@ def run_loop(cfg, task: str, *, on_event=None, attachments: str = "",
                     if ln.strip().startswith("- [")]
         emit("audit_blocked", "auditor", "BLOCKED",
              "; ".join(blocking[:2])[:300], state=RunState.AUDITING)
-        findings = gen_mod.render_findings(_last_report(cfg))
+        findings = gen_mod.render_findings(_last_report(cfg), verified_only=True)
+        from ..dispute import parse_findings
+
+        blockers = [item.artifact for item in parse_findings(_last_report(cfg))
+                    if item.severity == "BLOCKER" and item.rule.startswith("DCL:")]
+        broad = any(item in ("increment", "?", "invalid Auditor reply")
+                    for item in blockers)
+        repair_scope = set() if broad else set(blockers)
         emit("revision_requested", "loop", "findings returned to the generator",
              state=RunState.REVISING)
 

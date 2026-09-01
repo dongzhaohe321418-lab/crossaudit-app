@@ -26,6 +26,8 @@ VERDICT_RE = re.compile(r"\|\s*verdict\s*\|\s*\*\*(\w+)\*\*")
 ROUND_RE = re.compile(r"\|\s*round\s*\|\s*(\d+)")
 AUDITOR_RE = re.compile(r"\|\s*auditor\s*\|\s*`([^`]+)`")
 CONST_RE = re.compile(r"\|\s*constitution\s*\|\s*`([0-9a-f]+)`")
+AUTHORITY_RE = re.compile(
+    r"\|\s*evidence authority\s*\|\s*\*\*([A-Z]+)\*\*\s*via\s*`([^`]+)`")
 
 SEVERITY_ORDER = ("BLOCKER", "ADVISORY")
 
@@ -42,6 +44,8 @@ class Cycle:
     at: int
     auditor: str = ""
     constitution: str = ""
+    authority: str = ""
+    authority_route: str = ""
 
     @property
     def blockers(self) -> int:
@@ -82,6 +86,7 @@ def read_cycles(cfg: Config,
         round_m = ROUND_RE.search(text)
         aud = AUDITOR_RE.search(text)
         const = CONST_RE.search(text)
+        authority = AUTHORITY_RE.search(text)
         out.append(Cycle(
             directory=name, sha=sha, round=int(round_m.group(1)) if round_m else 1,
             verdict=verdict,
@@ -89,7 +94,9 @@ def read_cycles(cfg: Config,
                        "observation": f.observation} for f in parse_findings(text)],
             at=int(report.stat().st_mtime),
             auditor=aud.group(1) if aud else "",
-            constitution=const.group(1) if const else ""))
+            constitution=const.group(1) if const else "",
+            authority=authority.group(1) if authority else "",
+            authority_route=authority.group(2) if authority else ""))
     # Cycle directory names begin with a content hash, so lexical order is
     # random with respect to time. The UI's "latest" pipeline must follow the
     # ledger write order, with the protocol round as a deterministic tie-break.
@@ -172,7 +179,9 @@ def pipeline(cfg: Config, cycles: list[Cycle]) -> list[dict]:
                    else "no model ran — cannot be PASS",
          "state": state(model_ran, current=not model_ran)},
         {"title": "Verdict",
-         "detail": f"{latest.verdict} · {len(latest.findings)} finding(s)",
+         "detail": (f"{latest.verdict} · authority {latest.authority} -> "
+                    f"{latest.authority_route}" if latest.authority else
+                    f"{latest.verdict} · {len(latest.findings)} finding(s)"),
          "state": state(passed, failed=latest.verdict in ("BLOCKED", "ESCALATE"))},
         {"title": "Admission",
          "detail": "receipt consumed" if admitted
@@ -243,7 +252,11 @@ def escalations(cfg: Config) -> list[dict]:
                 why = "no model audit ran, so the result cannot pass"
             elif issues:
                 why = issues[0]["observation"][:220]
-        if issues:
+        if latest and latest.authority_route == "git-governance":
+            requested = (
+                "Review the proposed blocker and its evidence. Dispute a misreading, "
+                "reopen with a recorded reason, or stop without admission.")
+        elif issues:
             requested = (
                 "Tell the generator how to correct the remaining blockers, or stop "
                 "the task without admitting its output.")
@@ -265,7 +278,9 @@ def escalations(cfg: Config) -> list[dict]:
                     "remediations": escalation_remediations(kind),
                     "task": str(s.get("task", ""))[:12000],
                     "attempts": [{"round": c.round, "verdict": c.verdict,
-                                  "findings": len(c.findings)} for c in related],
+                                  "findings": len(c.findings),
+                                  "authority": c.authority,
+                                  "route": c.authority_route} for c in related],
                     "requested": requested})
     return out
 

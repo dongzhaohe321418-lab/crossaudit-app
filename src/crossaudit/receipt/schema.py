@@ -88,6 +88,19 @@ def validate(raw: Any) -> dict:
     for key in ("execution", "credential", "provisioner", "admission"):
         if key not in iso:
             raise IntegrityDenial(f"isolation.{key} evidence is missing")
+    authority = raw.get("authority")
+    if authority is not None:
+        if not isinstance(authority, dict):
+            raise IntegrityDenial("authority must be a mapping")
+        from ..authority import validate_block
+
+        failures = validate_block(authority)
+        if failures:
+            raise IntegrityDenial("; ".join(failures), where="authority")
+        if authority["workflow_verdict"] != raw["audit"]["verdict"]:
+            raise IntegrityDenial(
+                "authority workflow verdict differs from audit verdict",
+                where="authority")
     return raw
 
 

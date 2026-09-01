@@ -108,9 +108,9 @@ def build(*, cfg: Config, subject: dict, cycle: dict, manifest: dict,
           verdict: str, exchange: dict, retention: str, report_bytes: bytes,
           report_commit: str, cycle_path: str, audit_repo: str,
           mode: str, provisioner: str = "cli", admission: str = "local-controller",
-          integrity: str = "OK") -> dict:
+          integrity: str = "OK", authority: dict | None = None) -> dict:
     """Assemble a v2 receipt. Every field is derived, none is caller prose."""
-    return {
+    receipt = {
         "receipt_schema": RECEIPT_SCHEMA,
         "subject": {
             "science_repo": cfg.science_repo,
@@ -159,3 +159,9 @@ def build(*, cfg: Config, subject: dict, cycle: dict, manifest: dict,
         "isolation": isolation_evidence(cfg, mode=mode, provisioner=provisioner,
                                         admission=admission, exchange=exchange),
     }
+    if authority is not None:
+        # The entire receipt digest already binds this block; its inner evidence
+        # digest additionally lets a reader verify the normalized evidence set
+        # without trusting report prose.
+        receipt["authority"] = authority
+    return receipt
